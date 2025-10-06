@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="64" viewBox="0 0 128 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#21cf63" stop-opacity="1"/>
+      <stop offset="1" stop-color="#0b3c22" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="64" fill="none"/>
+  <g opacity="0.95">
+    <text x="8" y="42" font-family="Segoe UI, Roboto, Arial" font-size="28" font-weight="900" fill="url(#g)">SECeD</text>
+  </g>
+</svg>
