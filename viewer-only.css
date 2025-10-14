@@ -1,0 +1,19 @@
+
+/* Solo en VISOR (body.viewer) — oculta controles y desactiva clicks */
+.viewer .mode-panel,
+.viewer .micro-panel,
+.viewer #btnModeJefe,
+.viewer #btnModeSalida,
+.viewer #btnModeLlegada,
+.viewer .row,
+.viewer .help,
+.viewer .toolbar,
+.viewer .export-bar,
+.viewer .counters,
+.viewer .menu,
+.viewer .menu-btn,
+.viewer .btn-fullscreen {
+  display: none !important;
+}
+.viewer .card { cursor: default !important; }
+.viewer .card * { pointer-events: none !important; }
