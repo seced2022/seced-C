@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SECeD - Visor</title>
+  <link rel="stylesheet" href="styles.css">
+  <meta name="theme-color" content="#0b1f12">
+</head>
+<body>
+  <script>
+    (function(){
+      const p = new URLSearchParams(location.search);
+      if (!p.has('viewer')) { p.set('viewer','1'); location.search = p.toString(); }
+    })();
+  </script>
+  <main class="app">
+    <div class="brand"><img src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/></div>
+    <h1>SECeD - Visor</h1>
+
+    <div class="clock-bar">
+      <div class="clock">
+        <span id="clockTime">--:--:--</span>
+        <span class="tz" id="clockTz">Europe/Madrid</span>
+        <span class="sync" id="clockSync">sincronizando…</span>
+      </div>
+
+      <div class="controls-right">
+        <!-- Solo TRAMO en el visor, para cambiar lo que se ve -->
+        <div class="tramo-picker">
+          <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
+          <div id="tramoMenu" class="tramo-menu hidden" role="menu" aria-label="Seleccionar tramo">
+            <div class="tm-section">
+              <label for="tramoInput">Escribir tramo</label>
+              <input id="tramoInput" type="text" placeholder="ej. tramo-1" />
+              <button id="tramoGo" type="button" class="primary">Ir</button>
+            </div>
+            <div class="tm-section">
+              <div class="tm-label">Recientes</div>
+              <ul id="tramoRecent"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <section id="grid" class="grid" aria-live="polite"></section>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script>document.body.classList.add('viewer');</script>
+  <script src="sync.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
