@@ -56,19 +56,33 @@
     <section id="grid" class="grid" aria-live="polite"></section>
   </main>
 
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=2"></script>
+<!-- SDK Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js?v=3"></script>
 
-  <!-- Modo VISOR: marcarlo ANTES de cargar la lógica -->
-  <script>
-    window.VIEWER = true;
+<!-- Marcar modo VISOR ANTES de cargar la lógica -->
+<script>
+  window.VIEWER = true;
+  // añade clase viewer para activar las reglas CSS
+  document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.add('viewer');
-  </script>
+  });
+</script>
 
-  <!-- Lógica común (no cambiada) -->
-  <script src="sync.js?v=2"></script>
-  <script src="app.js?v=2"></script>
+<!-- Desactivar interacciones y ocultar menús en el visor -->
+<style>
+  .viewer .card,
+  .viewer .card * { pointer-events: none !important; cursor: default !important; }
+  .viewer .menu-btn,
+  .viewer .menu,
+  .viewer .hist-btn,
+  .viewer .tooltip { display: none !important; }
+</style>
+
+<!-- Tu lógica (no tocar) -->
+<script src="sync.js?v=3"></script>
+<script src="app.js?v=3"></script>
+
 </body>
 </html>
