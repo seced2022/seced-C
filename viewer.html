@@ -43,19 +43,19 @@
     <section id="grid" class="grid" aria-live="polite"></section>
   </main>
 
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
+  <!-- ...contenido... -->
 
-  <!-- Marcar modo VISOR ANTES de cargar app.js -->
-  <script>
-    window.VIEWER = true;
-    document.body.classList.add('viewer');
-  </script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js?v=2"></script>
 
-  <!-- Reutiliza la lógica existente del repo -->
-  <script src="sync.js"></script>
-  <script src="app.js"></script>
+<!-- Marcar visor ANTES de cargar la lógica -->
+<script>
+  window.VIEWER = true;
+  document.body.classList.add('viewer');
+</script>
+
+<script src="sync.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
