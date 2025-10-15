@@ -4,11 +4,21 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Visor</title>
-  <!-- Tu hoja de estilos principal del repo -->
   <link rel="stylesheet" href="styles.css">
-  <!-- Hoja extra SOLO para el visor -->
-  <link rel="stylesheet" href="viewer-only.css">
   <meta name="theme-color" content="#0b1f12">
+
+  <!-- Solo para el VISOR: desactivar clics y ocultar historial -->
+  <style>
+    /* Desactiva cualquier interacción sobre las tarjetas en el visor */
+    .viewer .card { cursor: default !important; }
+    .viewer .card * { pointer-events: none !important; }
+
+    /* Oculta el botón de historial y su tooltip */
+    .viewer .card .hist-btn,
+    .viewer .card .tooltip {
+      display: none !important;
+    }
+  </style>
 </head>
 <body>
   <main class="app">
@@ -43,19 +53,19 @@
     <section id="grid" class="grid" aria-live="polite"></section>
   </main>
 
-  <!-- ...contenido... -->
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=2"></script>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=2"></script>
+  <!-- Modo VISOR: marcarlo ANTES de cargar la lógica -->
+  <script>
+    window.VIEWER = true;
+    document.body.classList.add('viewer');
+  </script>
 
-<!-- Marcar visor ANTES de cargar la lógica -->
-<script>
-  window.VIEWER = true;
-  document.body.classList.add('viewer');
-</script>
-
-<script src="sync.js?v=2"></script>
-<script src="app.js?v=2"></script>
+  <!-- Lógica común (no cambiada) -->
+  <script src="sync.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
