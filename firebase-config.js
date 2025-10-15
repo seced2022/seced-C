@@ -1,5 +1,5 @@
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
+// Config pública para tu proyecto (usada por sync.js)
+window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
   authDomain: "secedcp.firebaseapp.com",
   projectId: "secedcp",
@@ -11,3 +11,4 @@ const firebaseConfig = {
 
 // Clave SOLO para abrir Auditoría
 window.AUDIT_KEY = "26238915";
+
