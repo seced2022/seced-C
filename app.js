@@ -60,7 +60,14 @@ const TIMEZONE = 'Europe/Madrid';
 const clockTime = document.getElementById('clockTime'); const clockTz = document.getElementById('clockTz'); const clockSync = document.getElementById('clockSync');
 if (clockTz) clockTz.textContent = TIMEZONE;
 let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
-const VIEWER = new URLSearchParams(window.location.search).has('viewer'); window.VIEWER = VIEWER; if (VIEWER) document.body.classList.add('viewer');
+
+// VISOR: respeta lo que venga de viewer.html (window.VIEWER)
+// y si no existe, cae al flag de la URL (?viewer)
+const urlViewerFlag = new URLSearchParams(location.search).has('viewer');
+window.VIEWER = (typeof window.VIEWER !== 'undefined') ? !!window.VIEWER : urlViewerFlag;
+if (window.VIEWER) document.body.classList.add('viewer');
+
+
 function pad(n) { return String(n).padStart(2, '0'); }
 function fmtTime(ms) { const d = new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
 function renderClock(nowMs) { const d = new Date(nowMs + timeOffsetMs); if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
