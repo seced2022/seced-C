@@ -170,3 +170,30 @@ button.primary { background: linear-gradient(180deg, #1dbd6d, #129254); border-c
   .print-counters .counter .label { font-size: 9pt !important; opacity: 1; }
   .print-counters .counter span:last-child { font-size: 12pt !important; }
 }
+
+/* Quitar el fondo y el borde detrás de los iconos ⋯ y 🕘 */
+.card .menu-btn,
+.card .hist-btn {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: inherit;           /* usa el color del recuadro */
+  width: auto;              /* que se adapte al icono */
+  height: auto;
+  padding: 0;
+  line-height: 1;
+  border-radius: 0;         /* sin forma de pastilla/círculo */
+}
+
+/* Evitar que al pasar el ratón se pinte algo */
+.card .menu-btn:hover,
+.card .hist-btn:hover {
+  background: transparent !important;
+}
+
+/* (Opcional) Mejorar contraste del icono sobre fondos claros/amarillos */
+.card .menu-btn,
+.card .hist-btn {
+  text-shadow: 0 1px 2px rgba(0,0,0,.25);
+}
+
