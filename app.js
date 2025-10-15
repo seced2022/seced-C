@@ -407,6 +407,16 @@ function fillRecent(){
     li.appendChild(b); tramoRecent.appendChild(li);
   }
 }
+function parseHHMMSSToToday(str){
+  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec((str||'').trim());
+  if(!m) return null;
+  const h = Number(m[1]), mi = Number(m[2]), s = Number(m[3]||'0');
+  if (h<0||h>23||mi<0||mi>59||s<0||s>59) return null;
+  const base = new Date(nowNetMs());
+  base.setHours(h, mi, s, 0);
+  return base.getTime();
+}
+
 function toggleTramoMenu(){
   if(!tramoMenu) return;
   const hidden = tramoMenu.classList.contains('hidden');
