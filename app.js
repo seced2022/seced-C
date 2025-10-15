@@ -131,19 +131,21 @@ function auditCSV(){
 function exportStatesCSV(){
   try{
     const arr = (typeof window._getItems==='function') ? window._getItems() : [];
-    const headers = ['tramo','valor','status','rNumber','tSalida','tLlegadaActual','llegadasHist','tAbandono'];
+    const headers = ['tramo','valor','status','rNumber','tSalidaActual','salidasHist','tLlegadaActual','llegadasHist','tAbandono'];
     const lines = [headers.join(',')];
     for(const it of arr){
       const row = [
-        (window.TRAMO_ID||'').toString().replace(/,/g,' '),
-        it.value,
-        it.status||'normal',
-        (it.rNumber!=null? it.rNumber:''),
-        (it.tSalida? new Date(it.tSalida).toISOString():''),
-        (it.tLlegada? new Date(it.tLlegada).toISOString():''),
-        (Array.isArray(it.llegadasHist)? it.llegadasHist.map(t=>new Date(t).toISOString()).join('|') : ''),
-        (it.tAbandono? new Date(it.tAbandono).toISOString(): '')
-      ];
+  (window.TRAMO_ID||'').toString().replace(/,/g,' '),
+  it.value,
+  it.status||'normal',
+  (it.rNumber!=null? it.rNumber:''),
+  (it.tSalida? new Date(it.tSalida).toISOString():''),                // tSalidaActual
+  (Array.isArray(it.salidasHist)? it.salidasHist.map(t=>new Date(t).toISOString()).join('|') : ''), // salidasHist
+  (it.tLlegada? new Date(it.tLlegada).toISOString():''),             // tLlegadaActual
+  (Array.isArray(it.llegadasHist)? it.llegadasHist.map(t=>new Date(t).toISOString()).join('|') : ''), // llegadasHist
+  (it.tAbandono? new Date(it.tAbandono).toISOString(): '')
+];
+
       lines.push(row.join(','));
     }
     const blob = new Blob([lines.join('\\n')], {type:'text/csv'});
@@ -190,6 +192,14 @@ function render() {
     menu.className = 'menu hidden';
     const optEdit = document.createElement('div'); optEdit.className = 'menu-item'; optEdit.textContent = 'Editar número';
     if (!VIEWER) optEdit.addEventListener('click', (e) => { e.stopPropagation(); menu.classList.add('hidden'); editNumber(item.value); });
+    const optEditSalida = document.createElement('div');
+    optEditSalida.className = 'menu-item';
+    optEditSalida.textContent = 'Editar salida…';
+    if (!VIEWER) optEditSalida.addEventListener('click', (e) => {
+    e.stopPropagation(); menu.classList.add('hidden'); editSalida(item.value);
+    });
+    menu.appendChild(optEditSalida);
+
     const optAbandon = document.createElement('div'); optAbandon.className = 'menu-item'; optAbandon.textContent = 'Abandono…';
     if (!VIEWER) optAbandon.addEventListener('click', (e) => { e.stopPropagation(); menu.classList.add('hidden'); setAbandon(item.value); });
     menu.appendChild(optEdit); menu.appendChild(optAbandon);
@@ -266,6 +276,35 @@ function render() {
     tt2.innerHTML='';
     const secS2 = document.createElement('div'); secS2.className='section';
     const sTitle2 = document.createElement('div'); sTitle2.className='sec-title'; sTitle2.textContent='S (Salida)'; secS2.appendChild(sTitle2);
+
+    const secSPrev = document.createElement('div'); 
+secSPrev.className = 'section';
+const sPrevTitle = document.createElement('div'); 
+sPrevTitle.className = 'sec-title'; 
+sPrevTitle.textContent = 'S previas';
+secSPrev.appendChild(sPrevTitle);
+
+const sHistArr = Array.isArray(item.salidasHist) ? item.salidasHist.slice() : [];
+sHistArr.sort((a,b)=> b-a);
+
+if (sHistArr.length === 0){
+  const r = document.createElement('div'); 
+  r.className = 'hist-empty'; 
+  r.textContent = 'Sin S previas';
+  secSPrev.appendChild(r);
+} else {
+  let idxS = 1;
+  for (const t of sHistArr){
+    const r = document.createElement('div'); r.className='row';
+    const tg = document.createElement('span'); tg.className='tag'; tg.textContent='S-'+(idxS++);
+    const v = document.createElement('span'); v.textContent=(new Date(t)).toTimeString().slice(0,8);
+    r.appendChild(tg); r.appendChild(v); secSPrev.appendChild(r);
+  }
+}
+
+tt2.appendChild(secSPrev); // <<— AÑADIR
+
+    
     if (item.tSalida){ const r=document.createElement('div'); r.className='row'; const tg=document.createElement('span'); tg.className='tag'; tg.textContent='S'; const v=document.createElement('span'); v.textContent=(new Date(item.tSalida)).toTimeString().slice(0,8); r.appendChild(tg); r.appendChild(v); secS2.appendChild(r);} else { const r=document.createElement('div'); r.className='hist-empty'; r.textContent='—'; secS2.appendChild(r); }
     const secLL2 = document.createElement('div'); secLL2.className='section'; const llTitle2 = document.createElement('div'); llTitle2.className='sec-title'; llTitle2.textContent='LL previas'; secLL2.appendChild(llTitle2);
     const histArr2 = Array.isArray(item.llegadasHist) ? item.llegadasHist.slice() : []; histArr2.sort((a,b)=>b-a);
@@ -339,6 +378,36 @@ function setAbandon(val) {
   if (typeof syncSave === 'function') syncSave();
   logAudit('abandono', { value: val, rNumber:r, tAbandono:tA });
 }
+function editSalida(val){
+  const idx = items.findIndex(x => x.value === val);
+  if (idx === -1) return;
+
+  const prev = items[idx].tSalida || null;
+  const raw = prompt('Nueva hora de SALIDA (HH:MM:SS). Deja vacío para hora actual:', '');
+  if (raw === null) return; // cancelar
+
+  let newT;
+  if ((raw||'').trim()==='') {
+    newT = nowNetMs();
+  } else {
+    newT = parseHHMMSSToToday(raw);
+    if (!newT) { alert('Formato inválido. Usa HH:MM:SS, ej: 08:31:05'); return; }
+  }
+
+  // Empujar la anterior al historial (si existía)
+  if (prev){
+    if (!Array.isArray(items[idx].salidasHist)) items[idx].salidasHist = [];
+    items[idx].salidasHist.push(prev);
+  }
+
+  // Actualizar salida actual
+  items[idx].tSalida = newT;
+
+  render();
+  if (typeof syncSave === 'function') syncSave();
+  logAudit('editar_salida', { value: val, tSalida_prev: prev, tSalida_new: newT, salidasHist: items[idx].salidasHist||[] });
+}
+
 
 if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
 if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') addNumber(); });
