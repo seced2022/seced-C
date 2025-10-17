@@ -39,6 +39,11 @@ h1 { font-size:1.2rem; margin:6px 0 10px; }
 .tramo-picker .secondary{ background:#123d26; border:1px solid var(--btn-border); color:#eafff7; }
 .tramo-menu{ position:absolute; right:0; top:36px; min-width:260px; background:#082013; color:#dffff0; border:1px solid var(--btn-border); border-radius:10px; box-shadow:0 8px 18px rgba(0,0,0,.45); padding:10px; z-index:50; }
 .tramo-menu.hidden{ display:none; }
+
+/* Asegura posicionamiento correcto del menú de tramo en esta página */
+.tramo-picker { position: relative; }
+.tramo-menu { z-index: 1000; } /* por si algo la tapaba */
+
 .tm-section{ display:grid; gap:6px; margin-bottom:10px; }
 .tm-section:last-child{ margin-bottom:0; }
 #tramoInput{ background:#07180e; color:#eafff1; border:1px solid var(--outline); border-radius:8px; padding:8px 10px; outline:none; }
