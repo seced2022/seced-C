@@ -180,4 +180,55 @@
     })();
   </script>
 </body>
+<script>
+  (function(){
+    // Misma normalización que usas en app.js
+    function sanitizeTramo(t){ return (t||'').trim().toLowerCase().replace(/[^\w-]+/g,'-').slice(0,64); }
+    function goToTramo(t){
+      const tramo = sanitizeTramo(t);
+      if(!tramo) return;
+      // guarda en recientes como hace el editor
+      try{
+        const k='seced_tramos_recent';
+        const list=JSON.parse(localStorage.getItem(k)||'[]');
+        const next=[tramo, ...list.filter(x=>x!==tramo)].slice(0,10);
+        localStorage.setItem(k, JSON.stringify(next));
+      }catch{}
+      const p = new URLSearchParams(location.search);
+      p.set('tramo', tramo);
+      location.search = p.toString();
+    }
+
+    const btnTramo = document.getElementById('btnTramo');
+    const tramoMenu = document.getElementById('tramoMenu');
+
+    if (btnTramo) {
+      btnTramo.addEventListener('click', (e) => {
+        // Si ya tienes la lógica del menú en app.js, esto solo asegura que no se “pierda” el click
+        e.stopPropagation();
+        // Si existe el menú y está visible/oculto, dejamos que lo gestione app.js;
+        // si no hay menú o no puede abrirse, usamos prompt como fallback:
+        const menuVisible = tramoMenu && !tramoMenu.classList.contains('hidden');
+        const menuDefined = !!tramoMenu;
+        // Si no hay menú o está “bloqueado”, cae al prompt directo:
+        if (!menuDefined) {
+          const t = prompt('Indica el tramo (ej. 1 o tramo-1):', new URLSearchParams(location.search).get('tramo') || '1');
+          if (t !== null) goToTramo(t);
+        } else {
+          // Si tienes el menú, no hacemos nada más aquí (lo maneja tu app.js).
+          // Como refuerzo: si tras 150ms no se abrió, disparar prompt.
+          setTimeout(() => {
+            const stillHidden = tramoMenu.classList.contains('hidden');
+            if (stillHidden) {
+              const t = prompt('Indica el tramo (ej. 1 o tramo-1):', new URLSearchParams(location.search).get('tramo') || '1');
+              if (t !== null) goToTramo(t);
+            }
+          }, 150);
+        }
+      });
+    }
+  })();
+</script>
+
+  
 </html>
