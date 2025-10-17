@@ -4,18 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=7" />
+  <link rel="stylesheet" href="styles.css?v=8" />
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
-    /* --- Solo lectura base (del visor) --- */
+    /* Solo lectura base (sin menús ni franjas) */
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
     .viewer .time-stack { display: none !important; }
 
     /* Por defecto bloqueamos los clicks… */
     .viewer .card, .viewer .card * { pointer-events: none; cursor: default; }
 
-    /* …pero los habilitamos SOLO en las tarjetas elegibles para este radio */
+    /* …pero habilitamos SOLO en tarjetas elegibles para este radio */
     .viewer .card.radio-eligible,
     .viewer .card.radio-eligible * {
       pointer-events: auto !important;
@@ -31,9 +31,15 @@
       border-color: #e5e7eb !important;
     }
 
-    /* Diferenciar elegibles vs bloqueadas */
-    .card.radio-eligible { box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset; }
-    .card.radio-locked   { opacity: .45; filter: grayscale(.2); }
+    /* Ocultar las no elegibles para el radio actual */
+    .card.radio-locked { display: none !important; }
+
+    /* Feedback amarillo al hacer clic */
+    .card.radio-clicking { 
+      background: #fef08a !important;           /* amarillo suave */
+      border-color: #eab308 !important;          /* contorno dorado */
+      box-shadow: 0 0 0 2px rgba(234,179,8,.35) inset;
+    }
 
     .radio-inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     #btnRadio {
@@ -139,11 +145,11 @@
   </script>
 
   <!-- Tu config (si existe) sobreescribe el fallback -->
-  <script src="firebase-config.js?v=7"></script>
+  <script src="firebase-config.js?v=8"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="sync.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 
   <!-- LÓGICA RADIO: reloj, selección radio y flujo de avance por radio -->
   <script>
@@ -253,8 +259,12 @@
           const val = card.dataset.value;
           if (!val) return;
           const eligible = canThisRadioClick(val);
+
           card.classList.toggle('radio-eligible', eligible);
-          card.classList.toggle('radio-locked', !eligible);
+          card.classList.toggle('radio-locked', !eligible); // no elegibles ocultas
+          // Si deja de ser elegible, quitamos amarillo si quedó
+          if (!eligible) card.classList.remove('radio-clicking');
+
           // Título informativo
           if (eligible) {
             card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
@@ -284,6 +294,9 @@
         if (!val) return;
         if (!card.classList.contains('radio-eligible')) return; // solo las elegibles
 
+        // Feedback visual inmediato
+        card.classList.add('radio-clicking');
+
         const rIdx = getRadioIndex();
         const docRef = radiosCol.doc(String(val));
 
@@ -298,7 +311,7 @@
             tx.set(docRef, { last: rIdx }, { merge:true });
           });
 
-          // Auditoría
+          // Auditoría (no bloquear si falla)
           try {
             const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
             await aud.add({
@@ -307,12 +320,20 @@
               detail: { value: Number(val), radio: rIdx },
               ts: firebase.firestore.FieldValue.serverTimestamp(),
             });
-          } catch(e){ /* no bloquear si falla auditoría */ }
+          } catch(e){}
 
           toast(`Avanzado dorsal ${val} → RADIO ${rIdx+1}`, 'ok');
+
         } catch (err) {
           toast('No se pudo avanzar: ' + err.message, 'err');
+          // Si falló, quitamos el amarillo
+          card.classList.remove('radio-clicking');
+          return;
         }
+
+        // Al llegar el snapshot, esta tarjeta dejará de ser elegible y se ocultará.
+        // Forzamos un repintado por si tarda un poco:
+        setTimeout(()=>{ applyEligibility(); }, 150);
       });
 
       /* ===== Fallback TRAMO (por si el menú no abre) ===== */
@@ -346,7 +367,7 @@
         });
       }
 
-      /* ===== Usuario (botón 👤 de siempre) ===== */
+      /* ===== Usuario (botón 👤) ===== */
       const btnOperador = document.getElementById('btnOperador');
       if (btnOperador) btnOperador.addEventListener('click', ()=>{
         const name = prompt('Nombre o identificador del operador:', localStorage.getItem('seced_operator')||'');
