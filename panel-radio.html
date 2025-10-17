@@ -4,14 +4,23 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
-    /* Solo lectura: sin clicks, sin menús, sin franjas */
-    .viewer .card, .viewer .card * { pointer-events: none !important; cursor: default !important; }
+    /* --- Solo lectura base (del visor) --- */
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
     .viewer .time-stack { display: none !important; }
+
+    /* Por defecto bloqueamos los clicks… */
+    .viewer .card, .viewer .card * { pointer-events: none; cursor: default; }
+
+    /* …pero los habilitamos SOLO en las tarjetas elegibles para este radio */
+    .viewer .card.radio-eligible,
+    .viewer .card.radio-eligible * {
+      pointer-events: auto !important;
+      cursor: pointer !important;
+    }
 
     /* Apariencia “radio”: cartas blancas */
     body.radio-skin .card,
@@ -21,6 +30,10 @@
       color: #111 !important;
       border-color: #e5e7eb !important;
     }
+
+    /* Diferenciar elegibles vs bloqueadas */
+    .card.radio-eligible { box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset; }
+    .card.radio-locked   { opacity: .45; filter: grayscale(.2); }
 
     .radio-inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     #btnRadio {
@@ -45,30 +58,17 @@
     .tramo-picker { position: relative; }
     .tramo-menu { z-index: 1000; }
 
-    /* Overlay de error */
-    #bootError {
-      position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
-      background: rgba(0,0,0,.7); color: #fff; z-index: 99999; padding: 24px; text-align: center;
+    /* Toast simple */
+    #toast {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      background: #0b1f12; color: #eafff7; padding: 8px 12px; border-radius: 10px;
+      border: 1px solid #13301e; font-weight: 700; display: none; z-index: 9999;
     }
-    #bootError .box{
-      background: #111; border:1px solid #444; border-radius: 12px; padding: 16px; max-width: 720px;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    }
-    #bootBeacon { opacity:.65; font-size: 13px; }
+    #toast.ok { background: #065f46; border-color: #0c7a5c; }
+    #toast.err { background: #7f1d1d; border-color: #991b1b; }
   </style>
 </head>
 <body class="radio-skin">
-  <noscript><div style="padding:12px;background:#fee2e2;color:#7f1d1d">Activa JavaScript para ver el panel.</div></noscript>
-
-  <!-- Overlay de error (se muestra si algo rompe en silencio) -->
-  <div id="bootError">
-    <div class="box">
-      <div style="font-weight:800; font-size:18px; margin-bottom:8px;">Error cargando el Panel Radio</div>
-      <div id="bootMsg" style="white-space:pre-wrap; word-break:break-word;"></div>
-      <div id="bootBeacon" style="margin-top:10px;">Beacon de arranque…</div>
-    </div>
-  </div>
-
   <main class="app" style="position:relative;">
     <span id="radioBadge" class="radio-badge" aria-hidden="true" hidden>RADIO: —</span>
 
@@ -109,66 +109,46 @@
       </div>
     </div>
 
-    <!-- Solo las cajas con números -->
     <section id="grid" class="grid" aria-live="polite"></section>
   </main>
+
+  <div id="toast"></div>
 
   <!-- SDK Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 
-  <!-- Fallback de config + init + visor + captura de errores -->
+  <!-- Fallback de config + init + marcar VISOR -->
   <script>
-    (function(){
-      // Mostrar overlay si hay errores silenciosos
-      function showBootError(msg){
-        var el = document.getElementById('bootError');
-        var m = document.getElementById('bootMsg');
-        if (m) m.textContent = String(msg || 'Error desconocido');
-        if (el) el.style.display = 'flex';
-      }
-      window.addEventListener('error', function(e){ showBootError(e.message || e.filename || 'Error'); });
-      window.addEventListener('unhandledrejection', function(e){ showBootError((e.reason && e.reason.message) || String(e.reason || 'Promise error')); });
+    // VISOR base (para que app.js no enganche sus propios clics)
+    window.VIEWER = true;
+    document.body.classList.add('viewer');
 
-      // Marcamos VISOR siempre en panel radio
-      window.VIEWER = true;
-      document.body.classList.add('viewer');
-
-      // Fallback de config por si firebase-config.js no llega (cache/ruta)
-      if (!window.FIREBASE_CONFIG) {
-        window.FIREBASE_CONFIG = {
-          apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
-          authDomain: "secedcp.firebaseapp.com",
-          projectId: "secedcp",
-          storageBucket: "secedcp.firebasestorage.app",
-          messagingSenderId: "722200684437",
-          appId: "1:722200684437:web:f8486e13dd6ec0bdaaf89c",
-          measurementId: "G-XB0C93FM9W"
-        };
-      }
-      try {
-        if (firebase && firebase.apps && firebase.apps.length === 0) {
-          firebase.initializeApp(window.FIREBASE_CONFIG);
-        }
-      } catch(e){ /* si ya está iniciado, seguimos */ }
-
-      // Beacon de arranque (visible si algo se queda en blanco)
-      var beacon = document.getElementById('bootBeacon');
-      if (beacon) beacon.textContent = 'Cargando recursos… OK';
-    })();
+    if (!window.FIREBASE_CONFIG) {
+      window.FIREBASE_CONFIG = {
+        apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
+        authDomain: "secedcp.firebaseapp.com",
+        projectId: "secedcp",
+        storageBucket: "secedcp.firebasestorage.app",
+        messagingSenderId: "722200684437",
+        appId: "1:722200684437:web:f8486e13dd6ec0bdaaf89c",
+        measurementId: "G-XB0C93FM9W"
+      };
+    }
+    try { if (firebase && firebase.apps && firebase.apps.length === 0) firebase.initializeApp(window.FIREBASE_CONFIG); } catch(e){}
   </script>
 
-  <!-- Tu config (si existe) sobreescribe el fallback — perfecto -->
-  <script src="firebase-config.js?v=6"></script>
+  <!-- Tu config (si existe) sobreescribe el fallback -->
+  <script src="firebase-config.js?v=7"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=6"></script>
-  <script src="app.js?v=6"></script>
+  <script src="sync.js?v=7"></script>
+  <script src="app.js?v=7"></script>
 
-  <!-- Reloj + RADIO + fallback TRAMO -->
+  <!-- LÓGICA RADIO: reloj, selección radio y flujo de avance por radio -->
   <script>
     (function(){
-      /* ====== Reloj ====== */
+      /* ===== Reloj online ===== */
       const TIMEZONE = 'Europe/Madrid';
       const clockTime = document.getElementById('clockTime');
       const clockTz = document.getElementById('clockTz');
@@ -194,30 +174,37 @@
         }
       };
       const startClock = () => {
-        if (tickTimer) clearInterval(tickTimer);
-        tickTimer = setInterval(renderClock, 1000); renderClock();
-        if (resyncTimer) clearInterval(resyncTimer);
-        resyncTimer = setInterval(syncTime, 5*60*1000);
+        clearInterval(tickTimer); tickTimer = setInterval(renderClock, 1000); renderClock();
+        clearInterval(resyncTimer); resyncTimer = setInterval(syncTime, 5*60*1000);
       };
       syncTime().then(startClock);
 
-      /* ====== RADIO ====== */
+      /* ===== Helper UI ===== */
+      const toast = (msg, kind='ok')=>{
+        const t = document.getElementById('toast');
+        if(!t) return; t.textContent = msg; t.className=''; t.classList.add(kind); t.style.display='block';
+        setTimeout(()=>{ t.style.display='none'; }, 1200);
+      };
+
+      /* ===== Selección de RADIO ===== */
       const btnRadio = document.getElementById('btnRadio');
       const radioBadge = document.getElementById('radioBadge');
       function getRadio(){ try { return localStorage.getItem('seced_radio') || ''; } catch { return ''; } }
       function setRadio(v){ try { localStorage.setItem('seced_radio', String(v||'')); } catch {} }
+      function getRadioIndex(){ const r = parseInt(getRadio(),10); return Number.isFinite(r) && r>0 ? r : 1; }
+
       function updateRadioUI(){
         const r = getRadio();
         if (btnRadio) btnRadio.textContent = 'RADIO: ' + (r ? r : '—');
-        if (radioBadge) {
-          if (r) { radioBadge.textContent = 'RADIO: ' + r; radioBadge.hidden = false; }
-          else { radioBadge.hidden = true; }
-        }
+        if (radioBadge) { radioBadge.textContent = 'RADIO: ' + (r ? r : '—'); radioBadge.hidden = !r; }
+        // Recalcular elegibilidad visual:
+        setTimeout(applyEligibility, 0);
       }
+
       if (btnRadio) {
         btnRadio.addEventListener('click', () => {
           const curr = getRadio();
-          const val = prompt('Introduce tu número de RADIO:', curr || '');
+          const val = prompt('Introduce tu número de RADIO (1,2,3…):', curr || '1');
           if (val === null) return;
           const clean = String(val).trim();
           setRadio(clean);
@@ -226,7 +213,109 @@
       }
       updateRadioUI();
 
-      /* ====== Fallback TRAMO (por si el menú no abre) ====== */
+      /* ===== Firestore: mapa de “último radio” por dorsal ===== */
+      const TRAMO = (window.TRAMO_ID||'').toString();
+      const db = firebase.firestore();
+      const radiosCol = db.collection('tramos').doc(TRAMO).collection('radios');
+
+      // Mantenemos en memoria el estado por dorsal: { "23": {last:1}, ... }
+      const radioState = new Map();
+
+      // Suscripción a los docs de estado de radios
+      radiosCol.onSnapshot(snap=>{
+        snap.docChanges().forEach(ch=>{
+          const id = ch.doc.id; // dorsal como string
+          const d = ch.doc.data()||{};
+          if (ch.type === 'removed') radioState.delete(id);
+          else radioState.set(id, { last: typeof d.last==='number' ? d.last : 0 });
+        });
+        applyEligibility();
+      });
+
+      // Helper: último radio que clicó ese dorsal
+      function getLastFor(value){
+        const key = String(value);
+        return (radioState.get(key)?.last) || 0; // 0 = nadie
+      }
+
+      // Elegibilidad: este radio puede clicar si last == (radioIndex-1)
+      function canThisRadioClick(value){
+        const last = getLastFor(value);
+        const rIdx = getRadioIndex();
+        return last === (rIdx - 1);
+      }
+
+      // Marca visual de elegibilidad en las tarjetas del grid
+      function applyEligibility(){
+        const cards = document.querySelectorAll('#grid .card');
+        const rIdx = getRadioIndex();
+        cards.forEach(card=>{
+          const val = card.dataset.value;
+          if (!val) return;
+          const eligible = canThisRadioClick(val);
+          card.classList.toggle('radio-eligible', eligible);
+          card.classList.toggle('radio-locked', !eligible);
+          // Título informativo
+          if (eligible) {
+            card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
+          } else {
+            const last = getLastFor(val);
+            const espera = (last >= rIdx) ? `ya pasó por RADIO ${rIdx}` : `esperando RADIO ${last+1}`;
+            card.title = `Bloqueado: ${espera}`;
+          }
+        });
+      }
+
+      // Reaplicar elegibilidad tras cada render del app.js
+      const origOnRemote = window._onRemoteUpdate;
+      if (typeof origOnRemote === 'function') {
+        window._onRemoteUpdate = (arr)=>{ origOnRemote(arr); applyEligibility(); };
+      } else {
+        // Por si acaso, observar el grid
+        const obs = new MutationObserver(()=>applyEligibility());
+        obs.observe(document.getElementById('grid'), {childList:true, subtree:true});
+      }
+
+      /* ===== Click para avanzar dorsal al siguiente RADIO ===== */
+      document.getElementById('grid').addEventListener('click', async (ev)=>{
+        const card = ev.target.closest('.card');
+        if (!card) return;
+        const val = card.dataset.value;
+        if (!val) return;
+        if (!card.classList.contains('radio-eligible')) return; // solo las elegibles
+
+        const rIdx = getRadioIndex();
+        const docRef = radiosCol.doc(String(val));
+
+        try {
+          await db.runTransaction(async (tx)=>{
+            const snap = await tx.get(docRef);
+            const data = snap.exists ? (snap.data()||{}) : {};
+            const last = (typeof data.last==='number') ? data.last : 0;
+            if (last !== (rIdx - 1)) {
+              throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`);
+            }
+            tx.set(docRef, { last: rIdx }, { merge:true });
+          });
+
+          // Auditoría
+          try {
+            const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
+            await aud.add({
+              actor: (localStorage.getItem('seced_radio')||('RADIO '+rIdx)),
+              action: 'radio_click',
+              detail: { value: Number(val), radio: rIdx },
+              ts: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch(e){ /* no bloquear si falla auditoría */ }
+
+          toast(`Avanzado dorsal ${val} → RADIO ${rIdx+1}`, 'ok');
+        } catch (err) {
+          toast('No se pudo avanzar: ' + err.message, 'err');
+        }
+      });
+
+      /* ===== Fallback TRAMO (por si el menú no abre) ===== */
       function sanitizeTramo(t){ return (t||'').trim().toLowerCase().replace(/[^\w-]+/g,'-').slice(0,64); }
       function goToTramo(t){
         const tramo = sanitizeTramo(t);
@@ -256,6 +345,13 @@
           }, 150);
         });
       }
+
+      /* ===== Usuario (botón 👤 de siempre) ===== */
+      const btnOperador = document.getElementById('btnOperador');
+      if (btnOperador) btnOperador.addEventListener('click', ()=>{
+        const name = prompt('Nombre o identificador del operador:', localStorage.getItem('seced_operator')||'');
+        if (name !== null) { try { localStorage.setItem('seced_operator', (name||'').trim()); } catch{} }
+      });
     })();
   </script>
 </body>
