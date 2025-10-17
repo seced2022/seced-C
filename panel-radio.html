@@ -4,17 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <meta name="theme-color" content="#0b1f12" />
 
-  <!-- Skin radio: solo números (sin tiempos) y sin menús -->
   <style>
-    /* Modo visual (no interactivo) */
+    /* Solo lectura: sin clicks, sin menús, sin franjas */
     .viewer .card, .viewer .card * { pointer-events: none !important; cursor: default !important; }
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
-    .viewer .time-stack { display: none !important; } /* oculta S/LL/A */
+    .viewer .time-stack { display: none !important; }
 
-    /* Apariencia “radio”: cartas blancas y legibles */
+    /* Apariencia “radio”: cartas blancas */
     body.radio-skin .card,
     body.radio-skin .card.selected,
     body.radio-skin .card.abandon {
@@ -23,13 +22,7 @@
       border-color: #e5e7eb !important;
     }
 
-    /* Botón RADIO en línea con TRAMO */
-    .radio-inline {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
+    .radio-inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     #btnRadio {
       border: 1px solid var(--btn-border);
       background: #0c2415;
@@ -40,7 +33,6 @@
       cursor: pointer;
     }
 
-    /* Badge opcional arriba a la derecha */
     .radio-badge{
       position:absolute; top:14px; right:14px;
       background:#ffd60a; color:#0f1300;
@@ -50,12 +42,33 @@
       user-select:none; pointer-events:none;
     }
 
-    /* Asegura posicionamiento correcto del menú TRAMO en esta página */
     .tramo-picker { position: relative; }
-    .tramo-menu { z-index: 1000; } /* por si algo la tapaba */
+    .tramo-menu { z-index: 1000; }
+
+    /* Overlay de error */
+    #bootError {
+      position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.7); color: #fff; z-index: 99999; padding: 24px; text-align: center;
+    }
+    #bootError .box{
+      background: #111; border:1px solid #444; border-radius: 12px; padding: 16px; max-width: 720px;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    }
+    #bootBeacon { opacity:.65; font-size: 13px; }
   </style>
 </head>
 <body class="radio-skin">
+  <noscript><div style="padding:12px;background:#fee2e2;color:#7f1d1d">Activa JavaScript para ver el panel.</div></noscript>
+
+  <!-- Overlay de error (se muestra si algo rompe en silencio) -->
+  <div id="bootError">
+    <div class="box">
+      <div style="font-weight:800; font-size:18px; margin-bottom:8px;">Error cargando el Panel Radio</div>
+      <div id="bootMsg" style="white-space:pre-wrap; word-break:break-word;"></div>
+      <div id="bootBeacon" style="margin-top:10px;">Beacon de arranque…</div>
+    </div>
+  </div>
+
   <main class="app" style="position:relative;">
     <span id="radioBadge" class="radio-badge" aria-hidden="true" hidden>RADIO: —</span>
 
@@ -72,7 +85,6 @@
       </div>
 
       <div class="controls-right">
-        <!-- TRAMO (igual que en editor/visor) + RADIO a su derecha -->
         <div class="tramo-picker">
           <div class="radio-inline">
             <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
@@ -91,7 +103,6 @@
           </div>
         </div>
 
-        <!-- Botón USUARIO (conservado) -->
         <div class="micro-panel">
           <button id="btnOperador" class="micro-btn" title="Cambiar usuario">👤</button>
         </div>
@@ -106,35 +117,53 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 
-  <!-- Fallback de config + init, y modo VISOR (por si falla firebase-config.js) -->
+  <!-- Fallback de config + init + visor + captura de errores -->
   <script>
-    if (!window.FIREBASE_CONFIG) {
-      window.FIREBASE_CONFIG = {
-        apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
-        authDomain: "secedcp.firebaseapp.com",
-        projectId: "secedcp",
-        storageBucket: "secedcp.firebasestorage.app",
-        messagingSenderId: "722200684437",
-        appId: "1:722200684437:web:f8486e13dd6ec0bdaaf89c",
-        measurementId: "G-XB0C93FM9W"
-      };
-    }
-    try {
-      if (firebase && firebase.apps && firebase.apps.length === 0) {
-        firebase.initializeApp(window.FIREBASE_CONFIG);
+    (function(){
+      // Mostrar overlay si hay errores silenciosos
+      function showBootError(msg){
+        var el = document.getElementById('bootError');
+        var m = document.getElementById('bootMsg');
+        if (m) m.textContent = String(msg || 'Error desconocido');
+        if (el) el.style.display = 'flex';
       }
-    } catch (e) {}
-    // Modo solo lectura SIEMPRE en panel radio
-    window.VIEWER = true;
-    document.body.classList.add('viewer');
+      window.addEventListener('error', function(e){ showBootError(e.message || e.filename || 'Error'); });
+      window.addEventListener('unhandledrejection', function(e){ showBootError((e.reason && e.reason.message) || String(e.reason || 'Promise error')); });
+
+      // Marcamos VISOR siempre en panel radio
+      window.VIEWER = true;
+      document.body.classList.add('viewer');
+
+      // Fallback de config por si firebase-config.js no llega (cache/ruta)
+      if (!window.FIREBASE_CONFIG) {
+        window.FIREBASE_CONFIG = {
+          apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
+          authDomain: "secedcp.firebaseapp.com",
+          projectId: "secedcp",
+          storageBucket: "secedcp.firebasestorage.app",
+          messagingSenderId: "722200684437",
+          appId: "1:722200684437:web:f8486e13dd6ec0bdaaf89c",
+          measurementId: "G-XB0C93FM9W"
+        };
+      }
+      try {
+        if (firebase && firebase.apps && firebase.apps.length === 0) {
+          firebase.initializeApp(window.FIREBASE_CONFIG);
+        }
+      } catch(e){ /* si ya está iniciado, seguimos */ }
+
+      // Beacon de arranque (visible si algo se queda en blanco)
+      var beacon = document.getElementById('bootBeacon');
+      if (beacon) beacon.textContent = 'Cargando recursos… OK';
+    })();
   </script>
 
-  <!-- Tu config (si existe) sobreescribe el fallback anterior — perfecto -->
-  <script src="firebase-config.js?v=2"></script>
+  <!-- Tu config (si existe) sobreescribe el fallback — perfecto -->
+  <script src="firebase-config.js?v=6"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=2"></script>
-  <script src="app.js?v=2"></script>
+  <script src="sync.js?v=6"></script>
+  <script src="app.js?v=6"></script>
 
   <!-- Reloj + RADIO + fallback TRAMO -->
   <script>
