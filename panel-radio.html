@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=8" />
+  <link rel="stylesheet" href="styles.css?v=10" />
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
@@ -31,8 +31,12 @@
       border-color: #e5e7eb !important;
     }
 
-    /* Ocultar las no elegibles para el radio actual */
-    .card.radio-locked { display: none !important; }
+    /* No elegibles: visibles pero atenuadas (evita “pantalla vacía”) */
+    .card.radio-locked { 
+      display: block !important;
+      opacity: .45; 
+      filter: grayscale(.2);
+    }
 
     /* Feedback amarillo al hacer clic */
     .card.radio-clicking { 
@@ -145,13 +149,13 @@
   </script>
 
   <!-- Tu config (si existe) sobreescribe el fallback -->
-  <script src="firebase-config.js?v=8"></script>
+  <script src="firebase-config.js?v=10"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="sync.js?v=10"></script>
+  <script src="app.js?v=10"></script>
 
-  <!-- LÓGICA RADIO: reloj, selección radio y flujo de avance por radio -->
+  <!-- LÓGICA RADIO -->
   <script>
     (function(){
       /* ===== Reloj online ===== */
@@ -203,10 +207,8 @@
         const r = getRadio();
         if (btnRadio) btnRadio.textContent = 'RADIO: ' + (r ? r : '—');
         if (radioBadge) { radioBadge.textContent = 'RADIO: ' + (r ? r : '—'); radioBadge.hidden = !r; }
-        // Recalcular elegibilidad visual:
         setTimeout(applyEligibility, 0);
       }
-
       if (btnRadio) {
         btnRadio.addEventListener('click', () => {
           const curr = getRadio();
@@ -219,18 +221,15 @@
       }
       updateRadioUI();
 
-      /* ===== Firestore: mapa de “último radio” por dorsal ===== */
-      const TRAMO = (window.TRAMO_ID||'').toString();
+      /* ===== Firestore: estado por radio ===== */
+      const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '').toString();
       const db = firebase.firestore();
       const radiosCol = db.collection('tramos').doc(TRAMO).collection('radios');
 
-      // Mantenemos en memoria el estado por dorsal: { "23": {last:1}, ... }
       const radioState = new Map();
-
-      // Suscripción a los docs de estado de radios
       radiosCol.onSnapshot(snap=>{
         snap.docChanges().forEach(ch=>{
-          const id = ch.doc.id; // dorsal como string
+          const id = ch.doc.id;
           const d = ch.doc.data()||{};
           if (ch.type === 'removed') radioState.delete(id);
           else radioState.set(id, { last: typeof d.last==='number' ? d.last : 0 });
@@ -238,20 +237,19 @@
         applyEligibility();
       });
 
-      // Helper: último radio que clicó ese dorsal
       function getLastFor(value){
         const key = String(value);
         return (radioState.get(key)?.last) || 0; // 0 = nadie
       }
 
-      // Elegibilidad: este radio puede clicar si last == (radioIndex-1)
+      // Radio1 ve nuevos aunque el sub-snapshot /radios aún no haya llegado
       function canThisRadioClick(value){
-        const last = getLastFor(value);
         const rIdx = getRadioIndex();
+        if (radioState.size === 0 && rIdx === 1) return true;
+        const last = getLastFor(value);
         return last === (rIdx - 1);
       }
 
-      // Marca visual de elegibilidad en las tarjetas del grid
       function applyEligibility(){
         const cards = document.querySelectorAll('#grid .card');
         const rIdx = getRadioIndex();
@@ -261,11 +259,9 @@
           const eligible = canThisRadioClick(val);
 
           card.classList.toggle('radio-eligible', eligible);
-          card.classList.toggle('radio-locked', !eligible); // no elegibles ocultas
-          // Si deja de ser elegible, quitamos amarillo si quedó
+          card.classList.toggle('radio-locked', !eligible);
           if (!eligible) card.classList.remove('radio-clicking');
 
-          // Título informativo
           if (eligible) {
             card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
           } else {
@@ -276,15 +272,14 @@
         });
       }
 
-      // Reaplicar elegibilidad tras cada render del app.js
       const origOnRemote = window._onRemoteUpdate;
       if (typeof origOnRemote === 'function') {
         window._onRemoteUpdate = (arr)=>{ origOnRemote(arr); applyEligibility(); };
       } else {
-        // Por si acaso, observar el grid
         const obs = new MutationObserver(()=>applyEligibility());
         obs.observe(document.getElementById('grid'), {childList:true, subtree:true});
       }
+      setTimeout(applyEligibility, 0);
 
       /* ===== Click para avanzar dorsal al siguiente RADIO ===== */
       document.getElementById('grid').addEventListener('click', async (ev)=>{
@@ -292,9 +287,8 @@
         if (!card) return;
         const val = card.dataset.value;
         if (!val) return;
-        if (!card.classList.contains('radio-eligible')) return; // solo las elegibles
+        if (!card.classList.contains('radio-eligible')) return;
 
-        // Feedback visual inmediato
         card.classList.add('radio-clicking');
 
         const rIdx = getRadioIndex();
@@ -311,7 +305,6 @@
             tx.set(docRef, { last: rIdx }, { merge:true });
           });
 
-          // Auditoría (no bloquear si falla)
           try {
             const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
             await aud.add({
@@ -326,13 +319,10 @@
 
         } catch (err) {
           toast('No se pudo avanzar: ' + err.message, 'err');
-          // Si falló, quitamos el amarillo
           card.classList.remove('radio-clicking');
           return;
         }
 
-        // Al llegar el snapshot, esta tarjeta dejará de ser elegible y se ocultará.
-        // Forzamos un repintado por si tarda un poco:
         setTimeout(()=>{ applyEligibility(); }, 150);
       });
 
