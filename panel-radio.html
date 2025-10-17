@@ -1,49 +1,233 @@
-<script>
-  (function(){
-    // Misma normalización que usas en app.js
-    function sanitizeTramo(t){ return (t||'').trim().toLowerCase().replace(/[^\w-]+/g,'-').slice(0,64); }
-    function goToTramo(t){
-      const tramo = sanitizeTramo(t);
-      if(!tramo) return;
-      // guarda en recientes como hace el editor
-      try{
-        const k='seced_tramos_recent';
-        const list=JSON.parse(localStorage.getItem(k)||'[]');
-        const next=[tramo, ...list.filter(x=>x!==tramo)].slice(0,10);
-        localStorage.setItem(k, JSON.stringify(next));
-      }catch{}
-      const p = new URLSearchParams(location.search);
-      p.set('tramo', tramo);
-      location.search = p.toString();
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SECeD - Panel Radio</title>
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="theme-color" content="#0b1f12" />
+
+  <!-- Skin radio: solo números (sin tiempos) y sin menús -->
+  <style>
+    /* Modo visual (no interactivo) */
+    .viewer .card, .viewer .card * { pointer-events: none !important; cursor: default !important; }
+    .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
+    .viewer .time-stack { display: none !important; } /* oculta S/LL/A */
+
+    /* Apariencia “radio”: cartas blancas y legibles */
+    body.radio-skin .card,
+    body.radio-skin .card.selected,
+    body.radio-skin .card.abandon {
+      background: #ffffff !important;
+      color: #111 !important;
+      border-color: #e5e7eb !important;
     }
 
-    const btnTramo = document.getElementById('btnTramo');
-    const tramoMenu = document.getElementById('tramoMenu');
+    /* Botón RADIO en línea con TRAMO */
+    .radio-inline {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    #btnRadio {
+      border: 1px solid var(--btn-border);
+      background: #0c2415;
+      color: #eafff7;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-weight: 700;
+      cursor: pointer;
+    }
 
-    if (btnTramo) {
-      btnTramo.addEventListener('click', (e) => {
-        // Si ya tienes la lógica del menú en app.js, esto solo asegura que no se “pierda” el click
-        e.stopPropagation();
-        // Si existe el menú y está visible/oculto, dejamos que lo gestione app.js;
-        // si no hay menú o no puede abrirse, usamos prompt como fallback:
-        const menuVisible = tramoMenu && !tramoMenu.classList.contains('hidden');
-        const menuDefined = !!tramoMenu;
-        // Si no hay menú o está “bloqueado”, cae al prompt directo:
-        if (!menuDefined) {
-          const t = prompt('Indica el tramo (ej. 1 o tramo-1):', new URLSearchParams(location.search).get('tramo') || '1');
-          if (t !== null) goToTramo(t);
-        } else {
-          // Si tienes el menú, no hacemos nada más aquí (lo maneja tu app.js).
-          // Como refuerzo: si tras 150ms no se abrió, disparar prompt.
+    /* Badge opcional arriba a la derecha */
+    .radio-badge{
+      position:absolute; top:14px; right:14px;
+      background:#ffd60a; color:#0f1300;
+      border:1px solid #e9b400; border-radius:9999px;
+      padding:6px 12px; font-weight:900; font-size:18px; letter-spacing:.3px;
+      box-shadow:0 6px 16px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.35);
+      user-select:none; pointer-events:none;
+    }
+
+    /* Asegura posicionamiento correcto del menú TRAMO en esta página */
+    .tramo-picker { position: relative; }
+    .tramo-menu { z-index: 1000; } /* por si algo la tapaba */
+  </style>
+</head>
+<body class="radio-skin">
+  <main class="app" style="position:relative;">
+    <span id="radioBadge" class="radio-badge" aria-hidden="true" hidden>RADIO: —</span>
+
+    <div class="brand">
+      <img src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
+    </div>
+    <h1>SECeD - Panel Radio</h1>
+
+    <div class="clock-bar">
+      <div class="clock">
+        <span id="clockTime">--:--:--</span>
+        <span class="tz" id="clockTz">Europe/Madrid</span>
+        <span class="sync" id="clockSync">sincronizando…</span>
+      </div>
+
+      <div class="controls-right">
+        <!-- TRAMO (igual que en editor/visor) + RADIO a su derecha -->
+        <div class="tramo-picker">
+          <div class="radio-inline">
+            <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
+            <button id="btnRadio" type="button" title="Seleccionar Radio">RADIO: —</button>
+          </div>
+          <div id="tramoMenu" class="tramo-menu hidden" role="menu">
+            <div class="tm-section">
+              <label for="tramoInput">Escribir tramo</label>
+              <input id="tramoInput" type="text" placeholder="ej. tramo-1" />
+              <button id="tramoGo" type="button" class="primary">Ir</button>
+            </div>
+            <div class="tm-section">
+              <div class="tm-label">Recientes</div>
+              <ul id="tramoRecent"></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Botón USUARIO (conservado) -->
+        <div class="micro-panel">
+          <button id="btnOperador" class="micro-btn" title="Cambiar usuario">👤</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Solo las cajas con números -->
+    <section id="grid" class="grid" aria-live="polite"></section>
+  </main>
+
+  <!-- SDK Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+
+  <!-- Fallback de config + init, y modo VISOR (por si falla firebase-config.js) -->
+  <script>
+    if (!window.FIREBASE_CONFIG) {
+      window.FIREBASE_CONFIG = {
+        apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
+        authDomain: "secedcp.firebaseapp.com",
+        projectId: "secedcp",
+        storageBucket: "secedcp.firebasestorage.app",
+        messagingSenderId: "722200684437",
+        appId: "1:722200684437:web:f8486e13dd6ec0bdaaf89c",
+        measurementId: "G-XB0C93FM9W"
+      };
+    }
+    try {
+      if (firebase && firebase.apps && firebase.apps.length === 0) {
+        firebase.initializeApp(window.FIREBASE_CONFIG);
+      }
+    } catch (e) {}
+    // Modo solo lectura SIEMPRE en panel radio
+    window.VIEWER = true;
+    document.body.classList.add('viewer');
+  </script>
+
+  <!-- Tu config (si existe) sobreescribe el fallback anterior — perfecto -->
+  <script src="firebase-config.js?v=2"></script>
+
+  <!-- Sincronización y lógica compartida -->
+  <script src="sync.js?v=2"></script>
+  <script src="app.js?v=2"></script>
+
+  <!-- Reloj + RADIO + fallback TRAMO -->
+  <script>
+    (function(){
+      /* ====== Reloj ====== */
+      const TIMEZONE = 'Europe/Madrid';
+      const clockTime = document.getElementById('clockTime');
+      const clockTz = document.getElementById('clockTz');
+      const clockSync = document.getElementById('clockSync');
+      if (clockTz) clockTz.textContent = TIMEZONE;
+      let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
+      const pad = n => String(n).padStart(2,'0');
+      const renderClock = () => {
+        const d = new Date(Date.now() + timeOffsetMs);
+        if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      };
+      const syncTime = async () => {
+        try {
+          if (clockSync) { clockSync.textContent = 'sincronizando…'; clockSync.className = 'sync'; }
+          const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          const apiMs = Date.parse(data.datetime);
+          timeOffsetMs = apiMs - Date.now();
+          if (clockSync) { clockSync.textContent = 'ok'; clockSync.className = 'sync ok'; }
+        } catch {
+          if (clockSync) { clockSync.textContent = 'sin conexión'; clockSync.className = 'sync err'; }
+        }
+      };
+      const startClock = () => {
+        if (tickTimer) clearInterval(tickTimer);
+        tickTimer = setInterval(renderClock, 1000); renderClock();
+        if (resyncTimer) clearInterval(resyncTimer);
+        resyncTimer = setInterval(syncTime, 5*60*1000);
+      };
+      syncTime().then(startClock);
+
+      /* ====== RADIO ====== */
+      const btnRadio = document.getElementById('btnRadio');
+      const radioBadge = document.getElementById('radioBadge');
+      function getRadio(){ try { return localStorage.getItem('seced_radio') || ''; } catch { return ''; } }
+      function setRadio(v){ try { localStorage.setItem('seced_radio', String(v||'')); } catch {} }
+      function updateRadioUI(){
+        const r = getRadio();
+        if (btnRadio) btnRadio.textContent = 'RADIO: ' + (r ? r : '—');
+        if (radioBadge) {
+          if (r) { radioBadge.textContent = 'RADIO: ' + r; radioBadge.hidden = false; }
+          else { radioBadge.hidden = true; }
+        }
+      }
+      if (btnRadio) {
+        btnRadio.addEventListener('click', () => {
+          const curr = getRadio();
+          const val = prompt('Introduce tu número de RADIO:', curr || '');
+          if (val === null) return;
+          const clean = String(val).trim();
+          setRadio(clean);
+          updateRadioUI();
+        });
+      }
+      updateRadioUI();
+
+      /* ====== Fallback TRAMO (por si el menú no abre) ====== */
+      function sanitizeTramo(t){ return (t||'').trim().toLowerCase().replace(/[^\w-]+/g,'-').slice(0,64); }
+      function goToTramo(t){
+        const tramo = sanitizeTramo(t);
+        if(!tramo) return;
+        try{
+          const k='seced_tramos_recent';
+          const list=JSON.parse(localStorage.getItem(k)||'[]');
+          const next=[tramo, ...list.filter(x=>x!==tramo)].slice(0,10);
+          localStorage.setItem(k, JSON.stringify(next));
+        }catch{}
+        const p = new URLSearchParams(location.search);
+        p.set('tramo', tramo);
+        location.search = p.toString();
+      }
+      const btnTramo = document.getElementById('btnTramo');
+      const tramoMenu = document.getElementById('tramoMenu');
+      if (btnTramo) {
+        btnTramo.addEventListener('click', (e) => {
+          e.stopPropagation();
           setTimeout(() => {
-            const stillHidden = tramoMenu.classList.contains('hidden');
-            if (stillHidden) {
+            const noMenu = !tramoMenu;
+            const stillHidden = tramoMenu && tramoMenu.classList.contains('hidden');
+            if (noMenu || stillHidden) {
               const t = prompt('Indica el tramo (ej. 1 o tramo-1):', new URLSearchParams(location.search).get('tramo') || '1');
               if (t !== null) goToTramo(t);
             }
           }, 150);
-        }
-      });
-    }
-  })();
-</script>
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
