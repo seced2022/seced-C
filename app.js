@@ -67,7 +67,6 @@ const urlViewerFlag = new URLSearchParams(location.search).has('viewer');
 window.VIEWER = (typeof window.VIEWER !== 'undefined') ? !!window.VIEWER : urlViewerFlag;
 if (window.VIEWER) document.body.classList.add('viewer');
 
-
 function pad(n) { return String(n).padStart(2, '0'); }
 function fmtTime(ms) { const d = new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
 function renderClock(nowMs) { const d = new Date(nowMs + timeOffsetMs); if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
@@ -120,7 +119,7 @@ function auditCSV(){
       const detail = JSON.stringify(r.detail||{}).replace(/"/g,'""');
       lines.push([ts, actor, action, `"${detail}"`].join(','));
     }
-    const blob = new Blob([lines.join('\\n')], {type: 'text/csv'});
+    const blob = new Blob([lines.join('\n')], {type: 'text/csv'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `auditoria_${(window.TRAMO_ID||'tramo').toString()}.csv`;
@@ -135,20 +134,19 @@ function exportStatesCSV(){
     const lines = [headers.join(',')];
     for(const it of arr){
       const row = [
-  (window.TRAMO_ID||'').toString().replace(/,/g,' '),
-  it.value,
-  it.status||'normal',
-  (it.rNumber!=null? it.rNumber:''),
-  (it.tSalida? new Date(it.tSalida).toISOString():''),                // tSalidaActual
-  (Array.isArray(it.salidasHist)? it.salidasHist.map(t=>new Date(t).toISOString()).join('|') : ''), // salidasHist
-  (it.tLlegada? new Date(it.tLlegada).toISOString():''),             // tLlegadaActual
-  (Array.isArray(it.llegadasHist)? it.llegadasHist.map(t=>new Date(t).toISOString()).join('|') : ''), // llegadasHist
-  (it.tAbandono? new Date(it.tAbandono).toISOString(): '')
-];
-
+        (window.TRAMO_ID||'').toString().replace(/,/g,' '),
+        it.value,
+        it.status||'normal',
+        (it.rNumber!=null? it.rNumber:''),
+        (it.tSalida? new Date(it.tSalida).toISOString():''),                // tSalidaActual
+        (Array.isArray(it.salidasHist)? it.salidasHist.map(t=>new Date(t).toISOString()).join('|') : ''), // salidasHist
+        (it.tLlegada? new Date(it.tLlegada).toISOString():''),             // tLlegadaActual
+        (Array.isArray(it.llegadasHist)? it.llegadasHist.map(t=>new Date(t).toISOString()).join('|') : ''), // llegadasHist
+        (it.tAbandono? new Date(it.tAbandono).toISOString(): '')
+      ];
       lines.push(row.join(','));
     }
-    const blob = new Blob([lines.join('\\n')], {type:'text/csv'});
+    const blob = new Blob([lines.join('\n')], {type:'text/csv'});
     const url = URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`estados_${(window.TRAMO_ID||'tramo')}.csv`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
@@ -164,6 +162,32 @@ if (btnOperador) btnOperador.addEventListener('click', ()=>{
   const name = prompt('Nombre o identificador del operador:', window.OPERATOR||'');
   if (name !== null) { window.OPERATOR = (name||'').trim(); setOperator(window.OPERATOR); }
 });
+
+/* ================================
+   [ADD] Mapa de clics por RADIO y suscripción a Firestore
+   dorsal (string) -> [radios que clicaron]
+=================================== */
+const radioClicksMap = new Map();
+window._getRadioClicks = () => radioClicksMap;
+
+(function subscribeRadioClicks(){
+  try {
+    if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
+    const db = firebase.firestore();
+    db.collection('tramos').doc(tramo).collection('radios')
+      .onSnapshot(snap=>{
+        snap.docChanges().forEach(ch=>{
+          const id  = ch.doc.id;       // dorsal como string
+          const d   = ch.doc.data()||{};
+          const arr = Array.isArray(d.list) ? d.list.slice().sort((a,b)=>a-b) : [];
+          if (ch.type === 'removed' || arr.length===0) radioClicksMap.delete(id);
+          else radioClicksMap.set(id, arr);
+        });
+        if (typeof render === 'function') render(); // repintar para mostrar chips
+      }, err => console.warn('subscribeRadioClicks error:', err));
+  } catch(e){ console.warn('subscribeRadioClicks exception:', e); }
+})();
 
 function render() {
   if (countSalida) countSalida.textContent = String(items.length);
@@ -196,7 +220,7 @@ function render() {
     optEditSalida.className = 'menu-item';
     optEditSalida.textContent = 'Editar salida…';
     if (!VIEWER) optEditSalida.addEventListener('click', (e) => {
-    e.stopPropagation(); menu.classList.add('hidden'); editSalida(item.value);
+      e.stopPropagation(); menu.classList.add('hidden'); editSalida(item.value);
     });
     menu.appendChild(optEditSalida);
 
@@ -236,6 +260,43 @@ function render() {
     if (!VIEWER) document.addEventListener('click', (ev) => { if (!card.contains(ev.target)) menu.classList.add('hidden'); });
 
     cell.appendChild(card);
+
+    /* ===== [ADD] Chips R:n (encima de franjas de tiempo) ===== */
+    const chipsWrap = document.createElement('div');
+    chipsWrap.className = 'radio-chips';
+    // Estilo inline para no tocar CSS global
+    chipsWrap.style.display = 'flex';
+    chipsWrap.style.gap = '6px';
+    chipsWrap.style.margin = '6px 0 5px';
+    chipsWrap.style.flexWrap = 'wrap';
+
+    try {
+      const clicks = (typeof window._getRadioClicks==='function')
+        ? window._getRadioClicks().get(String(item.value))
+        : null;
+      if (Array.isArray(clicks) && clicks.length > 0) {
+        for (const r of clicks) {
+          const chip = document.createElement('span');
+          chip.className = 'chip chip-radio';
+          // Estilos amarillos (bolita) inline
+          chip.style.display = 'inline-flex';
+          chip.style.alignItems = 'center';
+          chip.style.lineHeight = '1';
+          chip.style.padding = '2px 6px';
+          chip.style.borderRadius = '9999px';
+          chip.style.fontSize = '12px';
+          chip.style.fontWeight = '700';
+          chip.style.userSelect = 'none';
+          chip.style.background = '#fef08a';
+          chip.style.border = '1px solid #eab308';
+          chip.style.color = '#0f1300';
+          chip.textContent = `R:${r}`;
+          chipsWrap.appendChild(chip);
+        }
+      }
+    } catch(e){ /* silencioso */ }
+    cell.appendChild(chipsWrap);
+    /* ===== [/ADD] ===== */
 
     const timeStack = document.createElement('div');
     timeStack.className = 'time-stack';
@@ -278,33 +339,32 @@ function render() {
     const sTitle2 = document.createElement('div'); sTitle2.className='sec-title'; sTitle2.textContent='S (Salida)'; secS2.appendChild(sTitle2);
 
     const secSPrev = document.createElement('div'); 
-secSPrev.className = 'section';
-const sPrevTitle = document.createElement('div'); 
-sPrevTitle.className = 'sec-title'; 
-sPrevTitle.textContent = 'S previas';
-secSPrev.appendChild(sPrevTitle);
+    secSPrev.className = 'section';
+    const sPrevTitle = document.createElement('div'); 
+    sPrevTitle.className = 'sec-title'; 
+    sPrevTitle.textContent = 'S previas';
+    secSPrev.appendChild(sPrevTitle);
 
-const sHistArr = Array.isArray(item.salidasHist) ? item.salidasHist.slice() : [];
-sHistArr.sort((a,b)=> b-a);
+    const sHistArr = Array.isArray(item.salidasHist) ? item.salidasHist.slice() : [];
+    sHistArr.sort((a,b)=> b-a);
 
-if (sHistArr.length === 0){
-  const r = document.createElement('div'); 
-  r.className = 'hist-empty'; 
-  r.textContent = 'Sin S previas';
-  secSPrev.appendChild(r);
-} else {
-  let idxS = 1;
-  for (const t of sHistArr){
-    const r = document.createElement('div'); r.className='row';
-    const tg = document.createElement('span'); tg.className='tag'; tg.textContent='S-'+(idxS++);
-    const v = document.createElement('span'); v.textContent=(new Date(t)).toTimeString().slice(0,8);
-    r.appendChild(tg); r.appendChild(v); secSPrev.appendChild(r);
-  }
-}
+    if (sHistArr.length === 0){
+      const r = document.createElement('div'); 
+      r.className = 'hist-empty'; 
+      r.textContent = 'Sin S previas';
+      secSPrev.appendChild(r);
+    } else {
+      let idxS = 1;
+      for (const t of sHistArr){
+        const r = document.createElement('div'); r.className='row';
+        const tg = document.createElement('span'); tg.className='tag'; tg.textContent='S-'+(idxS++);
+        const v = document.createElement('span'); v.textContent=(new Date(t)).toTimeString().slice(0,8);
+        r.appendChild(tg); r.appendChild(v); secSPrev.appendChild(r);
+      }
+    }
 
-tt2.appendChild(secSPrev); // <<— AÑADIR
+    tt2.appendChild(secSPrev);
 
-    
     if (item.tSalida){ const r=document.createElement('div'); r.className='row'; const tg=document.createElement('span'); tg.className='tag'; tg.textContent='S'; const v=document.createElement('span'); v.textContent=(new Date(item.tSalida)).toTimeString().slice(0,8); r.appendChild(tg); r.appendChild(v); secS2.appendChild(r);} else { const r=document.createElement('div'); r.className='hist-empty'; r.textContent='—'; secS2.appendChild(r); }
     const secLL2 = document.createElement('div'); secLL2.className='section'; const llTitle2 = document.createElement('div'); llTitle2.className='sec-title'; llTitle2.textContent='LL previas'; secLL2.appendChild(llTitle2);
     const histArr2 = Array.isArray(item.llegadasHist) ? item.llegadasHist.slice() : []; histArr2.sort((a,b)=>b-a);
@@ -407,7 +467,6 @@ function editSalida(val){
   if (typeof syncSave === 'function') syncSave();
   logAudit('editar_salida', { value: val, tSalida_prev: prev, tSalida_new: newT, salidasHist: items[idx].salidasHist||[] });
 }
-
 
 if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
 if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') addNumber(); });
