@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=14" />
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
@@ -12,10 +12,10 @@
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
     .viewer .time-stack { display: none !important; }
 
-    /* Bloqueamos clicks por defecto… */
-    .viewer .card, .viewer .card * { pointer-events: none; cursor: default; }
+    /* ❗️IMPORTANTE: NO bloquear pointer-events globalmente (lo hacía fallar) */
+    /* .viewer .card, .viewer .card * { pointer-events: none; cursor: default; } */
 
-    /* …y los habilitamos SOLO en tarjetas elegibles para este radio */
+    /* Clic habilitado SOLO si es elegible (y lo controla el JS también) */
     .viewer .card.radio-eligible,
     .viewer .card.radio-eligible * {
       pointer-events: auto !important;
@@ -30,11 +30,13 @@
       box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset;
     }
 
-    /* NO elegibles: visibles pero atenuadas (¡no ocultar!) */
+    /* NO elegibles: visibles pero atenuadas (no ocultar) */
     .card.radio-locked {
       display: block !important;
       opacity: .45;
       filter: grayscale(.2);
+      pointer-events: none;      /* sin clic en no elegibles */
+      cursor: default !important;
     }
 
     /* Amarillo persistente en el radio que ya clicó */
@@ -43,6 +45,8 @@
       background: #fef08a !important;
       border-color: #eab308 !important;
       box-shadow: 0 0 0 2px rgba(234,179,8,.35) inset;
+      pointer-events: none;      /* ya clicada en este radio → no clicable de nuevo */
+      cursor: default !important;
     }
 
     /* Feedback amarillo inmediato al click (efímero) */
@@ -161,11 +165,11 @@
   </script>
 
   <!-- Tu config (si existe) sobreescribe el fallback -->
-  <script src="firebase-config.js?v=13"></script>
+  <script src="firebase-config.js?v=14"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=13"></script>
-  <script src="app.js?v=13"></script>
+  <script src="sync.js?v=14"></script>
+  <script src="app.js?v=14"></script>
 
   <!-- LÓGICA RADIO -->
   <script>
@@ -224,7 +228,7 @@
         const r = getRadio();
         if (btnRadio) btnRadio.textContent = 'RADIO: ' + (r ? r : '—');
         if (radioBadge) { radioBadge.textContent = 'RADIO: ' + (r ? r : '—'); radioBadge.hidden = !r; }
-        clickedSet = loadClickedSet();     // carga el set propio de este radio/tramo
+        clickedSet = loadClickedSet();     // set propio de este radio/tramo
         setTimeout(applyEligibility, 0);
       }
       if (btnRadio) {
@@ -270,10 +274,9 @@
         return (radioState.get(key)?.last) || 0; // 0 = nadie
       }
 
-      // Elegible si last == (radio-1). Para RADIO 1, si /radios aún no llegó, asumimos last=0.
+      // Elegibilidad directa: last debe ser (radio-1). (Radio1 ve last=0)
       function canThisRadioClick(value){
         const rIdx = getRadioIndex();
-        if (radioState.size === 0 && rIdx === 1) return true; // Radio1 ve nuevos aunque /radios tarde
         const last = getLastFor(value);
         return last === (rIdx - 1);
       }
@@ -288,27 +291,20 @@
           const eligible = canThisRadioClick(val);
           const clickedByMe = clickedSet.has(String(val));
 
-          // Reglas:
-          // - Elegibles → visibles en blanco brillo + clic habilitado
-          // - No elegibles → visibles PERO atenuadas
-          // - Si ya la clicó este radio → visible y amarilla persistente
-          const showAsEligible = eligible;
-          const showAsClicked  = clickedByMe;
-          const locked         = !showAsEligible && !showAsClicked;
+          /* Limpia clases anteriores para evitar estados pisados */
+          card.classList.remove('radio-eligible','radio-locked','radio-clicked-by-me','radio-clicking');
 
-          card.classList.toggle('radio-eligible', showAsEligible);
-          card.classList.toggle('radio-clicked-by-me', showAsClicked);
-          card.classList.toggle('radio-locked', locked);
-
-          // Limpia marca efímera si dejó de ser elegible
-          if (!eligible) card.classList.remove('radio-clicking');
-
-          // Tooltip informativo
-          if (showAsEligible) {
-            card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
-          } else if (showAsClicked) {
+          if (clickedByMe) {
+            // Ya la clicó este radio → visible y amarilla persistente
+            card.classList.add('radio-clicked-by-me');
             card.title = `Clicada por RADIO ${rIdx}`;
+          } else if (eligible) {
+            // Elegible → blanca y clic habilitado
+            card.classList.add('radio-eligible');
+            card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
           } else {
+            // No elegible → visible pero atenuada, sin clic
+            card.classList.add('radio-locked');
             const last = getLastFor(val);
             card.title = `Esperando turno (RADIO ${last+1})`;
           }
@@ -343,7 +339,7 @@
         if (!card) return;
         const val = card.dataset.value;
         if (!val) return;
-        if (!card.classList.contains('radio-eligible')) return;
+        if (!card.classList.contains('radio-eligible')) return; // doble seguridad
 
         card.classList.add('radio-clicking');
 
