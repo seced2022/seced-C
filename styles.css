@@ -228,3 +228,34 @@ button.primary { background: linear-gradient(180deg, #1dbd6d, #129254); border-c
   color:#0f1300;
   box-shadow:0 1px 0 rgba(255,255,255,.35) inset;
 }
+/* --- Reset del amarillo del editor en el panel radio/visor --- */
+body.viewer .grid .card,
+body.viewer .grid .card.selected {
+  background: #ffffff !important;
+  color: #111 !important;
+  border-color: #e5e7eb !important;
+  box-shadow: none !important;
+}
+
+/* Elegible (clic habilitado) → blanco con halo verde */
+body.viewer .grid .card.radio-eligible {
+  background: #ffffff !important;
+  color: #111 !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset !important;
+}
+
+/* Ya clicada por este radio → amarillo */
+body.viewer .grid .card.radio-clicked-by-me {
+  background: #fef08a !important;
+  border-color: #eab308 !important;
+  box-shadow: 0 0 0 2px rgba(234,179,8,.35) inset !important;
+}
+
+/* No elegible (aún no es su turno) → atenuada */
+body.viewer .grid .card.radio-locked {
+  opacity: .45 !important;
+  filter: grayscale(.2) !important;
+  pointer-events: none !important;
+  cursor: default !important;
+}
