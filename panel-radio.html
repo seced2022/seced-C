@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SECeD - Panel Radios</title>
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <title>SECeD - Panel Radio</title>
+  <link rel="stylesheet" href="styles.css?v=15" />
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
@@ -12,17 +12,15 @@
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
     .viewer .time-stack { display: none !important; }
 
-    /* ❗️IMPORTANTE: NO bloquear pointer-events globalmente (lo hacía fallar) */
+    /* NO bloquear pointer-events globalmente: el JS valida elegibilidad en el click */
     /* .viewer .card, .viewer .card * { pointer-events: none; cursor: default; } */
 
-    /* Clic habilitado SOLO si es elegible (y lo controla el JS también) */
+    /* Elegible → clic habilitado y “blanco brillo” */
     .viewer .card.radio-eligible,
     .viewer .card.radio-eligible * {
       pointer-events: auto !important;
       cursor: pointer !important;
     }
-
-    /* Estilo de elegible = "blanco brillo" */
     .card.radio-eligible {
       background: #ffffff !important;
       color: #111 !important;
@@ -30,26 +28,26 @@
       box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset;
     }
 
-    /* NO elegibles: visibles pero atenuadas (no ocultar) */
+    /* No elegibles → VISIBLES pero atenuadas (nunca las ocultamos) */
     .card.radio-locked {
       display: block !important;
       opacity: .45;
       filter: grayscale(.2);
-      pointer-events: none;      /* sin clic en no elegibles */
+      pointer-events: none;
       cursor: default !important;
     }
 
-    /* Amarillo persistente en el radio que ya clicó */
+    /* Ya clicadas por este radio → amarillas persistentes (sin clic) */
     .card.radio-clicked-by-me {
       display: block !important;
       background: #fef08a !important;
       border-color: #eab308 !important;
       box-shadow: 0 0 0 2px rgba(234,179,8,.35) inset;
-      pointer-events: none;      /* ya clicada en este radio → no clicable de nuevo */
+      pointer-events: none;
       cursor: default !important;
     }
 
-    /* Feedback amarillo inmediato al click (efímero) */
+    /* Feedback al clicar (efímero) */
     .card.radio-clicking {
       background: #fef08a !important;
       border-color: #eab308 !important;
@@ -165,11 +163,11 @@
   </script>
 
   <!-- Tu config (si existe) sobreescribe el fallback -->
-  <script src="firebase-config.js?v=14"></script>
+  <script src="firebase-config.js?v=15"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=14"></script>
-  <script src="app.js?v=14"></script>
+  <script src="sync.js?v=15"></script>
+  <script src="app.js?v=15"></script>
 
   <!-- LÓGICA RADIO -->
   <script>
@@ -271,14 +269,34 @@
 
       function getLastFor(value){
         const key = String(value);
-        return (radioState.get(key)?.last) || 0; // 0 = nadie
+        return (radioState.get(key)?.last) || 0; // 0 = nadie / sin doc
       }
 
-      // Elegibilidad directa: last debe ser (radio-1). (Radio1 ve last=0)
+      /* ===== ACCESO A ITEMS (para ver tSalida) ===== */
+      const getItems = (typeof window._getItems === 'function') ? window._getItems : () => [];
+      function getItemByValue(val){
+        const n = Number(val);
+        const arr = getItems() || [];
+        return arr.find(x => Number(x.value) === n) || null;
+      }
+
+      /* ===== Elegibilidad =====
+         - Regla base: last === (radio-1)
+         - Gracia RADIO 1: si last>0 (arrastra estado viejo) PERO la tarjeta es NUEVA (tSalida <= 5 min), permitir clic igualmente.
+      */
+      const GRACE_MS = 5 * 60 * 1000; // 5 minutos
       function canThisRadioClick(value){
-        const rIdx = getRadioIndex();
-        const last = getLastFor(value);
-        return last === (rIdx - 1);
+        const rIdx = getRadioIndex();            // 1,2,3…
+        const last = getLastFor(value);          // 0 si sin doc
+        if (last === (rIdx - 1)) return true;    // caso estándar
+
+        if (rIdx === 1 && last > 0) {
+          const it = getItemByValue(value);
+          if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) {
+            return true; // “nuevo de salida” aunque quede basura en /radios
+          }
+        }
+        return false;
       }
 
       function applyEligibility(){
@@ -295,16 +313,13 @@
           card.classList.remove('radio-eligible','radio-locked','radio-clicked-by-me','radio-clicking');
 
           if (clickedByMe) {
-            // Ya la clicó este radio → visible y amarilla persistente
-            card.classList.add('radio-clicked-by-me');
+            card.classList.add('radio-clicked-by-me');        // amarilla fija en MI panel
             card.title = `Clicada por RADIO ${rIdx}`;
           } else if (eligible) {
-            // Elegible → blanca y clic habilitado
-            card.classList.add('radio-eligible');
+            card.classList.add('radio-eligible');             // blanca, clic habilitado
             card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
           } else {
-            // No elegible → visible pero atenuada, sin clic
-            card.classList.add('radio-locked');
+            card.classList.add('radio-locked');               // visible atenuada
             const last = getLastFor(val);
             card.title = `Esperando turno (RADIO ${last+1})`;
           }
@@ -321,14 +336,12 @@
       }
       setTimeout(applyEligibility, 0);
 
-      /* ===== Watchdog: reaplica cada ~800 ms para no tener que recargar ni re-seleccionar radio ===== */
+      /* Watchdog: reaplica cada ~800 ms para no tener que recargar ni re-seleccionar radio */
       (function(){
         let _eligTimer = null;
         function startEligibilityWatchdog(){
           if (_eligTimer) clearInterval(_eligTimer);
-          _eligTimer = setInterval(() => {
-            try { applyEligibility(); } catch {}
-          }, 800);
+          _eligTimer = setInterval(() => { try { applyEligibility(); } catch {} }, 800);
         }
         startEligibilityWatchdog();
       })();
@@ -352,7 +365,17 @@
           await db.runTransaction(async (tx)=>{
             const snap = await tx.get(docRef);
             const data = snap.exists ? (snap.data()||{}) : {};
-            const last = (typeof data.last==='number') ? data.last : 0;
+            let last = (typeof data.last==='number') ? data.last : 0;
+
+            // Acepta también la “gracia” si soy R1 y es nueva salida
+            if (!(last === (rIdx - 1))) {
+              if (rIdx === 1) {
+                const it = getItemByValue(val);
+                if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) {
+                  last = 0; // tratamos como nuevo
+                }
+              }
+            }
             if (last !== (rIdx - 1)) {
               throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`);
             }
