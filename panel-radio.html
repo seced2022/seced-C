@@ -165,6 +165,14 @@
   <!-- Tu config (si existe) sobreescribe el fallback -->
   <script src="firebase-config.js?v=15"></script>
 
+<script>
+  // marcar esta página como visor / radio para que el CSS específico se active
+  window.VIEWER = true;
+  document.body.classList.add('viewer');
+</script>
+
+
+  
   <!-- Sincronización y lógica compartida -->
   <script src="sync.js?v=15"></script>
   <script src="app.js?v=15"></script>
