@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
@@ -32,16 +32,24 @@
     }
 
     /* No elegibles: visibles pero atenuadas (evita “pantalla vacía”) */
-    .card.radio-locked { 
+    .card.radio-locked {
       display: block !important;
-      opacity: .45; 
+      opacity: .45;
       filter: grayscale(.2);
     }
 
-    /* Feedback amarillo al hacer clic */
-    .card.radio-clicking { 
-      background: #fef08a !important;           /* amarillo suave */
-      border-color: #eab308 !important;          /* contorno dorado */
+    /* Amarillo persistente en el radio que ya clicó */
+    .card.radio-clicked-by-me {
+      display: block !important;
+      background: #fef08a !important;
+      border-color: #eab308 !important;
+      box-shadow: 0 0 0 2px rgba(234,179,8,.35) inset;
+    }
+
+    /* Feedback amarillo inmediato al click (efímero) */
+    .card.radio-clicking {
+      background: #fef08a !important;
+      border-color: #eab308 !important;
       box-shadow: 0 0 0 2px rgba(234,179,8,.35) inset;
     }
 
@@ -128,12 +136,13 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 
-  <!-- Fallback de config + init + marcar VISOR -->
+  <!-- Fallback de config + init + marcar VISOR (sin duplicar apps) -->
   <script>
-    // VISOR base (para que app.js no enganche sus propios clics)
+    // VISOR base (para que app.js no enganche clics propios)
     window.VIEWER = true;
     document.body.classList.add('viewer');
 
+    // Fallback config por si firebase-config.js no llegó aún
     if (!window.FIREBASE_CONFIG) {
       window.FIREBASE_CONFIG = {
         apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
@@ -145,15 +154,19 @@
         measurementId: "G-XB0C93FM9W"
       };
     }
-    try { if (firebase && firebase.apps && firebase.apps.length === 0) firebase.initializeApp(window.FIREBASE_CONFIG); } catch(e){}
+    try {
+      if (firebase && firebase.apps && firebase.apps.length === 0) {
+        firebase.initializeApp(window.FIREBASE_CONFIG);
+      }
+    } catch(e) { /* si ya está iniciada, seguimos sin error */ }
   </script>
 
   <!-- Tu config (si existe) sobreescribe el fallback -->
-  <script src="firebase-config.js?v=10"></script>
+  <script src="firebase-config.js?v=11"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="sync.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 
   <!-- LÓGICA RADIO -->
   <script>
@@ -203,10 +216,16 @@
       function setRadio(v){ try { localStorage.setItem('seced_radio', String(v||'')); } catch {} }
       function getRadioIndex(){ const r = parseInt(getRadio(),10); return Number.isFinite(r) && r>0 ? r : 1; }
 
+      function clickedKey(){ const tramo=(window.TRAMO_ID||new URLSearchParams(location.search).get('tramo')||'1').toString(); return `seced_radio_clicked:${tramo}:${getRadioIndex()}`; }
+      function loadClickedSet(){ try { return new Set(JSON.parse(localStorage.getItem(clickedKey())||'[]')); } catch { return new Set(); } }
+      function saveClickedSet(set){ try { localStorage.setItem(clickedKey(), JSON.stringify(Array.from(set))); } catch {} }
+      let clickedSet = loadClickedSet();
+
       function updateRadioUI(){
         const r = getRadio();
         if (btnRadio) btnRadio.textContent = 'RADIO: ' + (r ? r : '—');
         if (radioBadge) { radioBadge.textContent = 'RADIO: ' + (r ? r : '—'); radioBadge.hidden = !r; }
+        clickedSet = loadClickedSet();     // carga el set propio de este radio/tramo
         setTimeout(applyEligibility, 0);
       }
       if (btnRadio) {
@@ -222,27 +241,37 @@
       updateRadioUI();
 
       /* ===== Firestore: estado por radio ===== */
-      const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '').toString();
+      const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
       const db = firebase.firestore();
-      const radiosCol = db.collection('tramos').doc(TRAMO).collection('radios');
+      let radiosCol = null;
+      try {
+        radiosCol = db.collection('tramos').doc(TRAMO).collection('radios');
+      } catch(e) {
+        console.warn('Firestore no disponible aún:', e);
+      }
 
       const radioState = new Map();
-      radiosCol.onSnapshot(snap=>{
-        snap.docChanges().forEach(ch=>{
-          const id = ch.doc.id;
-          const d = ch.doc.data()||{};
-          if (ch.type === 'removed') radioState.delete(id);
-          else radioState.set(id, { last: typeof d.last==='number' ? d.last : 0 });
+      if (radiosCol) {
+        radiosCol.onSnapshot(snap=>{
+          snap.docChanges().forEach(ch=>{
+            const id = ch.doc.id;
+            const d = ch.doc.data()||{};
+            if (ch.type === 'removed') radioState.delete(id);
+            else radioState.set(id, { last: typeof d.last==='number' ? d.last : 0 });
+          });
+          applyEligibility();
+        }, err => {
+          console.error('onSnapshot error:', err);
+          toast('Error de sincronización', 'err');
         });
-        applyEligibility();
-      });
+      }
 
       function getLastFor(value){
         const key = String(value);
         return (radioState.get(key)?.last) || 0; // 0 = nadie
       }
 
-      // Radio1 ve nuevos aunque el sub-snapshot /radios aún no haya llegado
+      // Radio 1 ve nuevos aunque /radios tarde en llegar
       function canThisRadioClick(value){
         const rIdx = getRadioIndex();
         if (radioState.size === 0 && rIdx === 1) return true;
@@ -257,13 +286,17 @@
           const val = card.dataset.value;
           if (!val) return;
           const eligible = canThisRadioClick(val);
+          const clickedByMe = clickedSet.has(String(val));
 
           card.classList.toggle('radio-eligible', eligible);
-          card.classList.toggle('radio-locked', !eligible);
+          card.classList.toggle('radio-locked', !eligible && !clickedByMe); // no elegible y no clicada por mí → atenuada
+          card.classList.toggle('radio-clicked-by-me', clickedByMe);       // si ya la clicó este radio → visible y amarilla
           if (!eligible) card.classList.remove('radio-clicking');
 
           if (eligible) {
             card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
+          } else if (clickedByMe) {
+            card.title = `Clicada por RADIO ${rIdx}`;
           } else {
             const last = getLastFor(val);
             const espera = (last >= rIdx) ? `ya pasó por RADIO ${rIdx}` : `esperando RADIO ${last+1}`;
@@ -272,6 +305,7 @@
         });
       }
 
+      // Reaplicar elegibilidad tras cada render del app.js
       const origOnRemote = window._onRemoteUpdate;
       if (typeof origOnRemote === 'function') {
         window._onRemoteUpdate = (arr)=>{ origOnRemote(arr); applyEligibility(); };
@@ -280,6 +314,18 @@
         obs.observe(document.getElementById('grid'), {childList:true, subtree:true});
       }
       setTimeout(applyEligibility, 0);
+
+      /* ===== Watchdog: reaplica cada ~800 ms para no tener que recargar ni re-seleccionar radio ===== */
+      (function(){
+        let _eligTimer = null;
+        function startEligibilityWatchdog(){
+          if (_eligTimer) clearInterval(_eligTimer);
+          _eligTimer = setInterval(() => {
+            try { applyEligibility(); } catch {}
+          }, 800);
+        }
+        startEligibilityWatchdog();
+      })();
 
       /* ===== Click para avanzar dorsal al siguiente RADIO ===== */
       document.getElementById('grid').addEventListener('click', async (ev)=>{
@@ -292,6 +338,8 @@
         card.classList.add('radio-clicking');
 
         const rIdx = getRadioIndex();
+        if (!radiosCol) return; // seguridad
+
         const docRef = radiosCol.doc(String(val));
 
         try {
@@ -305,6 +353,11 @@
             tx.set(docRef, { last: rIdx }, { merge:true });
           });
 
+          // Guardar “clicado por este radio” (persistente por tramo+radio)
+          clickedSet.add(String(val));
+          saveClickedSet(clickedSet);
+
+          // Auditoría (no bloquear si falla)
           try {
             const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
             await aud.add({
@@ -315,7 +368,7 @@
             });
           } catch(e){}
 
-          toast(`Avanzado dorsal ${val} → RADIO ${rIdx+1}`, 'ok');
+          toast(`Clic RADIO ${rIdx} → dorsal ${val}`, 'ok');
 
         } catch (err) {
           toast('No se pudo avanzar: ' + err.message, 'err');
@@ -323,6 +376,7 @@
           return;
         }
 
+        // Recalcular (el snapshot hará el resto)
         setTimeout(()=>{ applyEligibility(); }, 150);
       });
 
