@@ -23,6 +23,7 @@ const tramoMenu  = document.getElementById('tramoMenu');
 const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
+const btnResetRadios = document.getElementById('btnResetRadios');
 
 function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
 function setOperator(name){ try { localStorage.setItem('seced_operator', name || ''); } catch {} updateAuditMeta(); }
