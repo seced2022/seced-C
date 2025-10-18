@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=12" />
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
@@ -22,21 +22,16 @@
       cursor: pointer !important;
     }
 
-    /* Apariencia “radio”: cartas blancas */
-    body.radio-skin .card,
-    body.radio-skin .card.selected,
-    body.radio-skin .card.abandon {
+    /* Estilos de elegible = "blanco brillo"  */
+    .card.radio-eligible {
       background: #ffffff !important;
       color: #111 !important;
       border-color: #e5e7eb !important;
+      box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset;
     }
 
-    /* No elegibles: visibles pero atenuadas (evita “pantalla vacía”) */
-    .card.radio-locked {
-      display: block !important;
-      opacity: .45;
-      filter: grayscale(.2);
-    }
+    /* NO elegibles: NO se muestran (para que no aparezcan en otros radios) */
+    .card.radio-locked { display: none !important; }
 
     /* Amarillo persistente en el radio que ya clicó */
     .card.radio-clicked-by-me {
@@ -162,11 +157,11 @@
   </script>
 
   <!-- Tu config (si existe) sobreescribe el fallback -->
-  <script src="firebase-config.js?v=11"></script>
+  <script src="firebase-config.js?v=12"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=11"></script>
-  <script src="app.js?v=11"></script>
+  <script src="sync.js?v=12"></script>
+  <script src="app.js?v=12"></script>
 
   <!-- LÓGICA RADIO -->
   <script>
@@ -271,10 +266,10 @@
         return (radioState.get(key)?.last) || 0; // 0 = nadie
       }
 
-      // Radio 1 ve nuevos aunque /radios tarde en llegar
+      // Elegible si last == (radio-1). Para RADIO 1, si /radios aún no llegó, asumimos last=0.
       function canThisRadioClick(value){
         const rIdx = getRadioIndex();
-        if (radioState.size === 0 && rIdx === 1) return true;
+        if (radioState.size === 0 && rIdx === 1) return true; // Radio1 ve nuevos aunque /radios tarde
         const last = getLastFor(value);
         return last === (rIdx - 1);
       }
@@ -288,19 +283,29 @@
           const eligible = canThisRadioClick(val);
           const clickedByMe = clickedSet.has(String(val));
 
-          card.classList.toggle('radio-eligible', eligible);
-          card.classList.toggle('radio-locked', !eligible && !clickedByMe); // no elegible y no clicada por mí → atenuada
-          card.classList.toggle('radio-clicked-by-me', clickedByMe);       // si ya la clicó este radio → visible y amarilla
+          // Regla principal:
+          //  - Elegibles → visibles en blanco brillo + clic habilitado
+          //  - NO elegibles → NO se muestran (locked)
+          //  - Si ya la clicó este radio → visible SIEMPRE y amarilla
+          const showAsClicked = clickedByMe;
+          const showAsEligible = eligible;
+
+          card.classList.toggle('radio-eligible', showAsEligible);
+          card.classList.toggle('radio-clicked-by-me', showAsClicked);
+
+          // locked si no es elegible y no la clicó este radio
+          const locked = !showAsEligible && !showAsClicked;
+          card.classList.toggle('radio-locked', locked);
+
           if (!eligible) card.classList.remove('radio-clicking');
 
-          if (eligible) {
+          if (showAsEligible) {
             card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
-          } else if (clickedByMe) {
+          } else if (showAsClicked) {
             card.title = `Clicada por RADIO ${rIdx}`;
           } else {
-            const last = getLastFor(val);
-            const espera = (last >= rIdx) ? `ya pasó por RADIO ${rIdx}` : `esperando RADIO ${last+1}`;
-            card.title = `Bloqueado: ${espera}`;
+            // no visible; no necesitas título
+            card.removeAttribute('title');
           }
         });
       }
