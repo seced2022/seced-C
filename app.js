@@ -46,6 +46,11 @@ function applyModeUI(){
   const disableInput = (window.MODE === 'LLEGADA');
   if (input) input.disabled = disableInput;
   if (btnAgregar) btnAgregar.disabled = disableInput;
+  
+  // ⬇️ Mostrar el botón Reset solo en JEFE
+  if (btnResetRadios) {
+    btnResetRadios.style.display = (window.MODE === 'JEFE') ? '' : 'none';
+  }
 }
 (function initModeButtons(){
   const bJ = document.getElementById('btnModeJefe');
