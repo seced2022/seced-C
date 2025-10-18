@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
@@ -12,17 +12,17 @@
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
     .viewer .time-stack { display: none !important; }
 
-    /* Por defecto bloqueamos los clicks… */
+    /* Bloqueamos clicks por defecto… */
     .viewer .card, .viewer .card * { pointer-events: none; cursor: default; }
 
-    /* …pero habilitamos SOLO en tarjetas elegibles para este radio */
+    /* …y los habilitamos SOLO en tarjetas elegibles para este radio */
     .viewer .card.radio-eligible,
     .viewer .card.radio-eligible * {
       pointer-events: auto !important;
       cursor: pointer !important;
     }
 
-    /* Estilos de elegible = "blanco brillo"  */
+    /* Estilo de elegible = "blanco brillo" */
     .card.radio-eligible {
       background: #ffffff !important;
       color: #111 !important;
@@ -30,8 +30,12 @@
       box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset;
     }
 
-    /* NO elegibles: NO se muestran (para que no aparezcan en otros radios) */
-    .card.radio-locked { display: none !important; }
+    /* NO elegibles: visibles pero atenuadas (¡no ocultar!) */
+    .card.radio-locked {
+      display: block !important;
+      opacity: .45;
+      filter: grayscale(.2);
+    }
 
     /* Amarillo persistente en el radio que ya clicó */
     .card.radio-clicked-by-me {
@@ -157,11 +161,11 @@
   </script>
 
   <!-- Tu config (si existe) sobreescribe el fallback -->
-  <script src="firebase-config.js?v=12"></script>
+  <script src="firebase-config.js?v=13"></script>
 
   <!-- Sincronización y lógica compartida -->
-  <script src="sync.js?v=12"></script>
-  <script src="app.js?v=12"></script>
+  <script src="sync.js?v=13"></script>
+  <script src="app.js?v=13"></script>
 
   <!-- LÓGICA RADIO -->
   <script>
@@ -280,32 +284,33 @@
         cards.forEach(card=>{
           const val = card.dataset.value;
           if (!val) return;
+
           const eligible = canThisRadioClick(val);
           const clickedByMe = clickedSet.has(String(val));
 
-          // Regla principal:
-          //  - Elegibles → visibles en blanco brillo + clic habilitado
-          //  - NO elegibles → NO se muestran (locked)
-          //  - Si ya la clicó este radio → visible SIEMPRE y amarilla
-          const showAsClicked = clickedByMe;
+          // Reglas:
+          // - Elegibles → visibles en blanco brillo + clic habilitado
+          // - No elegibles → visibles PERO atenuadas
+          // - Si ya la clicó este radio → visible y amarilla persistente
           const showAsEligible = eligible;
+          const showAsClicked  = clickedByMe;
+          const locked         = !showAsEligible && !showAsClicked;
 
           card.classList.toggle('radio-eligible', showAsEligible);
           card.classList.toggle('radio-clicked-by-me', showAsClicked);
-
-          // locked si no es elegible y no la clicó este radio
-          const locked = !showAsEligible && !showAsClicked;
           card.classList.toggle('radio-locked', locked);
 
+          // Limpia marca efímera si dejó de ser elegible
           if (!eligible) card.classList.remove('radio-clicking');
 
+          // Tooltip informativo
           if (showAsEligible) {
             card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
           } else if (showAsClicked) {
             card.title = `Clicada por RADIO ${rIdx}`;
           } else {
-            // no visible; no necesitas título
-            card.removeAttribute('title');
+            const last = getLastFor(val);
+            card.title = `Esperando turno (RADIO ${last+1})`;
           }
         });
       }
