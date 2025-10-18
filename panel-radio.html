@@ -6,85 +6,84 @@
   <title>SECeD · Panel Radio</title>
 
   <!-- Tu CSS global -->
-  <link rel="stylesheet" href="styles.css?v=61">
+  <link rel="stylesheet" href="styles.css?v=70">
 
-  <!-- SOLO Panel Radio: fuerza tarjetas en blanco y estilos de chips -->
-  <style id="radio-override">
+  <!-- OVERRIDES SOLO PARA PANEL-RADIO -->
+  <style>
+    /* Marcas para que estos estilos sólo apliquen aquí */
     html.is-radio body.viewer .grid .card,
     html.is-radio body.viewer .grid .card.selected{
       background:#fff !important; color:#111 !important;
       border-color:#e5e7eb !important; box-shadow:none !important;
     }
-    /* su turno -> blanco con halo verde */
+    /* Ocultar franjas de tiempo (S/LL/A) en panel radio */
+    html.is-radio .time-stack{ display:none !important; }
+
+    /* Estados de tarjetas en panel radio (si tu lógica los usa) */
     html.is-radio body.viewer .grid .card.radio-eligible{
-      background:#fff !important; border-color:#e5e7eb !important;
       box-shadow:0 0 0 2px rgba(34,197,94,.35) inset !important;
-      pointer-events:auto !important; cursor:pointer !important;
+      cursor:pointer !important;
     }
-    /* ya clicada por este radio -> amarilla */
     html.is-radio body.viewer .grid .card.radio-clicked-by-me{
       background:#fef08a !important; border-color:#eab308 !important;
       box-shadow:0 0 0 2px rgba(234,179,8,.35) inset !important;
-      pointer-events:none !important; cursor:default !important;
+      cursor:default !important;
     }
-    /* no es su turno -> atenuada */
     html.is-radio body.viewer .grid .card.radio-locked{
       opacity:.45 !important; filter:grayscale(.2) !important;
-      pointer-events:none !important; cursor:default !important;
+      cursor:default !important;
     }
-    /* chips R:n */
+
+    /* Chips “R:n” (puedes quitar esta sección si no los quieres aún) */
     html.is-radio .radio-chips{display:flex;gap:6px;margin:6px 0 5px;flex-wrap:wrap}
     html.is-radio .chip{display:inline-flex;align-items:center;line-height:1;padding:2px 6px;border-radius:9999px;font-size:12px;font-weight:700;user-select:none}
-    html.is-radio .chip-radio{background:#fef08a;border:1px solid #eab308;color:#0f1300;box-shadow:0 1px 0 rgba(255,255,255,.35) inset}
+    html.is-radio .chip-radio{background:#fef08a;border:1px solid #eab308;color:#0f1300;}
   </style>
+
+  <!-- MUY IMPORTANTE: marcar VISOR/RADIO ANTES DE app.js -->
+  <script>
+    window.VIEWER = true;                  // evita que app.js añada el click de LLegada
+    document.addEventListener('DOMContentLoaded', function(){
+      document.body.classList.add('viewer');
+      document.documentElement.classList.add('is-radio');
+    });
+  </script>
 </head>
 
 <body>
-  <!-- Cabecera mínima (puedes dejar la tuya si tienes otra) -->
-  <header class="topbar">
-    <div class="brand">
-      <img src="assets/logo.png" alt="SECeD" style="height:40px;vertical-align:middle;margin-right:8px;">
-      <strong>Panel Radio</strong>
-    </div>
-    <div class="spacer"></div>
+  <!-- Cabecera mínima -->
+  <header class="topbar" style="padding:8px 12px;display:flex;gap:12px;align-items:center">
+    <img src="assets/logo.png" alt="SECeD" style="height:40px">
+    <strong>Panel Radio</strong>
+    <div style="flex:1"></div>
     <div class="clock">
       <span id="clockTime">--:--:--</span>
-      <small id="clockTz" style="opacity:.8;margin-left:6px;">Europe/Madrid</small>
-      <small id="clockSync" style="margin-left:6px;opacity:.8;">…</small>
+      <small id="clockTz" style="opacity:.75;margin-left:6px;">Europe/Madrid</small>
+      <small id="clockSync" style="opacity:.75;margin-left:6px;">…</small>
     </div>
   </header>
 
-  <!-- Contenedor principal (usa el mismo id="grid" que espera app.js) -->
   <main class="app">
     <div id="grid" class="grid"></div>
   </main>
 
-  <!-- Marca esta página como VISOR/RADIO **antes** de cargar app.js -->
-  <script>
-    window.VIEWER = true;                 // deshabilita edición y menús
-    document.body.classList.add('viewer'); // estilos de visor
-    document.documentElement.classList.add('is-radio'); // activa CSS override
-  </script>
-
-  <!-- Firebase SDKs + tu config -->
+  <!-- Firebase + config (déjalos como los tienes) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=61"></script>
+  <script src="firebase-config.js?v=70"></script>
 
-  <!-- Tu lógica compartida (no tocar) -->
-  <script src="sync.js?v=61"></script>
-  <script src="app.js?v=61"></script>
+  <!-- Tu lógica compartida -->
+  <script src="sync.js?v=70"></script>
+  <script src="app.js?v=70"></script>
 
-  <!-- Bolitas R:n (no toca app.js) -->
+  <!-- (OPCIONAL) Bolitas R:n bajo cada dorsal; quita este bloque si no las quieres aún -->
   <script>
   (function(){
-    function ready(fn){ (document.readyState!=='loading') ? fn() : document.addEventListener('DOMContentLoaded', fn); }
+    function ready(fn){ (document.readyState!=='loading')?fn():document.addEventListener('DOMContentLoaded',fn); }
     ready(function(){
       const params=new URLSearchParams(location.search);
       const TRAMO=(window.TRAMO_ID||params.get('tramo')||'1').toString();
       const grid=document.getElementById('grid'); if(!grid) return;
-
-      // Mapa dorsal -> [radios]
       const radioClicks=new Map();
 
       function paintChips(){
@@ -105,19 +104,19 @@
             wrap.appendChild(chip);
           });
 
+          // Insertar chips encima de las franjas (que aquí están ocultas)
           const timeStack=cell.querySelector('.time-stack');
           if(timeStack) cell.insertBefore(wrap,timeStack); else cell.appendChild(wrap);
         });
       }
 
-      // Re-pintar chips cuando app.js vuelve a renderizar el grid
+      // repintar cuando app.js renderiza
       const mo=new MutationObserver(()=>paintChips());
       mo.observe(grid,{childList:true,subtree:true});
 
-      // Suscripción a Firestore: /tramos/{TRAMO}/radios (espera { list:[radios], last })
-      function subscribe(){
-        try{
-          if(!window.firebase||!firebase.firestore) return;
+      // suscripción a /tramos/{TRAMO}/radios para leer list:[radios]
+      try{
+        if(window.firebase && firebase.firestore){
           const db=firebase.firestore();
           db.collection('tramos').doc(TRAMO).collection('radios')
             .onSnapshot(snap=>{
@@ -130,9 +129,8 @@
               });
               paintChips();
             },err=>console.warn('radio-badges snapshot error:',err));
-        }catch(e){ console.warn('radio-badges subscribe error:',e); }
-      }
-      subscribe();
+        }
+      }catch(e){ console.warn('radio-badges subscribe error:',e); }
     });
   })();
   </script>
