@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
   <link rel="stylesheet" href="styles.css?v=15" />
+
+  <!-- SOLO Panel Radio: fuerza tarjetas en blanco y estilos de chips -->
+  <link rel="stylesheet" href="radio-override.css?v=1">
+
+  
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
@@ -165,9 +170,20 @@
   <!-- Tu config (si existe) sobreescribe el fallback -->
   <script src="firebase-config.js?v=15"></script>
 
+<script>
+  // Marcar esta página como VISOR/RADIO ANTES de cargar app.js
+  window.VIEWER = true;
+  document.body.classList.add('viewer');
+  document.documentElement.classList.add('is-radio'); // activa radio-override.css
+</script>
+
+  
   <!-- Sincronización y lógica compartida -->
   <script src="sync.js?v=15"></script>
   <script src="app.js?v=15"></script>
+
+  <!-- Pinta las bolitas R:n (no toca app.js) -->
+<script src="radio-badges.js?v=1"></script>
 
   <!-- LÓGICA RADIO -->
   <script>
