@@ -165,6 +165,51 @@
   <!-- Tu config (si existe) sobreescribe el fallback -->
   <script src="firebase-config.js?v=15"></script>
 
+  <script>
+(function(){
+  // Ejecutar después de cargar firebase-config.js
+  document.addEventListener('DOMContentLoaded', function(){
+    try{
+      if (!window.firebase || !firebase.firestore) return;
+      const TRAMO = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
+      const db = firebase.firestore();
+      const tramoRef = db.collection('tramos').doc(TRAMO);
+
+      // clave para saber si ya vimos este reset
+      const LS_KEY = `seced_radios_reset_seen_${TRAMO}`;
+
+      tramoRef.onSnapshot(snap=>{
+        if (!snap.exists) return;
+        const data = snap.data() || {};
+        const ts = data.radiosResetAt && data.radiosResetAt.toMillis ? data.radiosResetAt.toMillis() : 0;
+        const seen = Number(localStorage.getItem(LS_KEY) || '0');
+
+        if (ts && ts > seen) {
+          // nuevo reset global -> limpiar caches locales y recargar
+          try {
+            localStorage.setItem(LS_KEY, String(ts));
+            // limpiar caches locales que puedan influir
+            localStorage.removeItem('seced_radio_idx'); // si usas este para el número de radio
+            // (si guardas mas claves locales propias de radio, límpialas aquí)
+
+            // limpiar IndexedDB de Firestore (opcional; recarga después)
+            try {
+              indexedDB.deleteDatabase('firebase-firestore-database');
+              indexedDB.deleteDatabase('firebaseLocalStorageDb');
+              indexedDB.deleteDatabase('firebase-heartbeat-database');
+            } catch {}
+
+          } finally {
+            // Forzar una recarga limpia
+            location.reload();
+          }
+        }
+      }, err => console.warn('reset listener error', err));
+    } catch(e){ console.warn('reset listener setup error', e); }
+  });
+})();
+</script>
+
   <!-- Sincronización y lógica compartida -->
   <script src="sync.js?v=15"></script>
   <script src="app.js?v=15"></script>
