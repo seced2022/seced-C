@@ -353,7 +353,7 @@ function toggleMenu(card) {
   if (hidden) menu.classList.remove('hidden'); else menu.classList.add('hidden');
 }
 
-function addNumber() {
+async function addNumber() {
   if (window.MODE === 'LLEGADA') { alert('En modo LLEGADA no se pueden añadir números nuevos. Cambia a JEFE o SALIDA.'); return; }
   const raw = (input.value || '').trim().replace(',', '.');
   if (raw === '') return;
@@ -367,15 +367,14 @@ function addNumber() {
   render();
   if (typeof syncSave === 'function') syncSave();
 
-  // 🔧 IMPORTANTE: arrancar “limpio” el historial de radios para este dorsal
-  clearRadioDocFor(num);
+  // Espera a que se borre el doc de radios para este dorsal (evita “amarillo fantasma”)
+  await clearRadioDocFor(num);
 
   input.value = ''; input.focus();
   logAudit('alta', { value:num, tSalida:tS });
 }
 
-
-function editNumber(prevVal) {
+async function editNumber(prevVal) {
   const idx = items.findIndex(x => x.value === prevVal);
   if (idx === -1) return;
   const raw = prompt('Nuevo número para reemplazar a ' + prevVal + ':', String(prevVal));
@@ -389,12 +388,14 @@ function editNumber(prevVal) {
   render();
   if (typeof syncSave === 'function') syncSave();
 
-  // 🔧 IMPORTANTE: borrar historiales de radios ligados al dorsal viejo y al nuevo
-  clearRadioDocFor(prevVal);
-  clearRadioDocFor(newNum);
+  // Limpia historiales de radios del dorsal viejo y del nuevo
+  await clearRadioDocFor(prevVal);
+  await clearRadioDocFor(newNum);
 
   logAudit('editar', { from: prevVal, to: newNum });
 }
+
+
 
 
 function setAbandon(val) {
@@ -414,13 +415,13 @@ function setAbandon(val) {
   logAudit('abandono', { value: val, rNumber:r, tAbandono:tA });
 }
 
-function editSalida(val){
+async function editSalida(val){
   const idx = items.findIndex(x => x.value === val);
   if (idx === -1) return;
 
   const prev = items[idx].tSalida || null;
   const raw = prompt('Nueva hora de SALIDA (HH:MM:SS). Deja vacío para hora actual:', '');
-  if (raw === null) return; // cancelar
+  if (raw === null) return;
 
   let newT;
   if ((raw||'').trim()==='') {
@@ -440,11 +441,12 @@ function editSalida(val){
   render();
   if (typeof syncSave === 'function') syncSave();
 
-  // 🔧 IMPORTANTE: salida “nueva” => radios del dorsal deben empezar de cero
-  clearRadioDocFor(val);
+  // Al rearmar salida, reinicia el paso por radios de ese dorsal
+  await clearRadioDocFor(val);
 
   logAudit('editar_salida', { value: val, tSalida_prev: prev, tSalida_new: newT, salidasHist: items[idx].salidasHist||[] });
 }
+
 
 
 
