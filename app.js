@@ -1,6 +1,7 @@
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
 const btnLimpiar = document.getElementById('btnLimpiar');
+const btnResetRadios = document.getElementById('btnResetRadios');
 const grid = document.getElementById('grid');
 const countSalida = document.getElementById('countSalida');
 const countLlegada = document.getElementById('countLlegada');
@@ -23,7 +24,6 @@ const tramoMenu  = document.getElementById('tramoMenu');
 const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
-const btnResetRadios = document.getElementById('btnResetRadios');
 
 function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
 function setOperator(name){ try { localStorage.setItem('seced_operator', name || ''); } catch {} updateAuditMeta(); }
@@ -425,6 +425,50 @@ if (btnLimpiar) btnLimpiar.addEventListener('click', () => {
     input.focus();
   }
 });
+  // ==== Reset subcolección radios (tramos/{TRAMO}/radios) con clave ====
+async function resetRadiosForTramo(tramoId){
+  if (!window.firebase || !firebase.firestore) {
+    alert('Firebase no está disponible en esta página.');
+    return;
+  }
+  const tramo = (tramoId || window.TRAMO_ID || '').toString().trim();
+  if (!tramo) { alert('Tramo no determinado.'); return; }
+
+  // Confirmación y clave
+  if (!confirm(`Vas a borrar TODOS los registros de paso por radios del tramo "${tramo}".\n\nEsto NO borra las tarjetas ni tiempos del editor.\n\n¿Continuar?`)) return;
+  const key = prompt('Introduce la clave de seguridad para Reset dorsales:');
+  if (key === null) return; // cancelado
+  if (key !== '1234') { alert('Clave incorrecta. Operación cancelada.'); return; }
+
+  // Borrado por lotes
+  const db = firebase.firestore();
+  const colRef = db.collection('tramos').doc(tramo).collection('radios');
+
+  try {
+    // borrar en lotes (por si hay muchos docs)
+    let snap = await colRef.get();
+    let total = 0;
+    while (!snap.empty) {
+      const batch = db.batch();
+      snap.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      total += snap.size;
+      snap = await colRef.get();
+    }
+    // auditoría
+    try {
+      logAudit('reset_radios', { tramo, total_borrado: total });
+    } catch {}
+    alert(`OK: subcolección "radios" de tramo "${tramo}" vaciada (${total} documentos).`);
+  } catch (e) {
+    console.error('Error al resetear radios:', e);
+    alert('Error al borrar la subcolección de radios. Revisa permisos/Reglas Firestore.');
+  }
+}
+
+if (btnResetRadios) {
+  btnResetRadios.addEventListener('click', () => resetRadiosForTramo(window.TRAMO_ID));
+}
 
 const btnExportar = document.getElementById('btnExportar');
 const printTitle = document.getElementById('printTitle');
