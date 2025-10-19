@@ -369,10 +369,21 @@
     if (!val) return;
 
     const eligible = canThisRadioClick(val);
-    const clickedByMe = clickedSet.has(String(val));
 
-    /* Limpia clases anteriores para evitar estados pisados
-       + quitamos 'selected' (amarillo de llegada del visor/editor) */
+    // 👇 ESTO ES LA CLAVE:
+    // Si el doc de radios para ese dorsal está "antes" de mi radio,
+    // NO debo considerarlo "clicado por mí" aunque esté en localStorage.
+    const last = getLastFor(val);            // 0 si no hay doc (nuevo)
+    const clickedLocal = clickedSet.has(String(val));
+    const clickedByMe = clickedLocal && (last >= rIdx);
+
+    // Si en local tengo ese dorsal como "clicado" pero last < rIdx, lo purgo:
+    if (clickedLocal && !clickedByMe) {
+      clickedSet.delete(String(val));
+      saveClickedSet(clickedSet);
+    }
+
+    // Limpieza de clases anteriores + ignorar 'selected' del visor
     card.classList.remove('radio-eligible','radio-locked','radio-clicked-by-me','radio-clicking','selected');
 
     if (clickedByMe) {
@@ -383,7 +394,6 @@
       card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
     } else {
       card.classList.add('radio-locked');               // visible atenuada
-      const last = getLastFor(val);
       card.title = `Esperando turno (RADIO ${last+1})`;
     }
   });
