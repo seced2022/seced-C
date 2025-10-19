@@ -362,31 +362,34 @@
       }
 
       function applyEligibility(){
-        const cards = document.querySelectorAll('#grid .card');
-        const rIdx = getRadioIndex();
-        cards.forEach(card=>{
-          const val = card.dataset.value;
-          if (!val) return;
+  const cards = document.querySelectorAll('#grid .card');
+  const rIdx = getRadioIndex();
+  cards.forEach(card=>{
+    const val = card.dataset.value;
+    if (!val) return;
 
-          const eligible = canThisRadioClick(val);
-          const clickedByMe = clickedSet.has(String(val));
+    const eligible = canThisRadioClick(val);
+    const clickedByMe = clickedSet.has(String(val));
 
-          /* Limpia clases anteriores para evitar estados pisados */
-          card.classList.remove('radio-eligible','radio-locked','radio-clicked-by-me','radio-clicking');
+    /* Limpia clases anteriores para evitar estados pisados
+       + quitamos 'selected' (amarillo de llegada del visor/editor) */
+    card.classList.remove('radio-eligible','radio-locked','radio-clicked-by-me','radio-clicking','selected');
 
-          if (clickedByMe) {
-            card.classList.add('radio-clicked-by-me');        // amarilla fija en MI panel
-            card.title = `Clicada por RADIO ${rIdx}`;
-          } else if (eligible) {
-            card.classList.add('radio-eligible');             // blanca, clic habilitado
-            card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
-          } else {
-            card.classList.add('radio-locked');               // visible atenuada
-            const last = getLastFor(val);
-            card.title = `Esperando turno (RADIO ${last+1})`;
-          }
-        });
-      }
+    if (clickedByMe) {
+      card.classList.add('radio-clicked-by-me');        // amarilla fija en MI panel
+      card.title = `Clicada por RADIO ${rIdx}`;
+    } else if (eligible) {
+      card.classList.add('radio-eligible');             // blanca, clic habilitado
+      card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
+    } else {
+      card.classList.add('radio-locked');               // visible atenuada
+      const last = getLastFor(val);
+      card.title = `Esperando turno (RADIO ${last+1})`;
+    }
+  });
+}
+
+
 
       // Reaplicar elegibilidad tras cada render del app.js
       const origOnRemote = window._onRemoteUpdate;
