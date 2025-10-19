@@ -25,6 +25,21 @@ const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
 
+async function clearRadioDocFor(value){
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || '1').toString();
+    const db = firebase.firestore();
+    await db.collection('tramos').doc(tramo)
+      .collection('radios').doc(String(value))
+      .delete();
+  }catch(e){
+    // si no existe, no pasa nada
+    // console.debug('clearRadioDocFor', value, e);
+  }
+}
+
+
 function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
 function setOperator(name){ try { localStorage.setItem('seced_operator', name || ''); } catch {} updateAuditMeta(); }
 window.OPERATOR = getOperator();
