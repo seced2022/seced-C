@@ -360,13 +360,20 @@ function addNumber() {
   const num = Number(raw);
   if (!Number.isFinite(num)) { alert('Por favor, ingresa un número válido.'); return; }
   if (existsValue(num)) { alert('Ese número ya existe y no se puede repetir.'); input.select(); return; }
+
   const tS = nowNetMs();
   items.push({ value: num, selected: false, status: 'normal', rNumber: null, tSalida: tS, tLlegada: null, tAbandono: null });
+
   render();
   if (typeof syncSave === 'function') syncSave();
+
+  // 🔧 IMPORTANTE: arrancar “limpio” el historial de radios para este dorsal
+  clearRadioDocFor(num);
+
   input.value = ''; input.focus();
   logAudit('alta', { value:num, tSalida:tS });
 }
+
 
 function editNumber(prevVal) {
   const idx = items.findIndex(x => x.value === prevVal);
@@ -377,11 +384,18 @@ function editNumber(prevVal) {
   if (!Number.isFinite(newNum)) { alert('Número no válido.'); return; }
   if (newNum === prevVal) return;
   if (existsValue(newNum)) { alert('No se puede cambiar: el número ' + newNum + ' ya existe.'); return; }
+
   items[idx].value = newNum;
   render();
   if (typeof syncSave === 'function') syncSave();
+
+  // 🔧 IMPORTANTE: borrar historiales de radios ligados al dorsal viejo y al nuevo
+  clearRadioDocFor(prevVal);
+  clearRadioDocFor(newNum);
+
   logAudit('editar', { from: prevVal, to: newNum });
 }
+
 
 function setAbandon(val) {
   const idx = items.findIndex(x => x.value === val);
@@ -399,6 +413,7 @@ function setAbandon(val) {
   if (typeof syncSave === 'function') syncSave();
   logAudit('abandono', { value: val, rNumber:r, tAbandono:tA });
 }
+
 function editSalida(val){
   const idx = items.findIndex(x => x.value === val);
   if (idx === -1) return;
@@ -415,19 +430,22 @@ function editSalida(val){
     if (!newT) { alert('Formato inválido. Usa HH:MM:SS, ej: 08:31:05'); return; }
   }
 
-  // Empujar la anterior al historial (si existía)
   if (prev){
     if (!Array.isArray(items[idx].salidasHist)) items[idx].salidasHist = [];
     items[idx].salidasHist.push(prev);
   }
 
-  // Actualizar salida actual
   items[idx].tSalida = newT;
 
   render();
   if (typeof syncSave === 'function') syncSave();
+
+  // 🔧 IMPORTANTE: salida “nueva” => radios del dorsal deben empezar de cero
+  clearRadioDocFor(val);
+
   logAudit('editar_salida', { value: val, tSalida_prev: prev, tSalida_new: newT, salidasHist: items[idx].salidasHist||[] });
 }
+
 
 
 if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
