@@ -230,7 +230,7 @@ button.primary { background: linear-gradient(180deg, #1dbd6d, #129254); border-c
 .radio-dots{
   display: grid;
   grid-template-columns: repeat(5, 10px); /* 5 columnas del ancho de la bolita */
-  gap: 6px 8px;            /* espacio entre filas y columnas */
+  gap: 4px 6px;            /* espacio entre filas y columnas */
   justify-content: start;
   margin-top: 4px;
   margin-bottom: 6px;
