@@ -246,8 +246,8 @@ button.primary { background: linear-gradient(180deg, #1dbd6d, #129254); border-c
 
 /* bolita sin texto, tamaño pequeño */
 .radio-dot{
-  width: 10px;
-  height: 10px;
+  width: 5px;
+  height: 5px;
   border-radius: 9999px;
   background: #fef08a;      /* amarillo */
   border: 1px solid #eab308;/* borde */
