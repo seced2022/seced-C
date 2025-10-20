@@ -334,23 +334,19 @@ function render() {
 
     cell.appendChild(card);
 
-    // ---- Bolitas de radios (R:n) — SOLO en editor/visor, NO en panel radio ----
+    // ---- Bolitas de radios (mini, sin texto) — SOLO en editor/visor, NO en panel radio ----
     if (!document.body.classList.contains('radio-skin')) {
       const dots = document.createElement('div');
-      dot.className = 'radio-dot';
-      dot.title = `R:${r}`;
-      dot.setAttribute('aria-label', `R${r}`);
-      // NO pongas dot.textContent
-
+      dots.className = 'radio-dots';
 
       const m = window._radioMarks && window._radioMarks.get(String(item.value));
       if (Array.isArray(m) && m.length > 0) {
         for (const r of m) {
           const dot = document.createElement('span');
           dot.className = 'radio-dot';
-          dot.title = `R:${r}`;                 // tooltip al pasar el ratón
+          dot.title = `R:${r}`;                 // tooltip
           dot.setAttribute('aria-label', `R${r}`); // accesible
-
+          // sin texto visible para que sea una bolita pequeña
           dots.appendChild(dot);
         }
       }
