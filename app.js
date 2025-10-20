@@ -216,6 +216,24 @@ window._radioMarks = new Map(); // key: String(dorsal) -> Array<number>
   }catch(e){
     console.warn('radio marks subscribe error', e);
   }
+  // ---- Bolitas de radios (R:n) ----
+if (!document.body.classList.contains('radio-skin')) {
+  const dots = document.createElement('div');
+  dots.className = 'radio-dots';
+
+  const m = window._radioMarks && window._radioMarks.get(String(item.value));
+  if (Array.isArray(m) && m.length > 0) {
+    for (const r of m) {
+      const dot = document.createElement('span');
+      dot.className = 'radio-dot';
+      dot.textContent = `R:${r}`;
+      dots.appendChild(dot);
+    }
+  }
+  cell.appendChild(dots);
+}
+// ---- /bolitas ----
+
 })();
 
 
