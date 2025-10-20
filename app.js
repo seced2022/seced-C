@@ -182,9 +182,43 @@ if (btnAuditRefresh) btnAuditRefresh.addEventListener('click', refreshAudit);
 if (btnAuditCSV) btnAuditCSV.addEventListener('click', auditCSV);
 if (btnStatesCSV) btnStatesCSV.addEventListener('click', exportStatesCSV);
 if (btnOperador) btnOperador.addEventListener('click', ()=>{
-  const name = prompt('Nombre o identificador del operador:', window.OPERATOR||'');
-  if (name !== null) { window.OPERATOR = (name||'').trim(); setOperator(window.OPERATOR); }
+const name = prompt('Nombre o identificador del operador:', window.OPERATOR||'');
+if (name !== null) { window.OPERATOR = (name||'').trim(); setOperator(window.OPERATOR); }
 });
+
+// ====== MARCAS DE RADIOS (para bolitas R:n en editor/visor) ======
+window._radioMarks = new Map(); // key: String(dorsal) -> Array<number>
+
+(function subscribeRadioMarks(){
+  try{
+    const tramo = (window.TRAMO_ID || '1').toString();
+    const db = firebase.firestore();
+    db.collection('tramos').doc(tramo).collection('radios')
+      .onSnapshot(snap => {
+        snap.docChanges().forEach(ch => {
+          const id = ch.doc.id;
+          const data = ch.doc.data() || {};
+          const arr = Array.isArray(data.marks) ? data.marks.slice() : [];
+          if (ch.type === 'removed') {
+            window._radioMarks.delete(id);
+          } else {
+            // normalizamos y ordenamos
+            const clean = arr
+              .map(x => parseInt(x,10))
+              .filter(n => Number.isFinite(n) && n>0)
+              .sort((a,b)=>a-b);
+            window._radioMarks.set(id, clean);
+          }
+        });
+        // re-pinta para que salgan las bolitas
+        if (typeof render === 'function') render();
+      }, err => console.warn('radio marks listener error', err));
+  }catch(e){
+    console.warn('radio marks subscribe error', e);
+  }
+})();
+
+
 
 function render() {
   if (countSalida) countSalida.textContent = String(items.length);
