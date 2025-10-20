@@ -1,3 +1,4 @@
+// ====== Referencias de UI ======
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
 const btnLimpiar = document.getElementById('btnLimpiar');
@@ -25,6 +26,7 @@ const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
 
+// ====== Utilidad Firestore para limpiar doc de radios de un dorsal ======
 async function clearRadioDocFor(value){
   try{
     if (!window.firebase || !firebase.firestore) return;
@@ -35,19 +37,21 @@ async function clearRadioDocFor(value){
       .delete();
   }catch(e){
     // si no existe, no pasa nada
-    // console.debug('clearRadioDocFor', value, e);
   }
 }
 
-
+// ====== Operador (localStorage) ======
 function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
 function setOperator(name){ try { localStorage.setItem('seced_operator', name || ''); } catch {} updateAuditMeta(); }
 window.OPERATOR = getOperator();
 
+// ====== Estado principal de items ======
 let items = [];
 window._getItems = () => items;
+// app.js recibe los items remotos (sync.js) y re-renderiza
 window._onRemoteUpdate = (remoteItems) => { items = Array.isArray(remoteItems) ? remoteItems : []; render(); };
 
+// ====== Modo (JEFE/SALIDA/LLEGADA) ======
 window.MODE = 'LLEGADA';
 function applyModeUI(){
   const bJ = document.getElementById('btnModeJefe');
@@ -61,8 +65,8 @@ function applyModeUI(){
   const disableInput = (window.MODE === 'LLEGADA');
   if (input) input.disabled = disableInput;
   if (btnAgregar) btnAgregar.disabled = disableInput;
-  
-  // ⬇️ Mostrar el botón Reset solo en JEFE
+
+  // Mostrar el botón Reset solo en JEFE
   if (btnResetRadios) {
     btnResetRadios.style.display = (window.MODE === 'JEFE') ? '' : 'none';
   }
@@ -77,33 +81,71 @@ function applyModeUI(){
   applyModeUI();
 })();
 
+// ====== Reloj de red ======
 const TIMEZONE = 'Europe/Madrid';
-const clockTime = document.getElementById('clockTime'); const clockTz = document.getElementById('clockTz'); const clockSync = document.getElementById('clockSync');
+const clockTime = document.getElementById('clockTime');
+const clockTz   = document.getElementById('clockTz');
+const clockSync = document.getElementById('clockSync');
 if (clockTz) clockTz.textContent = TIMEZONE;
 let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
 
-// VISOR: respeta lo que venga de viewer.html (window.VIEWER)
-// y si no existe, cae al flag de la URL (?viewer)
+// VISOR: respeta window.VIEWER (si viene de viewer.html) o ?viewer
 const urlViewerFlag = new URLSearchParams(location.search).has('viewer');
 window.VIEWER = (typeof window.VIEWER !== 'undefined') ? !!window.VIEWER : urlViewerFlag;
 if (window.VIEWER) document.body.classList.add('viewer');
 
-
 function pad(n) { return String(n).padStart(2, '0'); }
 function fmtTime(ms) { const d = new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
 function renderClock(nowMs) { const d = new Date(nowMs + timeOffsetMs); if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
-async function syncTime() { try { if (clockSync) { clockSync.textContent = 'sincronizando…'; clockSync.className = 'sync'; } const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache: 'no-store' }); if (!res.ok) throw new Error('HTTP ' + res.status); const data = await res.json(); const apiMs = Date.parse(data.datetime); const localMs = Date.now(); timeOffsetMs = apiMs - localMs; if (clockSync) { clockSync.textContent = 'ok'; clockSync.className = 'sync ok'; } } catch (err) { if (clockSync) { clockSync.textContent = 'sin conexión'; clockSync.className = 'sync err'; } } }
-function startClock() { if (tickTimer) clearInterval(tickTimer); tickTimer = setInterval(() => renderClock(Date.now()), 1000); renderClock(Date.now()); if (resyncTimer) clearInterval(resyncTimer); resyncTimer = setInterval(syncTime, 5*60*1000); }
+async function syncTime() {
+  try {
+    if (clockSync) { clockSync.textContent = 'sincronizando…'; clockSync.className = 'sync'; }
+    const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const apiMs = Date.parse(data.datetime);
+    const localMs = Date.now();
+    timeOffsetMs = apiMs - localMs;
+    if (clockSync) { clockSync.textContent = 'ok'; clockSync.className = 'sync ok'; }
+  } catch (err) {
+    if (clockSync) { clockSync.textContent = 'sin conexión'; clockSync.className = 'sync err'; }
+  }
+}
+function startClock() {
+  if (tickTimer) clearInterval(tickTimer);
+  tickTimer = setInterval(() => renderClock(Date.now()), 1000);
+  renderClock(Date.now());
+  if (resyncTimer) clearInterval(resyncTimer);
+  resyncTimer = setInterval(syncTime, 5*60*1000);
+}
 syncTime().then(startClock);
 
 function nowNetMs() { return Date.now() + (typeof timeOffsetMs !== 'undefined' ? timeOffsetMs : 0); }
 function existsValue(val) { return items.some(x => x.value === val); }
 
+// ====== Auditoría (UI + helpers) ======
 function logAudit(action, detail){
-  try { const entry = { tramo:(window.TRAMO_ID||'').toString(), actor:(window.OPERATOR||'').toString()||'—', action, detail:detail||{}, clientTime:new Date(nowNetMs()).toISOString() }; if (typeof auditSave === 'function') auditSave(entry); } catch (e) { console.warn('Audit log error:', e); }
+  try {
+    const entry = {
+      tramo:(window.TRAMO_ID||'').toString(),
+      actor:(window.OPERATOR||'').toString()||'—',
+      action,
+      detail:detail||{},
+      clientTime:new Date(nowNetMs()).toISOString()
+    };
+    if (typeof auditSave === 'function') auditSave(entry);
+  } catch (e) {
+    console.warn('Audit log error:', e);
+  }
 }
 let auditUnlocked = false;
-function askAudit(){ const key = prompt('Introduce la clave de auditoría:'); if (key === null) return false; if (key === (window.AUDIT_KEY||'')) { auditUnlocked = true; return true; } alert('Clave incorrecta.'); return false; }
+function askAudit(){
+  const key = prompt('Introduce la clave de auditoría:');
+  if (key === null) return false;
+  if (key === (window.AUDIT_KEY||'')) { auditUnlocked = true; return true; }
+  alert('Clave incorrecta.');
+  return false;
+}
 function updateAuditMeta(){ if (auditTramo) auditTramo.textContent = (window.TRAMO_ID||'—'); if (auditOperador) auditOperador.textContent = (window.OPERATOR||'—') || '—'; }
 async function openAudit(){ if (!auditUnlocked && !askAudit()) return; updateAuditMeta(); if (auditPanel) auditPanel.classList.remove('hidden'); await refreshAudit(); }
 function closeAudit(){ if (auditPanel) auditPanel.classList.add('hidden'); }
@@ -141,7 +183,7 @@ function auditCSV(){
       const detail = JSON.stringify(r.detail||{}).replace(/"/g,'""');
       lines.push([ts, actor, action, `"${detail}"`].join(','));
     }
-    const blob = new Blob([lines.join('\\n')], {type: 'text/csv'});
+    const blob = new Blob([lines.join('\n')], {type: 'text/csv'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `auditoria_${(window.TRAMO_ID||'tramo').toString()}.csv`;
@@ -156,20 +198,19 @@ function exportStatesCSV(){
     const lines = [headers.join(',')];
     for(const it of arr){
       const row = [
-  (window.TRAMO_ID||'').toString().replace(/,/g,' '),
-  it.value,
-  it.status||'normal',
-  (it.rNumber!=null? it.rNumber:''),
-  (it.tSalida? new Date(it.tSalida).toISOString():''),                // tSalidaActual
-  (Array.isArray(it.salidasHist)? it.salidasHist.map(t=>new Date(t).toISOString()).join('|') : ''), // salidasHist
-  (it.tLlegada? new Date(it.tLlegada).toISOString():''),             // tLlegadaActual
-  (Array.isArray(it.llegadasHist)? it.llegadasHist.map(t=>new Date(t).toISOString()).join('|') : ''), // llegadasHist
-  (it.tAbandono? new Date(it.tAbandono).toISOString(): '')
-];
-
+        (window.TRAMO_ID||'').toString().replace(/,/g,' '),
+        it.value,
+        it.status||'normal',
+        (it.rNumber!=null? it.rNumber:''),
+        (it.tSalida? new Date(it.tSalida).toISOString():''),
+        (Array.isArray(it.salidasHist)? it.salidasHist.map(t=>new Date(t).toISOString()).join('|') : ''),
+        (it.tLlegada? new Date(it.tLlegada).toISOString():''),
+        (Array.isArray(it.llegadasHist)? it.llegadasHist.map(t=>new Date(t).toISOString()).join('|') : ''),
+        (it.tAbandono? new Date(it.tAbandono).toISOString(): '')
+      ];
       lines.push(row.join(','));
     }
-    const blob = new Blob([lines.join('\\n')], {type:'text/csv'});
+    const blob = new Blob([lines.join('\n')], {type:'text/csv'});
     const url = URL.createObjectURL(blob);
     const a=document.createElement('a'); a.href=url; a.download=`estados_${(window.TRAMO_ID||'tramo')}.csv`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
@@ -182,13 +223,14 @@ if (btnAuditRefresh) btnAuditRefresh.addEventListener('click', refreshAudit);
 if (btnAuditCSV) btnAuditCSV.addEventListener('click', auditCSV);
 if (btnStatesCSV) btnStatesCSV.addEventListener('click', exportStatesCSV);
 if (btnOperador) btnOperador.addEventListener('click', ()=>{
-const name = prompt('Nombre o identificador del operador:', window.OPERATOR||'');
-if (name !== null) { window.OPERATOR = (name||'').trim(); setOperator(window.OPERATOR); }
+  const name = prompt('Nombre o identificador del operador:', window.OPERATOR||'');
+  if (name !== null) { window.OPERATOR = (name||'').trim(); setOperator(window.OPERATOR); }
 });
 
-// ====== MARCAS DE RADIOS (para bolitas R:n en editor/visor) ======
+// ====== MARCAS DE RADIOS (bolitas R:n) ======
 window._radioMarks = new Map(); // key: String(dorsal) -> Array<number>
 
+// Solo escucha Firestore y actualiza _radioMarks. El render decide si mostrarlas.
 (function subscribeRadioMarks(){
   try{
     const tramo = (window.TRAMO_ID || '1').toString();
@@ -202,7 +244,6 @@ window._radioMarks = new Map(); // key: String(dorsal) -> Array<number>
           if (ch.type === 'removed') {
             window._radioMarks.delete(id);
           } else {
-            // normalizamos y ordenamos
             const clean = arr
               .map(x => parseInt(x,10))
               .filter(n => Number.isFinite(n) && n>0)
@@ -210,34 +251,15 @@ window._radioMarks = new Map(); // key: String(dorsal) -> Array<number>
             window._radioMarks.set(id, clean);
           }
         });
-        // re-pinta para que salgan las bolitas
+        // re-pinta para que salgan (o desaparezcan) las bolitas según el modo
         if (typeof render === 'function') render();
       }, err => console.warn('radio marks listener error', err));
   }catch(e){
     console.warn('radio marks subscribe error', e);
   }
-  // ---- Bolitas de radios (R:n) ----
-if (!document.body.classList.contains('radio-skin')) {
-  const dots = document.createElement('div');
-  dots.className = 'radio-dots';
-
-  const m = window._radioMarks && window._radioMarks.get(String(item.value));
-  if (Array.isArray(m) && m.length > 0) {
-    for (const r of m) {
-      const dot = document.createElement('span');
-      dot.className = 'radio-dot';
-      dot.textContent = `R:${r}`;
-      dots.appendChild(dot);
-    }
-  }
-  cell.appendChild(dots);
-}
-// ---- /bolitas ----
-
 })();
 
-
-
+// ====== Render principal ======
 function render() {
   if (countSalida) countSalida.textContent = String(items.length);
   if (countLlegada) countLlegada.textContent = String(items.filter(x => x.status !== 'abandon' && x.selected).length);
@@ -265,16 +287,18 @@ function render() {
     menu.className = 'menu hidden';
     const optEdit = document.createElement('div'); optEdit.className = 'menu-item'; optEdit.textContent = 'Editar número';
     if (!VIEWER) optEdit.addEventListener('click', (e) => { e.stopPropagation(); menu.classList.add('hidden'); editNumber(item.value); });
+
     const optEditSalida = document.createElement('div');
     optEditSalida.className = 'menu-item';
     optEditSalida.textContent = 'Editar salida…';
     if (!VIEWER) optEditSalida.addEventListener('click', (e) => {
-    e.stopPropagation(); menu.classList.add('hidden'); editSalida(item.value);
+      e.stopPropagation(); menu.classList.add('hidden'); editSalida(item.value);
     });
     menu.appendChild(optEditSalida);
 
     const optAbandon = document.createElement('div'); optAbandon.className = 'menu-item'; optAbandon.textContent = 'Abandono…';
     if (!VIEWER) optAbandon.addEventListener('click', (e) => { e.stopPropagation(); menu.classList.add('hidden'); setAbandon(item.value); });
+
     menu.appendChild(optEdit); menu.appendChild(optAbandon);
     card.appendChild(menu);
 
@@ -310,24 +334,24 @@ function render() {
 
     cell.appendChild(card);
 
-    // ---- Bolitas de radios (R:n) ----
-const dots = document.createElement('div');
-dots.className = 'radio-dots';
+    // ---- Bolitas de radios (R:n) — SOLO en editor/visor, NO en panel radio ----
+    if (!document.body.classList.contains('radio-skin')) {
+      const dots = document.createElement('div');
+      dots.className = 'radio-dots';
 
-const m = window._radioMarks && window._radioMarks.get(String(item.value));
-if (Array.isArray(m) && m.length > 0) {
-  for (const r of m) {
-    const dot = document.createElement('span');
-    dot.className = 'radio-dot';
-    dot.textContent = `R:${r}`;
-    dots.appendChild(dot);
-  }
-}
-cell.appendChild(dots);
-// ---- /bolitas ----
+      const m = window._radioMarks && window._radioMarks.get(String(item.value));
+      if (Array.isArray(m) && m.length > 0) {
+        for (const r of m) {
+          const dot = document.createElement('span');
+          dot.className = 'radio-dot';
+          dot.textContent = `R:${r}`;
+          dots.appendChild(dot);
+        }
+      }
+      cell.appendChild(dots);
+    }
+    // ---- /bolitas ----
 
-
-    
     const timeStack = document.createElement('div');
     timeStack.className = 'time-stack';
 
@@ -365,46 +389,80 @@ cell.appendChild(dots);
     const tt2 = document.createElement('div'); tt2.className='hist-list'; tooltip2.appendChild(tt2);
 
     tt2.innerHTML='';
+
+    const secSPrev = document.createElement('div');
+    secSPrev.className = 'section';
+    const sPrevTitle = document.createElement('div');
+    sPrevTitle.className = 'sec-title';
+    sPrevTitle.textContent = 'S previas';
+    secSPrev.appendChild(sPrevTitle);
+
+    const sHistArr = Array.isArray(item.salidasHist) ? item.salidasHist.slice() : [];
+    sHistArr.sort((a,b)=> b-a);
+    if (sHistArr.length === 0){
+      const r = document.createElement('div'); r.className = 'hist-empty'; r.textContent = 'Sin S previas';
+      secSPrev.appendChild(r);
+    } else {
+      let idxS = 1;
+      for (const t of sHistArr){
+        const r = document.createElement('div'); r.className='row';
+        const tg = document.createElement('span'); tg.className='tag'; tg.textContent='S-'+(idxS++);
+        const v = document.createElement('span'); v.textContent=(new Date(t)).toTimeString().slice(0,8);
+        r.appendChild(tg); r.appendChild(v); secSPrev.appendChild(r);
+      }
+    }
+
     const secS2 = document.createElement('div'); secS2.className='section';
     const sTitle2 = document.createElement('div'); sTitle2.className='sec-title'; sTitle2.textContent='S (Salida)'; secS2.appendChild(sTitle2);
+    if (item.tSalida){
+      const r=document.createElement('div'); r.className='row';
+      const tg=document.createElement('span'); tg.className='tag'; tg.textContent='S';
+      const v=document.createElement('span'); v.textContent=(new Date(item.tSalida)).toTimeString().slice(0,8);
+      r.appendChild(tg); r.appendChild(v); secS2.appendChild(r);
+    } else {
+      const r=document.createElement('div'); r.className='hist-empty'; r.textContent='—'; secS2.appendChild(r);
+    }
 
-    const secSPrev = document.createElement('div'); 
-secSPrev.className = 'section';
-const sPrevTitle = document.createElement('div'); 
-sPrevTitle.className = 'sec-title'; 
-sPrevTitle.textContent = 'S previas';
-secSPrev.appendChild(sPrevTitle);
+    const secLL2 = document.createElement('div'); secLL2.className='section';
+    const llTitle2 = document.createElement('div'); llTitle2.className='sec-title'; llTitle2.textContent='LL previas';
+    secLL2.appendChild(llTitle2);
+    const histArr2 = Array.isArray(item.llegadasHist) ? item.llegadasHist.slice() : [];
+    histArr2.sort((a,b)=>b-a);
+    if (histArr2.length===0){
+      const r=document.createElement('div'); r.className='hist-empty'; r.textContent='Sin LL previas';
+      secLL2.appendChild(r);
+    } else {
+      let idx2=1;
+      for (const t of histArr2){
+        const r=document.createElement('div'); r.className='row';
+        const tg=document.createElement('span'); tg.className='tag'; tg.textContent='LL-'+(idx2++);
+        const v=document.createElement('span'); v.textContent=(new Date(t)).toTimeString().slice(0,8);
+        r.appendChild(tg); r.appendChild(v); secLL2.appendChild(r);
+      }
+    }
 
-const sHistArr = Array.isArray(item.salidasHist) ? item.salidasHist.slice() : [];
-sHistArr.sort((a,b)=> b-a);
+    const secA2 = document.createElement('div'); secA2.className='section';
+    const aTitle2 = document.createElement('div'); aTitle2.className='sec-title'; aTitle2.textContent='A (Abandono)';
+    secA2.appendChild(aTitle2);
+    if (item.tAbandono){
+      const r=document.createElement('div'); r.className='row';
+      const tg=document.createElement('span'); tg.className='tag'; tg.textContent='A';
+      const v=document.createElement('span'); v.textContent=(new Date(item.tAbandono)).toTimeString().slice(0,8);
+      r.appendChild(tg); r.appendChild(v); secA2.appendChild(r);
+    } else {
+      const r=document.createElement('div'); r.className='hist-empty'; r.textContent='—'; secA2.appendChild(r);
+    }
 
-if (sHistArr.length === 0){
-  const r = document.createElement('div'); 
-  r.className = 'hist-empty'; 
-  r.textContent = 'Sin S previas';
-  secSPrev.appendChild(r);
-} else {
-  let idxS = 1;
-  for (const t of sHistArr){
-    const r = document.createElement('div'); r.className='row';
-    const tg = document.createElement('span'); tg.className='tag'; tg.textContent='S-'+(idxS++);
-    const v = document.createElement('span'); v.textContent=(new Date(t)).toTimeString().slice(0,8);
-    r.appendChild(tg); r.appendChild(v); secSPrev.appendChild(r);
-  }
-}
+    tt2.appendChild(secSPrev);
+    tt2.appendChild(secS2);
+    tt2.appendChild(secLL2);
+    tt2.appendChild(secA2);
 
-tt2.appendChild(secSPrev); // <<— AÑADIR
-
-    
-    if (item.tSalida){ const r=document.createElement('div'); r.className='row'; const tg=document.createElement('span'); tg.className='tag'; tg.textContent='S'; const v=document.createElement('span'); v.textContent=(new Date(item.tSalida)).toTimeString().slice(0,8); r.appendChild(tg); r.appendChild(v); secS2.appendChild(r);} else { const r=document.createElement('div'); r.className='hist-empty'; r.textContent='—'; secS2.appendChild(r); }
-    const secLL2 = document.createElement('div'); secLL2.className='section'; const llTitle2 = document.createElement('div'); llTitle2.className='sec-title'; llTitle2.textContent='LL previas'; secLL2.appendChild(llTitle2);
-    const histArr2 = Array.isArray(item.llegadasHist) ? item.llegadasHist.slice() : []; histArr2.sort((a,b)=>b-a);
-    if (histArr2.length===0){ const r=document.createElement('div'); r.className='hist-empty'; r.textContent='Sin LL previas'; secLL2.appendChild(r);} else { let idx2=1; for (const t of histArr2){ const r=document.createElement('div'); r.className='row'; const tg=document.createElement('span'); tg.className='tag'; tg.textContent='LL-'+(idx2++); const v=document.createElement('span'); v.textContent=(new Date(t)).toTimeString().slice(0,8); r.appendChild(tg); r.appendChild(v); secLL2.appendChild(r); } }
-    const secA2 = document.createElement('div'); secA2.className='section'; const aTitle2 = document.createElement('div'); aTitle2.className='sec-title'; aTitle2.textContent='A (Abandono)'; secA2.appendChild(aTitle2);
-    if (item.tAbandono){ const r=document.createElement('div'); r.className='row'; const tg=document.createElement('span'); tg.className='tag'; tg.textContent='A'; const v=document.createElement('span'); v.textContent=(new Date(item.tAbandono)).toTimeString().slice(0,8); r.appendChild(tg); r.appendChild(v); secA2.appendChild(r);} else { const r=document.createElement('div'); r.className='hist-empty'; r.textContent='—'; secA2.appendChild(r); }
-
-    tt2.appendChild(secS2); tt2.appendChild(secLL2); tt2.appendChild(secA2);
-    if ((histArr2.length===0) && !item.tSalida && !item.tAbandono) { histBtn2.classList.add('hidden'); } else { histBtn2.classList.remove('hidden'); }
+    if ((histArr2.length===0) && !item.tSalida && !item.tAbandono) {
+      histBtn2.classList.add('hidden');
+    } else {
+      histBtn2.classList.remove('hidden');
+    }
 
     histBtn2.onclick = (ev)=>{ ev.stopPropagation(); tooltip2.classList.toggle('hidden'); };
     document.addEventListener('click', (ev)=>{ if (!card.contains(ev.target)) tooltip2.classList.add('hidden'); }, { once:true });
@@ -416,6 +474,7 @@ tt2.appendChild(secSPrev); // <<— AÑADIR
   }
 }
 
+// ====== Menú contextual ======
 function toggleMenu(card) {
   const menu = card.querySelector('.menu');
   const hidden = menu.classList.contains('hidden');
@@ -423,6 +482,7 @@ function toggleMenu(card) {
   if (hidden) menu.classList.remove('hidden'); else menu.classList.add('hidden');
 }
 
+// ====== Alta / Edición / Abandono / Editar Salida ======
 async function addNumber() {
   if (window.MODE === 'LLEGADA') { alert('En modo LLEGADA no se pueden añadir números nuevos. Cambia a JEFE o SALIDA.'); return; }
   const raw = (input.value || '').trim().replace(',', '.');
@@ -464,9 +524,6 @@ async function editNumber(prevVal) {
 
   logAudit('editar', { from: prevVal, to: newNum });
 }
-
-
-
 
 function setAbandon(val) {
   const idx = items.findIndex(x => x.value === val);
@@ -517,9 +574,7 @@ async function editSalida(val){
   logAudit('editar_salida', { value: val, tSalida_prev: prev, tSalida_new: newT, salidasHist: items[idx].salidasHist||[] });
 }
 
-
-
-
+// ====== Botones básicos ======
 if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
 if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') addNumber(); });
 if (btnLimpiar) btnLimpiar.addEventListener('click', () => {
@@ -574,11 +629,11 @@ async function resetRadiosForTramo(tramoId){
     alert('Error al borrar la subcolección de radios. Revisa permisos/Reglas Firestore.');
   }
 }
-
 if (btnResetRadios) {
   btnResetRadios.addEventListener('click', () => resetRadiosForTramo(window.TRAMO_ID));
 }
 
+// ====== Exportar PDF ======
 const btnExportar = document.getElementById('btnExportar');
 const printTitle = document.getElementById('printTitle');
 function exportarPDF() {
@@ -598,14 +653,19 @@ function exportarPDF() {
 }
 if (btnExportar) btnExportar.addEventListener('click', exportarPDF);
 
+// ====== Pantalla completa ======
 const btnFullscreen = document.getElementById('btnFullscreen');
 function isFullscreen() { return document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement; }
 async function enterFullscreen(el) { try { if (el.requestFullscreen) await el.requestFullscreen(); else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen(); else if (el.msRequestFullscreen) await el.msRequestFullscreen(); } catch (e) {} }
 async function exitFullscreen() { try { if (document.exitFullscreen) await document.exitFullscreen(); else if (document.webkitExitFullscreen) await document.webkitExitFullscreen(); else if (document.msExitFullscreen) await document.msExitFullscreen(); } catch (e) {} }
 function updateFsButton() { if (!btnFullscreen) return; btnFullscreen.textContent = isFullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa'; }
 if (btnFullscreen) btnFullscreen.addEventListener('click', () => { if (isFullscreen()) exitFullscreen(); else enterFullscreen(document.documentElement); });
-document.addEventListener('fullscreenchange', updateFsButton); document.addEventListener('webkitfullscreenchange', updateFsButton); document.addEventListener('msfullscreenchange', updateFsButton); updateFsButton();
+document.addEventListener('fullscreenchange', updateFsButton);
+document.addEventListener('webkitfullscreenchange', updateFsButton);
+document.addEventListener('msfullscreenchange', updateFsButton);
+updateFsButton();
 
+// ====== Cambios de tramo (UI) ======
 function sanitizeTramo(t){ return (t||'').trim().toLowerCase().replace(/[^\w-]+/g,'-').slice(0,64); }
 function getParams(){ return new URLSearchParams(location.search); }
 function goToTramo(t){
@@ -644,7 +704,6 @@ function parseHHMMSSToToday(str){
   base.setHours(h, mi, s, 0);
   return base.getTime();
 }
-
 function toggleTramoMenu(){
   if(!tramoMenu) return;
   const hidden = tramoMenu.classList.contains('hidden');
