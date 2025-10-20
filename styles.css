@@ -230,7 +230,7 @@ button.primary { background: linear-gradient(180deg, #1dbd6d, #129254); border-c
 .radio-dots {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, max-content));
-  row-gap: 2px;       /* espacio vertical entre filas */
+  row-gap: 3px;       /* espacio vertical entre filas */
   column-gap: 2px;    /* <-- junta más las bolitas en la misma fila */
   align-items: center;
   justify-content: start;
