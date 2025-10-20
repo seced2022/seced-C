@@ -225,41 +225,38 @@ button.primary { background: linear-gradient(180deg, #1dbd6d, #129254); border-c
   line-height: 1.2;
   user-select: none;
 }
-/* Contenedor de bolitas: 5 por fila, debajo de cada tarjeta */
-.grid .cell {
-  display: flex;
-  flex-direction: column;
-  gap: 6px; /* separa tarjeta, bolitas y timebars */
-}
 
-/* contenedor bajo cada tarjeta: 5 columnas fijas, con salto a la siguiente fila */
+/* Contenedor: 5 columnas del tamaño de la bolita */
 .radio-dots{
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, max-content));
-  gap: 4px 6px;          /* fila x columna */
-  align-items: center;
+  grid-template-columns: repeat(5, 10px); /* 5 columnas del ancho de la bolita */
+  gap: 6px 8px;            /* espacio entre filas y columnas */
   justify-content: start;
-  margin-top: 4px;       /* separa del número */
-  margin-bottom: 6px;    /* separa de las franjas de tiempo */
-  padding-top: 0;
+  margin-top: 4px;
+  margin-bottom: 6px;
 }
 
-/* bolita sin texto, tamaño pequeño */
+/* Bolita mini: círculo fijo, sin texto ni padding */
 .radio-dot{
-  width: 5px;
-  height: 5px;
-  border-radius: 9999px;
-  background: #fef08a;      /* amarillo */
-  border: 1px solid #eab308;/* borde */
-  display: inline-block;
-  pointer-events: none;
-  user-select: none;
+  width: 8px !important;      /* diámetro (sin contar el borde) */
+  height: 8px !important;
+  border-radius: 50% !important;
+  background: #fef08a !important;     /* amarillo */
+  border: 1px solid #eab308 !important;
+  display: block !important;
+
+  /* anula estilos antiguos de “píldora” */
+  padding: 0 !important;
+  min-width: 0 !important;
+  font-size: 0 !important;   /* por si quedara texto, que no ocupe */
+  line-height: 0 !important;
 }
 
 /* Panel Radio: ocultar bolitas */
 body.radio-skin .radio-dots{
   display: none !important;
 }
+
 
 
 /* Panel Radio: no mostrar bolitas R:n */
