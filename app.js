@@ -337,7 +337,11 @@ function render() {
     // ---- Bolitas de radios (R:n) — SOLO en editor/visor, NO en panel radio ----
     if (!document.body.classList.contains('radio-skin')) {
       const dots = document.createElement('div');
-      dots.className = 'radio-dots';
+      dot.className = 'radio-dot';
+      dot.title = `R:${r}`;
+      dot.setAttribute('aria-label', `R${r}`);
+      // NO pongas dot.textContent
+
 
       const m = window._radioMarks && window._radioMarks.get(String(item.value));
       if (Array.isArray(m) && m.length > 0) {
