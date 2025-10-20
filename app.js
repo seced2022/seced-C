@@ -292,6 +292,24 @@ function render() {
 
     cell.appendChild(card);
 
+    // ---- Bolitas de radios (R:n) ----
+const dots = document.createElement('div');
+dots.className = 'radio-dots';
+
+const m = window._radioMarks && window._radioMarks.get(String(item.value));
+if (Array.isArray(m) && m.length > 0) {
+  for (const r of m) {
+    const dot = document.createElement('span');
+    dot.className = 'radio-dot';
+    dot.textContent = `R:${r}`;
+    dots.appendChild(dot);
+  }
+}
+cell.appendChild(dots);
+// ---- /bolitas ----
+
+
+    
     const timeStack = document.createElement('div');
     timeStack.className = 'time-stack';
 
