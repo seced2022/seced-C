@@ -344,7 +344,9 @@ function render() {
         for (const r of m) {
           const dot = document.createElement('span');
           dot.className = 'radio-dot';
-          dot.textContent = `R:${r}`;
+          dot.title = `R:${r}`;                 // tooltip al pasar el ratón
+          dot.setAttribute('aria-label', `R${r}`); // accesible
+
           dots.appendChild(dot);
         }
       }
