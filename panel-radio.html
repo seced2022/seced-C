@@ -431,73 +431,80 @@ body.viewer.radio-skin .grid .card.selected {
         startEligibilityWatchdog();
       })();
 
-      /* ===== Click para avanzar dorsal al siguiente RADIO ===== */
-      document.getElementById('grid').addEventListener('click', async (ev)=>{
-        const card = ev.target.closest('.card');
-        if (!card) return;
-        const val = card.dataset.value;
-        if (!val) return;
-        if (!card.classList.contains('radio-eligible')) return; // doble seguridad
+      <script>
+// ===== Click para avanzar dorsal al siguiente RADIO =====
+document.getElementById('grid').addEventListener('click', async (ev)=>{
+  const card = ev.target.closest('.card');
+  if (!card) return;
+  const val = card.dataset.value;
+  if (!val) return;
+  if (!card.classList.contains('radio-eligible')) return; // doble seguridad
 
-        card.classList.add('radio-clicking');
+  card.classList.add('radio-clicking');
 
-        const rIdx = getRadioIndex();
-        if (!radiosCol) return; // seguridad
+  const rIdx = getRadioIndex();
+  if (!radiosCol) return; // seguridad
+  const docRef = radiosCol.doc(String(val));
 
-        const docRef = radiosCol.doc(String(val));
+  try {
+    // 1) Transacción: validar turno + avanzar last + guardar marca
+    await db.runTransaction(async (tx)=>{
+      const snap = await tx.get(docRef);
+      const data = snap.exists ? (snap.data()||{}) : {};
+      let last = (typeof data.last==='number') ? data.last : 0;
 
-        try {
-          await db.runTransaction(async (tx)=>{
-            const snap = await tx.get(docRef);
-            const data = snap.exists ? (snap.data()||{}) : {};
-            let last = (typeof data.last==='number') ? data.last : 0;
-
-            // Acepta también la “gracia” si soy R1 y es nueva salida
-            if (!(last === (rIdx - 1))) {
-              if (rIdx === 1) {
-                const it = getItemByValue(val);
-                if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) {
-                  last = 0; // tratamos como nuevo
-                }
-              }
-            }
-            if (last !== (rIdx - 1)) {
-              throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`);
-            }
-            tx.set(docRef, {
-             last: rIdx,
-            marks: firebase.firestore.FieldValue.arrayUnion(rIdx) // ← guardamos el radio que clicó
-            }, { merge:true });
-
-            
-
-          // Guardar “clicado por este radio” (persistente por tramo+radio)
-          clickedSet.add(String(val));
-          saveClickedSet(clickedSet);
-
-          // Auditoría (no bloquear si falla)
-          try {
-            const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
-            await aud.add({
-              actor: (localStorage.getItem('seced_radio')||('RADIO '+rIdx)),
-              action: 'radio_click',
-              detail: { value: Number(val), radio: rIdx },
-              ts: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-          } catch(e){}
-
-          toast(`Clic RADIO ${rIdx} → dorsal ${val}`, 'ok');
-
-        } catch (err) {
-          toast('No se pudo avanzar: ' + err.message, 'err');
-          card.classList.remove('radio-clicking');
-          return;
+      // Gracia para RADIO 1 si la tarjeta es "nueva de salida"
+      if (!(last === (rIdx - 1))) {
+        if (rIdx === 1) {
+          const it = getItemByValue(val);
+          if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) {
+            last = 0; // tratamos como nuevo
+          }
         }
+      }
+      if (last !== (rIdx - 1)) {
+        throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`);
+      }
 
-        // Recalcular (el snapshot hará el resto)
-        setTimeout(()=>{ applyEligibility(); }, 150);
+      tx.set(docRef, {
+        last: rIdx,
+        marks: firebase.firestore.FieldValue.arrayUnion(rIdx) // ← guarda la “bolita” R:n
+      }, { merge:true });
+    });
+
+    // 2) Estado local “clicado por mí” (persistente por tramo+radio)
+    clickedSet.add(String(val));
+    saveClickedSet(clickedSet);
+
+    // 3) Auditoría (no bloquea si falla)
+    try {
+      const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
+      await aud.add({
+        actor: (localStorage.getItem('seced_radio')||('RADIO '+rIdx)),
+        action: 'radio_click',
+        detail: { value: Number(val), radio: rIdx },
+        ts: firebase.firestore.FieldValue.serverTimestamp(),
       });
+    } catch(e){ /* noop */ }
 
+    toast(`Clic RADIO ${rIdx} → dorsal ${val}`, 'ok');
+
+  } catch (err) {
+    toast('No se pudo avanzar: ' + err.message, 'err');
+    card.classList.remove('radio-clicking');
+    return;
+  }
+
+  // 4) Recalcular (el snapshot hará el resto)
+  setTimeout(()=>{ applyEligibility(); }, 150);
+});
+</script>
+
+
+
+
+
+      
       /* ===== Fallback TRAMO (por si el menú no abre) ===== */
       function sanitizeTramo(t){ return (t||'').trim().toLowerCase().replace(/[^\w-]+/g,'-').slice(0,64); }
       function goToTramo(t){
