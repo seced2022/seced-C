@@ -464,8 +464,12 @@ body.viewer.radio-skin .grid .card.selected {
             if (last !== (rIdx - 1)) {
               throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`);
             }
-            tx.set(docRef, { last: rIdx }, { merge:true });
-          });
+            tx.set(docRef, {
+             last: rIdx,
+            marks: firebase.firestore.FieldValue.arrayUnion(rIdx) // ← guardamos el radio que clicó
+            }, { merge:true });
+
+            
 
           // Guardar “clicado por este radio” (persistente por tramo+radio)
           clickedSet.add(String(val));
