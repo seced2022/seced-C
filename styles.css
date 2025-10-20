@@ -202,3 +202,26 @@ button.primary { background: linear-gradient(180deg, #1dbd6d, #129254); border-c
   text-shadow: 0 1px 2px rgba(0,0,0,.25);
 }
 
+/* Contenedor de bolitas debajo del dorsal y encima de las franjas */
+.radio-dots{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;     /* separación del número */
+  margin-bottom: 6px;  /* separación respecto a las franjas */
+  min-height: 0; 
+}
+
+/* Píldora amarilla "R:n" */
+.radio-dot{
+  background: #fef08a;            /* amarillo */
+  color: #111;                     /* texto oscuro */
+  border: 1px solid #eab308;       /* borde amarillo */
+  border-radius: 9999px;           
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  line-height: 1.2;
+  user-select: none;
+}
