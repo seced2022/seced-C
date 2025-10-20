@@ -254,3 +254,8 @@ button.primary { background: linear-gradient(180deg, #1dbd6d, #129254); border-c
   user-select: none;
   pointer-events: none;
 }
+
+/* Panel Radio: no mostrar bolitas R:n */
+body.radio-skin .radio-dots {
+  display: none !important;
+}
