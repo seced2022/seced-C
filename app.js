@@ -549,16 +549,19 @@ async function editSalida(val){
   if (idx === -1) return;
 
   const prev = items[idx].tSalida || null;
-  const raw = prompt('Nueva hora de SALIDA (HH:MM:SS). Deja vacío para hora actual:', '');
+  const raw = prompt(
+    'Nueva hora de SALIDA (puedes escribir HH, HHMM, HHMMSS o HH:MM(:SS)).\nDeja vacío para hora actual:',
+    ''
+  );
   if (raw === null) return;
 
   let newT;
-  if ((raw||'').trim()==='') {
-    newT = nowNetMs();
-  } else {
-    newT = parseHHMMSSToToday(raw);
-    if (!newT) { alert('Formato inválido. Usa HH:MM:SS, ej: 08:31:05'); return; }
+  const parsed = parseFlexibleTimeToToday(raw);
+  if (parsed === null) {
+    alert('Formato inválido. Usa HH, HHMM, HHMMSS o HH:MM(:SS)');
+    return;
   }
+  newT = (parsed === '') ? nowNetMs() : parsed;
 
   if (prev){
     if (!Array.isArray(items[idx].salidasHist)) items[idx].salidasHist = [];
@@ -575,6 +578,8 @@ async function editSalida(val){
 
   logAudit('editar_salida', { value: val, tSalida_prev: prev, tSalida_new: newT, salidasHist: items[idx].salidasHist||[] });
 }
+
+
 
 // ====== Botones básicos ======
 if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
@@ -706,6 +711,48 @@ function parseHHMMSSToToday(str){
   base.setHours(h, mi, s, 0);
   return base.getTime();
 }
+// --- Entrada flexible de hora: "HH", "HHMM", "HHMMSS" o "HH:MM(:SS)" ---
+function normalizeTimeDigitsOrColon(str){
+  const s = (str || '').trim();
+  if (!s) return '';                 // vacío = usar hora actual (lo maneja editSalida)
+  if (s.includes(':')) {
+    // Acepta HH:MM o HH:MM:SS
+    const parts = s.split(':').map(x => x.trim());
+    if (parts.length === 2) return `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}:00`;
+    if (parts.length === 3) return `${parts[0].padStart(2,'0')}:${parts[1].padStart(2,'0')}:${parts[2].padStart(2,'0')}`;
+    return null; // formato raro
+  }
+
+  // Solo dígitos → HH | HHMM | HHMMSS
+  let d = s.replace(/\D/g, '');
+  if (d.length === 0) return '';
+  if (d.length > 6) d = d.slice(0, 6); // capar a 6 dígitos
+
+  let hh='00', mm='00', ss='00';
+  if (d.length <= 2) {
+    hh = d.padStart(2,'0');
+  } else if (d.length <= 4) {
+    hh = d.slice(0, d.length - 2).padStart(2,'0');
+    mm = d.slice(-2);
+  } else { // 5 o 6 dígitos
+    hh = d.slice(0, d.length - 4).padStart(2,'0');
+    mm = d.slice(-4, -2);
+    ss = d.slice(-2);
+  }
+
+  const H = Number(hh), M = Number(mm), S = Number(ss);
+  if (H < 0 || H > 23 || M < 0 || M > 59 || S < 0 || S > 59) return null;
+
+  return `${hh}:${mm}:${ss}`;
+}
+
+function parseFlexibleTimeToToday(str){
+  const norm = normalizeTimeDigitsOrColon(str);
+  if (norm === null) return null;   // inválido
+  if (norm === '') return '';       // vacío → usar “ahora”
+  return parseHHMMSSToToday(norm);  // reutiliza tu parser existente
+}
+
 function toggleTramoMenu(){
   if(!tramoMenu) return;
   const hidden = tramoMenu.classList.contains('hidden');
