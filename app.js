@@ -769,3 +769,176 @@ function setTramoBadge(name){
   if (typeof btnTramo !== 'undefined' && btnTramo) btnTramo.textContent = `TRAMO: ${t || '—'} ▾`;
 }
 setTramoBadge(window.TRAMO_ID);
+
+// ====== AVISO de Panel Radio -> Editor (JEFE) ======
+
+// Intenta deducir el ID del radio en el Panel Radio.
+// Prioridad: window.RADIO_ID -> data-radio en <body> -> ?radio= -> localStorage -> prompt único
+function getRadioId() {
+  try {
+    if (window.RADIO_ID) return String(window.RADIO_ID);
+    const bodyRadio = document.body.getAttribute('data-radio');
+    if (bodyRadio) return String(bodyRadio);
+    const qp = new URLSearchParams(location.search).get('radio');
+    if (qp) return String(qp);
+
+    const k = 'seced_radio_id';
+    let v = localStorage.getItem(k);
+    if (!v && document.body.classList.contains('radio-skin')) {
+      v = prompt('Identificador de este RADIO (ej. R1, RADIO-A, etc.):') || '';
+      if (v) localStorage.setItem(k, v);
+    }
+    return v || 'RADIO';
+  } catch { return 'RADIO'; }
+}
+
+// Publica un aviso en Firestore para el tramo actual
+async function publishRadioAlert() {
+  try {
+    if (!window.firebase || !firebase.firestore) {
+      alert('No hay conexión con Firestore.');
+      return;
+    }
+    const tramo = (window.TRAMO_ID || '1').toString();
+    const db = firebase.firestore();
+    const radio = getRadioId();
+    const payload = {
+      tramo,
+      radio,
+      actor: (window.OPERATOR || '—'),
+      type: 'radio_alert',
+      ts: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    await db.collection('tramos').doc(tramo).collection('alerts').add(payload);
+    try { logAudit('radio_alert_emit', { radio }); } catch {}
+  } catch (e) {
+    console.error('publishRadioAlert error', e);
+    alert('Error enviando AVISO.');
+  }
+}
+
+// Inyecta botón rojo "AVISO" SOLO en panel radio (body.radio-skin)
+(function initRadioAvisoButton(){
+  if (!document.body.classList.contains('radio-skin')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'btnAviso';
+  btn.type = 'button';
+  btn.textContent = 'AVISO';
+  // estilo inline para no tocar tu CSS existente
+  Object.assign(btn.style, {
+    position: 'fixed',
+    right: '16px',
+    bottom: '16px',
+    zIndex: 1000,
+    background: '#dc2626',
+    color: '#fff',
+    border: '1px solid #b91c1c',
+    borderRadius: '10px',
+    padding: '12px 16px',
+    fontWeight: '800',
+    letterSpacing: '0.5px',
+    boxShadow: '0 8px 18px rgba(0,0,0,.35)',
+    cursor: 'pointer'
+  });
+
+  btn.addEventListener('click', publishRadioAlert);
+  document.body.appendChild(btn);
+
+  // Accesibilidad
+  btn.setAttribute('aria-label', 'Enviar AVISO de radio');
+})();
+
+// Banner de alerta en editor/visor (NO en panel radio)
+function showRadioAlertBanner(radio) {
+  if (document.body.classList.contains('radio-skin')) return; // nunca en panel radio
+  if (window.MODE !== 'JEFE') return; // solo en modo JEFE en el editor
+
+  let banner = document.getElementById('radioAlertBanner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'radioAlertBanner';
+    Object.assign(banner.style, {
+      position: 'fixed',
+      top: '10px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 1000,
+      background: '#b91c1c',
+      color: '#fff',
+      border: '2px solid #7f1d1d',
+      borderRadius: '12px',
+      padding: '14px 18px',
+      fontWeight: '900',
+      fontSize: '16px',
+      boxShadow: '0 10px 24px rgba(0,0,0,.45)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px'
+    });
+
+    const txt = document.createElement('span');
+    txt.id = 'radioAlertBannerText';
+    banner.appendChild(txt);
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = '×';
+    Object.assign(close.style, {
+      background: 'transparent',
+      color: '#fff',
+      border: 'none',
+      fontSize: '18px',
+      fontWeight: '900',
+      cursor: 'pointer',
+      lineHeight: 1
+    });
+    close.addEventListener('click', () => banner.remove());
+    banner.appendChild(close);
+
+    document.body.appendChild(banner);
+  }
+  const txt = banner.querySelector('#radioAlertBannerText');
+  if (txt) txt.textContent = `AVISO RADIO: ${radio}`;
+
+  banner.style.display = 'flex';
+  // auto-ocultar tras 15s (reinicia si llega otro aviso)
+  clearTimeout(banner._hideTimer);
+  banner._hideTimer = setTimeout(() => {
+    if (banner && banner.parentNode) banner.remove();
+  }, 15000);
+}
+
+// Suscripción a avisos del tramo (solo editor/visor)
+(function subscribeRadioAlerts(){
+  if (document.body.classList.contains('radio-skin')) return; // no escuchar en panel radio
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || '1').toString();
+    const db = firebase.firestore();
+
+    const lastKey = `seced_last_alert_${tramo}`;
+    let lastSeen = 0;
+    try { lastSeen = Number(localStorage.getItem(lastKey) || '0'); } catch {}
+
+    db.collection('tramos').doc(tramo).collection('alerts')
+      .orderBy('ts','desc').limit(20) // un buffer pequeño
+      .onSnapshot(snap => {
+        snap.docChanges().forEach(ch => {
+          if (ch.type !== 'added') return;
+          const data = ch.doc.data() || {};
+          const ts = (data.ts && data.ts.toMillis) ? data.ts.toMillis() : Date.now();
+          const radio = data.radio || 'RADIO';
+          // Solo avisos nuevos
+          if (ts > lastSeen) {
+            // memoriza y muestra si procede
+            try { localStorage.setItem(lastKey, String(ts)); } catch {}
+            try { logAudit('radio_alert_recv', { radio, ts }); } catch {}
+            showRadioAlertBanner(radio);
+          }
+        });
+      }, err => console.warn('alerts listener error', err));
+  }catch(e){
+    console.warn('subscribeRadioAlerts error', e);
+  }
+})();
