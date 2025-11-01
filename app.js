@@ -888,7 +888,7 @@ async function publishRadioAlert() {
   const btn = document.createElement('button');
   btn.id = 'btnAviso';
   btn.type = 'button';
-  btn.textContent = 'AVISO';
+  btn.textContent = 'BANDERA';
   Object.assign(btn.style, {
     position: 'fixed',
     right: '16px',
