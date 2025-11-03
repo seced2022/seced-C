@@ -502,6 +502,79 @@
         const name = prompt('Nombre o identificador del operador:', localStorage.getItem('seced_operator')||'');
         if (name !== null) { try { localStorage.setItem('seced_operator', (name||'').trim()); } catch{} }
       });
+
+      /* ====== BOTÓN BANDERA + AVISO A EDITOR ====== */
+      (function ensureBanderaButton(){
+        // Solo en panel radio
+        if (!document.body.classList.contains('radio-skin')) return;
+
+        // Reutiliza si existiera
+        let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
+
+        function wire(b){
+          b.onclick = async (ev)=>{
+            ev.preventDefault();
+            try {
+              if (!db) { alert('Firestore no disponible.'); return; }
+
+              // Etiqueta/ID del radio actual
+              const rLabel = (typeof getRadio === 'function' && getRadio()) || ('RADIO ' + getRadioIndex());
+
+              const payload = {
+                tramo: TRAMO,
+                radio: rLabel,
+                actor: (localStorage.getItem('seced_operator') || rLabel || '—'),
+                type: 'radio_alert',
+                ts: firebase.firestore.FieldValue.serverTimestamp()
+              };
+
+              await db.collection('tramos').doc(TRAMO).collection('alerts').add(payload);
+
+              const t = document.getElementById('toast');
+              if (t) { t.textContent = `BANDERA enviada (${rLabel})`; t.className='ok'; t.style.display='block'; setTimeout(()=>t.style.display='none', 1500); }
+              console.log('[BANDERA] aviso enviado', payload);
+            } catch (e) {
+              console.error('[BANDERA] error', e);
+              const t = document.getElementById('toast');
+              if (t) { t.textContent = 'Error enviando BANDERA'; t.className='err'; t.style.display='block'; setTimeout(()=>t.style.display='none', 2000); }
+              alert('Error enviando BANDERA.');
+            }
+          };
+          b.setAttribute('aria-label', 'Enviar aviso de BANDERA');
+        }
+
+        if (!btn) {
+          btn = document.createElement('button');
+          btn.id = 'btnBandera';
+          btn.type = 'button';
+          btn.textContent = 'BANDERA';
+          Object.assign(btn.style, {
+            position: 'fixed',
+            right: '16px',
+            bottom: '16px',
+            zIndex: 1000,
+            background: '#dc2626',
+            color: '#fff',
+            border: '1px solid #b91c1c',
+            borderRadius: '10px',
+            padding: '14px 18px',
+            fontWeight: '900',
+            letterSpacing: '0.5px',
+            boxShadow: '0 8px 18px rgba(0,0,0,.35)',
+            cursor: 'pointer'
+          });
+          wire(btn);
+          document.body.appendChild(btn);
+          console.log('[BANDERA] botón creado');
+        } else {
+          // Normaliza si existía como AVISO
+          btn.id = 'btnBandera';
+          btn.textContent = 'BANDERA';
+          wire(btn);
+          console.log('[BANDERA] botón normalizado (reutilizado)');
+        }
+      })();
+
     })();
   </script>
 </body>
