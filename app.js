@@ -344,9 +344,8 @@ function render() {
         for (const r of m) {
           const dot = document.createElement('span');
           dot.className = 'radio-dot';
-          dot.title = `R:${r}`;                 // tooltip
-          dot.setAttribute('aria-label', `R${r}`); // accesible
-          // sin texto visible para que sea una bolita pequeña
+          dot.title = `R:${r}`;
+          dot.setAttribute('aria-label', `R${r}`);
           dots.appendChild(dot);
         }
       }
@@ -774,11 +773,9 @@ setTramoBadge(window.TRAMO_ID);
 
 // 1) Resolver el radio “seleccionado” leyendo el DOM del Panel Radio
 function resolveSelectedRadioFromUI() {
-  // a) input tipo radio marcado: <input name="radio" value="R1" checked>
   const checked = document.querySelector('[name="radio"]:checked');
   if (checked && checked.value) return String(checked.value).trim();
 
-  // b) botón activo: <button class="radio-option active" data-radio-id="R2">...</button>
   const activeBtn = document.querySelector('.radio-option.active,[data-radio-selected="true"]');
   if (activeBtn) {
     const v = activeBtn.getAttribute('data-radio-id')
@@ -787,11 +784,9 @@ function resolveSelectedRadioFromUI() {
     if (v) return String(v).trim();
   }
 
-  // c) marcador directo en la página
   const byIdText = document.getElementById('radioActual');
   if (byIdText && byIdText.textContent) return String(byIdText.textContent).trim();
 
-  // d) atributo en <body>
   const bodyAttr = document.body.getAttribute('data-radio');
   if (bodyAttr) return String(bodyAttr).trim();
 
@@ -825,7 +820,6 @@ function getRadioId() {
     try { localStorage.setItem('seced_radio_id', id); } catch {}
   }
 
-  // Cambios en inputs name=radio
   document.addEventListener('change', (e)=>{
     const t = e.target;
     if (t && t.matches && t.matches('[name="radio"]')) {
@@ -833,7 +827,6 @@ function getRadioId() {
     }
   });
 
-  // Clicks en botones .radio-option (o cualquier nodo con data-radio-id)
   document.addEventListener('click', (e)=>{
     const btn = e.target.closest('.radio-option,[data-radio-id],[data-radio]');
     if (!btn) return;
@@ -843,7 +836,6 @@ function getRadioId() {
     if (v) store(v);
   });
 
-  // Inicializar al cargar
   const initial = resolveSelectedRadioFromUI()
                || new URLSearchParams(location.search).get('radio')
                || localStorage.getItem('seced_radio_id');
@@ -870,10 +862,14 @@ async function publishRadioAlert() {
       radio,
       actor: (window.OPERATOR || '—'),
       type: 'radio_alert',
+      clientTs: Date.now(), // respaldo inmediato
       ts: firebase.firestore.FieldValue.serverTimestamp()
     };
 
+    console.log('[AVISO] Enviando', payload);
     await db.collection('tramos').doc(tramo).collection('alerts').add(payload);
+    console.log('[AVISO] Emitido OK desde radio:', radio);
+
     try { logAudit('radio_alert_emit', { radio }); } catch {}
   } catch (e) {
     console.error('publishRadioAlert error', e);
@@ -881,7 +877,7 @@ async function publishRadioAlert() {
   }
 }
 
-// 5) Inyectar botón rojo "AVISO" SOLO en panel radio (body.radio-skin)
+// 5) Inyectar botón rojo "BANDERA" SOLO en panel radio (body.radio-skin)
 (function initRadioAvisoButton(){
   if (!document.body.classList.contains('radio-skin')) return;
 
@@ -896,7 +892,7 @@ async function publishRadioAlert() {
     zIndex: 1000,
     background: '#dc2626',
     color: '#fff',
-    border: '1px solid #b91c1c',
+    border: '1px solid '#b91c1c',
     borderRadius: '10px',
     padding: '12px 16px',
     fontWeight: '800',
@@ -984,9 +980,12 @@ function showRadioAlertBanner(radio) {
         snap.docChanges().forEach(ch => {
           if (ch.type !== 'added') return;
           const data = ch.doc.data() || {};
-          const ts = (data.ts && data.ts.toMillis) ? data.ts.toMillis() : Date.now();
+          // usar ts de servidor si existe, si no clientTs, si no ahora
+          const ts = (data.ts && data.ts.toMillis) ? data.ts.toMillis()
+                    : (typeof data.clientTs === 'number' ? data.clientTs : Date.now());
           const radio = data.radio || 'RADIO';
           if (ts > lastSeen) {
+            lastSeen = ts; // evita duplicados en la sesión
             try { localStorage.setItem(lastKey, String(ts)); } catch {}
             try { logAudit('radio_alert_recv', { radio, ts }); } catch {}
             showRadioAlertBanner(radio);
