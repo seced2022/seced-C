@@ -877,32 +877,26 @@ async function publishRadioAlert() {
   }
 }
 
-// --- FIX/Normalizador del botón de BANDERA en panel radio ---
-(function ensureBanderaButton(){
-  // Solo en el perfil de panel radio
-  if (!document.body.classList.contains('radio-skin')) return;
+// --- FIX/Normalizador del botón de BANDERA en panel radio (robusto) ---
+(function ensureBanderaButtonRobusto(){
+  if (!document.body.classList.contains('radio-skin')) return; // solo en Panel Radio
 
-  // Buscar si ya hay un botón previo (AVISO/BANDERA)
-  let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
+  const WANT_ID = 'btnBandera';
+  const WANT_TEXT = 'BANDERA';
 
-  // Función para enganchar el click correcto
   function wireClick(b){
-    b.onclick = (ev)=>{
+    if (b._banderaWired) return;
+    b._banderaWired = true;
+    b.addEventListener('click', (ev)=>{
       ev.preventDefault();
       console.log('[BANDERA] click');
       publishRadioAlert();
-    };
-    // Accesibilidad
-    b.setAttribute('aria-label', 'Enviar AVISO de radio');
+    });
+    b.setAttribute('aria-label', 'Enviar aviso de BANDERA');
   }
 
-  if (!btn) {
-    // Crear desde cero
-    btn = document.createElement('button');
-    btn.id = 'btnBandera';
-    btn.type = 'button';
-    btn.textContent = 'BANDERA';
-    Object.assign(btn.style, {
+  function styleButton(b){
+    Object.assign(b.style, {
       position: 'fixed',
       right: '16px',
       bottom: '16px',
@@ -917,16 +911,44 @@ async function publishRadioAlert() {
       boxShadow: '0 8px 18px rgba(0,0,0,.35)',
       cursor: 'pointer'
     });
-    wireClick(btn);
-    document.body.appendChild(btn);
-    console.log('[BANDERA] creado');
-  } else {
-    // Convertir el antiguo al nuevo
-    btn.id = 'btnBandera';
-    btn.textContent = 'BANDERA';
-    wireClick(btn);
-    console.log('[BANDERA] normalizado (se reutilizó un botón previo)');
   }
+
+  function upsert(){
+    let btn = document.getElementById(WANT_ID)
+           || document.getElementById('btnAviso')
+           || document.querySelector('#btnBandera, #btnAviso, button[data-role="aviso"]');
+
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = WANT_ID;
+      btn.type = 'button';
+      btn.textContent = WANT_TEXT;
+      styleButton(btn);
+      document.body.appendChild(btn);
+      console.log('[BANDERA] botón creado');
+    } else {
+      if (btn.id !== WANT_ID) btn.id = WANT_ID;
+      if (btn.textContent !== WANT_TEXT) btn.textContent = WANT_TEXT;
+      styleButton(btn);
+      console.log('[BANDERA] botón normalizado (reutilizado)');
+    }
+    wireClick(btn);
+  }
+
+  // Corre ahora…
+  upsert();
+
+  // … reintenta durante unos segundos por si otro script lo inyecta tarde
+  let tries = 0;
+  const maxTries = 15; // ~7.5s
+  const iv = setInterval(()=>{
+    try { upsert(); } catch {}
+    if (++tries >= maxTries) clearInterval(iv);
+  }, 500);
+
+  // Observa inyecciones dinámicas
+  const mo = new MutationObserver(()=>{ try { upsert(); } catch {} });
+  mo.observe(document.body, { childList: true, subtree: true });
 })();
 
 // 6) Banner de alerta en editor/visor (NO en panel radio)
@@ -946,7 +968,7 @@ function showRadioAlertBanner(radio) {
       zIndex: 1000,
       background: '#b91c1c',
       color: '#fff',
-      border: '2px solid #7f1d1d',
+      border: '2px solid '#7f1d1d'.replace("'",""),
       borderRadius: '12px',
       padding: '14px 18px',
       fontWeight: '900',
