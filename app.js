@@ -877,33 +877,56 @@ async function publishRadioAlert() {
   }
 }
 
-// 5) Inyectar botón rojo "BANDERA" SOLO en panel radio (body.radio-skin)
-(function initRadioAvisoButton(){
+// --- FIX/Normalizador del botón de BANDERA en panel radio ---
+(function ensureBanderaButton(){
+  // Solo en el perfil de panel radio
   if (!document.body.classList.contains('radio-skin')) return;
 
-  const btn = document.createElement('button');
-  btn.id = 'btnAviso';
-  btn.type = 'button';
-  btn.textContent = 'BANDERA';
-  Object.assign(btn.style, {
-    position: 'fixed',
-    right: '16px',
-    bottom: '16px',
-    zIndex: 1000,
-    background: '#dc2626',
-    color: '#fff',
-    border: '1px solid '#b91c1c',
-    borderRadius: '10px',
-    padding: '12px 16px',
-    fontWeight: '800',
-    letterSpacing: '0.5px',
-    boxShadow: '0 8px 18px rgba(0,0,0,.35)',
-    cursor: 'pointer'
-  });
-  btn.setAttribute('aria-label', 'Enviar AVISO de radio');
-  btn.addEventListener('click', publishRadioAlert);
+  // Buscar si ya hay un botón previo (AVISO/BANDERA)
+  let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
 
-  document.body.appendChild(btn);
+  // Función para enganchar el click correcto
+  function wireClick(b){
+    b.onclick = (ev)=>{
+      ev.preventDefault();
+      console.log('[BANDERA] click');
+      publishRadioAlert();
+    };
+    // Accesibilidad
+    b.setAttribute('aria-label', 'Enviar AVISO de radio');
+  }
+
+  if (!btn) {
+    // Crear desde cero
+    btn = document.createElement('button');
+    btn.id = 'btnBandera';
+    btn.type = 'button';
+    btn.textContent = 'BANDERA';
+    Object.assign(btn.style, {
+      position: 'fixed',
+      right: '16px',
+      bottom: '16px',
+      zIndex: 1000,
+      background: '#dc2626',
+      color: '#fff',
+      border: '1px solid #b91c1c',
+      borderRadius: '10px',
+      padding: '12px 16px',
+      fontWeight: '800',
+      letterSpacing: '0.5px',
+      boxShadow: '0 8px 18px rgba(0,0,0,.35)',
+      cursor: 'pointer'
+    });
+    wireClick(btn);
+    document.body.appendChild(btn);
+    console.log('[BANDERA] creado');
+  } else {
+    // Convertir el antiguo al nuevo
+    btn.id = 'btnBandera';
+    btn.textContent = 'BANDERA';
+    wireClick(btn);
+    console.log('[BANDERA] normalizado (se reutilizó un botón previo)');
+  }
 })();
 
 // 6) Banner de alerta en editor/visor (NO en panel radio)
