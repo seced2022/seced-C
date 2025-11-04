@@ -1041,3 +1041,101 @@ function showRadioAlertBanner(radio) {
     console.warn('subscribeRadioAlerts error', e);
   }
 })();
+// alerts-listener.js — Editor/Visor
+
+(function(){
+  // Nunca en Panel Radio
+  if (document.body.classList.contains('radio-skin')) return;
+
+  function getTramo(){
+    const qs = new URLSearchParams(location.search).get('tramo');
+    return (window.TRAMO_ID || qs || '1').toString();
+  }
+
+  function showRadioAlertBanner(radio){
+    // Solo en JEFE
+    if (window.MODE !== 'JEFE') return;
+
+    let banner = document.getElementById('radioAlertBanner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'radioAlertBanner';
+      Object.assign(banner.style, {
+        position: 'fixed',
+        top: '10px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 1000,
+        background: '#b91c1c',
+        color: '#fff',
+        border: '2px solid #7f1d1d',
+        borderRadius: '12px',
+        padding: '14px 18px',
+        fontWeight: '900',
+        fontSize: '16px',
+        boxShadow: '0 10px 24px rgba(0,0,0,.45)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px'
+      });
+      const txt = document.createElement('span');
+      txt.id = 'radioAlertBannerText';
+      banner.appendChild(txt);
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.textContent = '×';
+      Object.assign(close.style, {
+        background: 'transparent',
+        color: '#fff',
+        border: 'none',
+        fontSize: '18px',
+        fontWeight: '900',
+        cursor: 'pointer',
+        lineHeight: 1
+      });
+      close.addEventListener('click', () => banner.remove());
+      banner.appendChild(close);
+      document.body.appendChild(banner);
+    }
+    const txt = banner.querySelector('#radioAlertBannerText');
+    if (txt) txt.textContent = `AVISO RADIO: ${radio}`;
+    banner.style.display = 'flex';
+
+    clearTimeout(banner._hideTimer);
+    banner._hideTimer = setTimeout(() => {
+      if (banner && banner.parentNode) banner.remove();
+    }, 15000);
+  }
+
+  // Suscripción a Firestore
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const tramo = getTramo();
+    const db = firebase.firestore();
+    const lastKey = `seced_last_alert_${tramo}`;
+
+    let lastSeen = 0;
+    try { lastSeen = Number(localStorage.getItem(lastKey) || '0'); } catch {}
+
+    db.collection('tramos').doc(tramo).collection('alerts')
+      .orderBy('ts','desc').limit(20)
+      .onSnapshot(snap => {
+        snap.docChanges().forEach(ch => {
+          if (ch.type !== 'added') return;
+          const data = ch.doc.data() || {};
+          const ts = (data.ts && data.ts.toMillis) ? data.ts.toMillis()
+                    : (typeof data.clientTs === 'number' ? data.clientTs : Date.now());
+          const radio = data.radio || 'RADIO';
+          if (ts > lastSeen) {
+            lastSeen = ts;
+            try { localStorage.setItem(lastKey, String(ts)); } catch {}
+            showRadioAlertBanner(radio);
+          }
+        });
+      }, err => console.warn('alerts listener error', err));
+  }catch(e){
+    console.warn('alerts-listener init error', e);
+  }
+})();
+
+
