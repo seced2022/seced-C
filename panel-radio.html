@@ -3,271 +3,517 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SECeD · Panel Radio</title>
+  <title>SECeD - Panel Radio</title>
+  <link rel="stylesheet" href="styles.css?v=41" />
+  <meta name="theme-color" content="#0b1f12" />
+
   <style>
-    :root{ --bg:#0b1220; --card:#121a2b; --text:#e6eefc; --muted:#9db0d0; --accent:#2563eb; --danger:#dc2626; }
-    html,body{ margin:0; height:100%; }
-    body.radio-skin{ background:var(--bg); color:var(--text); font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif; }
-    .wrap{ max-width:900px; margin:0 auto; padding:16px 16px 88px; }
-    h1{ margin:0 0 8px; font-size:20px; font-weight:800; letter-spacing:.3px; }
-    .sub{ color:var(--muted); font-size:13px; margin-bottom:18px; }
-    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .card{ background:var(--card); border:1px solid #1d2741; border-radius:12px; padding:12px; }
-    .pill{ background:#0d1730; border:1px solid #213057; border-radius:999px; padding:8px 12px; color:var(--text); cursor:pointer; user-select:none; font-weight:700; }
-    .pill.active{ outline:2px solid var(--accent); background:#0b1f4a; }
-    .pill[data-radio-id]{ min-width:48px; text-align:center; }
-    .toolbar{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-    .toolbar .label{ color:var(--muted); font-size:12px; margin-right:4px; }
-    .toolbar input{ background:#0d1730; color:var(--text); border:1px solid #1d2741; border-radius:8px; padding:8px 10px; min-width:140px; }
-    .toolbar button{ background:#0d1730; color:var(--text); border:1px solid #1d2741; border-radius:8px; padding:8px 12px; cursor:pointer; font-weight:700; }
-    .toolbar button:hover{ border-color:#2b3c65; }
-    #radioActual{ font-weight:900; }
-    /* BOTÓN BANDERA */
-    #btnBandera{ position:fixed; right:16px; bottom:16px; z-index:1000; background:var(--danger);
-      color:#fff; border:1px solid #b91c1c; border-radius:12px; padding:14px 18px; font-weight:900;
-      letter-spacing:.5px; box-shadow:0 12px 28px rgba(0,0,0,.35); cursor:pointer; }
-    #btnBandera:active{ transform:translateY(1px); }
-    /* TOAST */
-    #toast{ position:fixed; left:50%; bottom:20px; transform:translateX(-50%); z-index:1200;
-      background:#111827; color:#e5e7eb; border:1px solid #374151; border-radius:10px; padding:10px 14px; display:none; }
-    #toast.ok{ border-color:#10b981; color:#ecfdf5; }
-    #toast.err{ border-color:#ef4444; color:#fee2e2; }
+    /* Solo lectura base (sin menús ni franjas) */
+    .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
+    .viewer .time-stack { display: none !important; }
+
+    /* Elegible → clic habilitado y “blanco brillo” */
+    .viewer .card.radio-eligible,
+    .viewer .card.radio-eligible * { pointer-events: auto !important; cursor: pointer !important; }
+    .card.radio-eligible {
+      background: #ffffff !important; color: #111 !important; border-color: #e5e7eb !important;
+      box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset;
+    }
+
+    /* No elegibles → visibles pero atenuadas */
+    .card.radio-locked { display:block !important; opacity:.45; filter:grayscale(.2); pointer-events:none; cursor:default !important; }
+
+    /* Ya clicadas por este radio → amarillas persistentes */
+    .card.radio-clicked-by-me {
+      display:block !important; background:#fef08a !important; border-color:#eab308 !important;
+      box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; pointer-events:none; cursor:default !important;
+    }
+
+    .card.radio-clicking { background:#fef08a !important; border-color:#eab308 !important;
+      box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; }
+
+    .radio-inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    #btnRadio {
+      border: 1px solid var(--btn-border); background:#0c2415; color:#eafff7;
+      border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer;
+    }
+
+    .radio-badge{
+      position:absolute; top:14px; right:14px; background:#ffd60a; color:#0f1300;
+      border:1px solid #e9b400; border-radius:9999px; padding:6px 12px; font-weight:900; font-size:18px; letter-spacing:.3px;
+      box-shadow:0 6px 16px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.35);
+      user-select:none; pointer-events:none;
+    }
+
+    .tramo-picker { position: relative; }
+    .tramo-menu { z-index: 1000; }
+
+    /* Toast simple */
+    #toast {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      background: #0b1f12; color: #eafff7; padding: 8px 12px; border-radius: 10px;
+      border: 1px solid #13301e; font-weight: 700; display: none; z-index: 9999;
+    }
+    #toast.ok { background: #065f46; border-color: #0c7a5c; }
+    #toast.err { background: #7f1d1d; border-color: #991b1b; }
+
+    /* En Panel Radio ignoramos el estado 'selected' del editor/visor */
+    .viewer .card.selected,
+    body.viewer.radio-skin .grid .card.selected {
+      background:#ffffff !important; color:#111 !important; border-color:#e5e7eb !important;
+      box-shadow:none !important; opacity:1 !important; filter:none !important;
+    }
   </style>
-
-  <!-- Firebase compat SDKs (usa estilo namespace como en tu app) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-  <!-- Tu config pública (debe definir window.FIREBASE_CONFIG y window.AUDIT_KEY) -->
-  <script src="config.js"></script>
 </head>
 <body class="radio-skin">
-  <div class="wrap">
-    <h1>Panel Radio</h1>
-    <div class="sub">Selecciona tu <b>RADIO</b>, define <b>TRAMO</b> y pulsa <b>BANDERA</b> para enviar un aviso con dorsal.</div>
+  <main class="app" style="position:relative;">
+    <span id="radioBadge" class="radio-badge" aria-hidden="true" hidden>RADIO: —</span>
 
-    <!-- Estado -->
-    <div class="card" style="margin-bottom:12px;">
-      <div class="row">
-        <div><span class="label">TRAMO:</span> <span id="tramoBadge">—</span></div>
-        <div>·</div>
-        <div><span class="label">RADIO:</span> <span id="radioActual">—</span></div>
-        <div>·</div>
-        <div><span class="label">OPERADOR:</span> <span id="opBadge">—</span></div>
+    <div class="brand">
+      <img src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
+    </div>
+    <h1>SECeD - Panel Radio</h1>
+
+    <div class="clock-bar">
+      <div class="clock">
+        <span id="clockTime">--:--:--</span>
+        <span class="tz" id="clockTz">Europe/Madrid</span>
+        <span class="sync" id="clockSync">sincronizando…</span>
+      </div>
+
+      <div class="controls-right">
+        <div class="tramo-picker">
+          <div class="radio-inline">
+            <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
+            <button id="btnRadio" type="button" title="Seleccionar Radio">RADIO: —</button>
+          </div>
+          <div id="tramoMenu" class="tramo-menu hidden" role="menu">
+            <div class="tm-section">
+              <label for="tramoInput">Escribir tramo</label>
+              <input id="tramoInput" type="text" placeholder="ej. tramo-1" />
+              <button id="tramoGo" type="button" class="primary">Ir</button>
+            </div>
+            <div class="tm-section">
+              <div class="tm-label">Recientes</div>
+              <ul id="tramoRecent"></ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="micro-panel">
+          <button id="btnOperador" class="micro-btn" title="Cambiar usuario">👤</button>
+        </div>
       </div>
     </div>
 
-    <!-- Selector de radio -->
-    <div class="card" style="margin-bottom:12px;">
-      <div class="row" id="radioGroup" role="group" aria-label="Seleccionar radio">
-        <!-- Botones de ejemplo (modifica la lista si quieres otros radios) -->
-        <div class="pill" data-radio-id="1">R1</div>
-        <div class="pill" data-radio-id="2">R2</div>
-        <div class="pill" data-radio-id="3">R3</div>
-        <div class="pill" data-radio-id="4">R4</div>
-        <div class="pill" data-radio-id="5">R5</div>
-        <div class="pill" data-radio-id="6">R6</div>
-        <div class="pill" data-radio-id="7">R7</div>
-        <div class="pill" data-radio-id="8">R8</div>
-        <div class="pill" data-radio-id="9">R9</div>
-        <div class="pill" data-radio-id="10">R10</div>
-      </div>
-    </div>
+    <section id="grid" class="grid" aria-live="polite"></section>
+  </main>
 
-    <!-- Herramientas -->
-    <div class="card toolbar">
-      <div class="row">
-        <span class="label">Cambiar TRAMO:</span>
-        <input id="tramoInput" type="text" placeholder="p.ej. 1" />
-        <button id="tramoGo" type="button">Aplicar</button>
-      </div>
-      <div class="row">
-        <button id="btnOperador" type="button">Definir operador…</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Botón flotante BANDERA -->
-  <button id="btnBandera" type="button" aria-label="Enviar AVISO de radio">BANDERA</button>
-
-  <!-- Toast -->
   <div id="toast"></div>
 
+  <!-- SDK Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+
+  <!-- Marcar este HTML como panel radio (viewer) y fallback de config -->
   <script>
-    // ---------- Helpers UI ----------
-    const $ = (sel) => document.querySelector(sel);
-    const tramoBadge = $('#tramoBadge');
-    const radioActual = $('#radioActual');
-    const opBadge = $('#opBadge');
-    const tramoInput = $('#tramoInput');
-    const tramoGo = $('#tramoGo');
-    const btnOperador = $('#btnOperador');
-    const btnBandera = $('#btnBandera');
-    const toastEl = $('#toast');
+    window.VIEWER = true;
+    document.body.classList.add('viewer');
 
-    function toast(msg, kind){ // kind: 'ok' | 'err' | undefined
-      toastEl.textContent = msg || '';
-      toastEl.className = '';
-      toastEl.classList.add(kind === 'ok' ? 'ok' : (kind === 'err' ? 'err' : ''));
-      toastEl.style.display = 'block';
-      clearTimeout(toastEl._t);
-      toastEl._t = setTimeout(()=>{ toastEl.style.display = 'none'; }, 2400);
+    if (!window.FIREBASE_CONFIG) {
+      window.FIREBASE_CONFIG = {
+        apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
+        authDomain: "secedcp.firebaseapp.com",
+        projectId: "secedcp",
+        storageBucket: "secedcp.firebasestorage.app",
+        messagingSenderId: "722200684437",
+        appId: "1:722200684437:web:f8486e13dd6ec0bdaaf89c",
+        measurementId: "G-XB0C93FM9W"
+      };
     }
+    try { if (firebase && firebase.apps && firebase.apps.length === 0) { firebase.initializeApp(window.FIREBASE_CONFIG); } } catch(e){}
+  </script>
 
-    // ---------- Estado global ----------
-    window.TRAMO_ID = (new URLSearchParams(location.search).get('tramo') || '1').toString();
-    tramoBadge.textContent = window.TRAMO_ID;
+  <!-- Tu config (si existe) sobreescribe el fallback -->
+  <script src="firebase-config.js?v=16"></script>
 
-    function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
-    function setOperator(name){ try { localStorage.setItem('seced_operator', name || ''); } catch {} updateBadges(); }
-    window.OPERATOR = getOperator();
-    function updateBadges(){
-      tramoBadge.textContent = (window.TRAMO_ID || '—');
-      opBadge.textContent = (window.OPERATOR || '—') || '—';
-      radioActual.textContent = (getRadioId() || '—');
-    }
-    updateBadges();
+  <!-- Listener de resets globales de radios -->
+  <script>
+    (function(){
+      document.addEventListener('DOMContentLoaded', function(){
+        try{
+          if (!window.firebase || !firebase.firestore) return;
+          const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
+          const db = firebase.firestore();
+          const tramoRef = db.collection('tramos').doc(TRAMO);
+          const LS_KEY = `seced_radios_reset_seen_${TRAMO}`;
 
-    if (btnOperador) btnOperador.addEventListener('click', ()=>{
-      const name = prompt('Nombre o identificador del operador:', window.OPERATOR||'');
-      if (name !== null) { window.OPERATOR = (name||'').trim(); setOperator(window.OPERATOR); }
-    });
+          tramoRef.onSnapshot(snap=>{
+            if (!snap.exists) return;
+            const data = snap.data() || {};
+            const ts = data.radiosResetAt && data.radiosResetAt.toMillis ? data.radiosResetAt.toMillis() : 0;
+            const seen = Number(localStorage.getItem(LS_KEY) || '0');
 
-    if (tramoGo) tramoGo.addEventListener('click', ()=>{
-      const t = (tramoInput.value || '').trim();
-      if (!t) return;
-      window.TRAMO_ID = t;
-      const p = new URLSearchParams(location.search);
-      p.set('tramo', t);
-      history.replaceState(null, '', location.pathname + '?' + p.toString());
-      updateBadges();
-      toast('Tramo aplicado', 'ok');
-    });
-
-    // ---------- Firebase init ----------
-    (function initFirebase(){
-      try{
-        if (!window.firebase?.apps?.length) firebase.initializeApp(window.FIREBASE_CONFIG);
-        window._db = firebase.firestore();
-      }catch(e){
-        console.error('Firebase init error', e);
-        toast('Firebase no inicializado', 'err');
-      }
-    })();
-
-    // ---------- Selección de Radio ----------
-    function storeRadio(id){
-      if (!id) return;
-      window.RADIO_ID = String(id).trim();
-      try { localStorage.setItem('seced_radio_id', window.RADIO_ID); } catch {}
-      // compat antiguo
-      try { localStorage.setItem('seced_radio', window.RADIO_ID); } catch {}
-      // UI
-      document.querySelectorAll('[data-radio-id]').forEach(el=>{
-        el.classList.toggle('active', el.getAttribute('data-radio-id') === window.RADIO_ID);
+            if (ts && ts > seen) {
+              try {
+                localStorage.setItem(LS_KEY, String(ts));
+                localStorage.removeItem('seced_radio_idx');
+                try {
+                  indexedDB.deleteDatabase('firebase-firestore-database');
+                  indexedDB.deleteDatabase('firebaseLocalStorageDb');
+                  indexedDB.deleteDatabase('firebase-heartbeat-database');
+                } catch {}
+              } finally { location.reload(); }
+            }
+          }, err => console.warn('reset listener error', err));
+        } catch(e){ console.warn('reset listener setup error', e); }
       });
-      updateBadges();
-    }
+    })();
+  </script>
 
-    function getRadioId(){
-      try{
-        const checked = document.querySelector('[name="radio"]:checked');
-        if (checked?.value) return String(checked.value).trim();
+  <!-- Sincronización y lógica compartida -->
+  <script src="sync.js?v=16"></script>
+  <script src="app.js?v=16"></script>
 
-        const activeBtn = document.querySelector('.radio-option.active,[data-radio-selected="true"], .pill.active');
-        if (activeBtn) {
-          const v = activeBtn.getAttribute('data-radio-id') || activeBtn.getAttribute('data-radio') || activeBtn.textContent;
-          if (v) return String(v).trim();
+  <!-- Lógica específica del Panel Radio -->
+  <script>
+    (function(){
+      /* ===== Reloj online ===== */
+      const TIMEZONE = 'Europe/Madrid';
+      const clockTime = document.getElementById('clockTime');
+      const clockTz = document.getElementById('clockTz');
+      const clockSync = document.getElementById('clockSync');
+      if (clockTz) clockTz.textContent = TIMEZONE;
+      let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
+      const pad = n => String(n).padStart(2,'0');
+      const renderClock = () => {
+        const d = new Date(Date.now() + timeOffsetMs);
+        if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      };
+      const syncTime = async () => {
+        try {
+          if (clockSync) { clockSync.textContent = 'sincronizando…'; clockSync.className = 'sync'; }
+          const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache: 'no-store' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+          const apiMs = Date.parse(data.datetime);
+          timeOffsetMs = apiMs - Date.now();
+          if (clockSync) { clockSync.textContent = 'ok'; clockSync.className = 'sync ok'; }
+        } catch {
+          if (clockSync) { clockSync.textContent = 'sin conexión'; clockSync.className = 'sync err'; }
+        }
+      };
+      const startClock = () => {
+        clearInterval(tickTimer); tickTimer = setInterval(renderClock, 1000); renderClock();
+        clearInterval(resyncTimer); resyncTimer = setInterval(syncTime, 5*60*1000);
+      };
+      syncTime().then(startClock);
+
+      /* ===== Helper UI ===== */
+      const toast = (msg, kind='ok')=>{
+        const t = document.getElementById('toast');
+        if(!t) return; t.textContent = msg; t.className=''; t.classList.add(kind); t.style.display='block';
+        setTimeout(()=>{ t.style.display='none'; }, 1200);
+      };
+
+      /* ===== Selección de RADIO (compat v1/v2) ===== */
+      const btnRadio = document.getElementById('btnRadio');
+      const radioBadge = document.getElementById('radioBadge');
+
+      function getRadio(){
+        try {
+          const v2 = (localStorage.getItem('seced_radio_id') || '').trim();
+          if (v2) return v2;
+          const v1 = (localStorage.getItem('seced_radio') || '').trim();
+          return v1;
+        } catch { return ''; }
+      }
+      function setRadio(v){
+        const clean = String(v||'').trim();
+        try {
+          localStorage.setItem('seced_radio', clean);
+          localStorage.setItem('seced_radio_id', clean); // sincronizado
+        } catch {}
+      }
+      function getRadioIndex(){
+        const r = parseInt(getRadio(),10);
+        return Number.isFinite(r) && r>0 ? r : 1;
+      }
+
+      function clickedKey(){
+        const tramo=(window.TRAMO_ID||new URLSearchParams(location.search).get('tramo')||'1').toString();
+        return `seced_radio_clicked:${tramo}:${getRadioIndex()}`;
+      }
+      function loadClickedSet(){ try { return new Set(JSON.parse(localStorage.getItem(clickedKey())||'[]')); } catch { return new Set(); } }
+      function saveClickedSet(set){ try { localStorage.setItem(clickedKey(), JSON.stringify(Array.from(set))); } catch {} }
+      let clickedSet = loadClickedSet();
+
+      function updateRadioUI(){
+        const r = getRadio();
+        if (btnRadio) btnRadio.textContent = 'RADIO: ' + (r ? r : '—');
+        if (radioBadge) { radioBadge.textContent = 'RADIO: ' + (r ? r : '—'); radioBadge.hidden = !r; }
+        clickedSet = loadClickedSet();
+        setTimeout(applyEligibility, 0);
+      }
+      if (btnRadio) {
+        btnRadio.addEventListener('click', () => {
+          const curr = getRadio();
+          const val = prompt('Introduce tu número de RADIO (1,2,3…):', curr || '1');
+          if (val === null) return;
+          setRadio(val);
+          updateRadioUI();
+        });
+      }
+      updateRadioUI();
+
+      /* ===== Firestore: estado por radio ===== */
+      const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
+      const db = firebase.firestore();
+      let radiosCol = null;
+      try { radiosCol = db.collection('tramos').doc(TRAMO).collection('radios'); } catch(e) { console.warn('Firestore no disponible aún:', e); }
+
+      const radioState = new Map();
+      if (radiosCol) {
+        radiosCol.onSnapshot(snap=>{
+          snap.docChanges().forEach(ch=>{
+            const id = ch.doc.id;
+            const d = ch.doc.data()||{};
+            if (ch.type === 'removed') radioState.delete(id);
+            else radioState.set(id, { last: typeof d.last==='number' ? d.last : 0 });
+          });
+          applyEligibility();
+        }, err => { console.error('onSnapshot error:', err); toast('Error de sincronización', 'err'); });
+      }
+
+      function getLastFor(value){
+        const key = String(value);
+        return (radioState.get(key)?.last) || 0;
+      }
+
+      /* ===== ACCESO A ITEMS (para ver tSalida) ===== */
+      const getItems = (typeof window._getItems === 'function') ? window._getItems : () => [];
+      function getItemByValue(val){
+        const n = Number(val);
+        const arr = getItems() || [];
+        return arr.find(x => Number(x.value) === n) || null;
+      }
+
+      /* ===== Elegibilidad ===== */
+      const GRACE_MS = 5 * 60 * 1000; // 5 min
+      function canThisRadioClick(value){
+        const rIdx = getRadioIndex();
+        const last = getLastFor(value);
+        if (last === (rIdx - 1)) return true;
+
+        if (rIdx === 1 && last > 0) {
+          const it = getItemByValue(value);
+          if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      function applyEligibility(){
+        const cards = document.querySelectorAll('#grid .card');
+        const rIdx = getRadioIndex();
+        cards.forEach(card=>{
+          const val = card.dataset.value;
+          if (!val) return;
+
+          const eligible = canThisRadioClick(val);
+          const last = getLastFor(val);
+          const clickedLocal = clickedSet.has(String(val));
+          const clickedByMe = clickedLocal && (last >= rIdx);
+
+          if (clickedLocal && !clickedByMe) { clickedSet.delete(String(val)); saveClickedSet(clickedSet); }
+
+          card.classList.remove('radio-eligible','radio-locked','radio-clicked-by-me','radio-clicking','selected');
+
+          if (clickedByMe) {
+            card.classList.add('radio-clicked-by-me'); card.title = `Clicada por RADIO ${rIdx}`;
+          } else if (eligible) {
+            card.classList.add('radio-eligible'); card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
+          } else {
+            card.classList.add('radio-locked'); card.title = `Esperando turno (RADIO ${last+1})`;
+          }
+        });
+      }
+
+      // Reaplicar elegibilidad tras cada render del app.js
+      const origOnRemote = window._onRemoteUpdate;
+      if (typeof origOnRemote === 'function') {
+        window._onRemoteUpdate = (arr)=>{ origOnRemote(arr); applyEligibility(); };
+      } else {
+        const obs = new MutationObserver(()=>applyEligibility());
+        obs.observe(document.getElementById('grid'), {childList:true, subtree:true});
+      }
+      setTimeout(applyEligibility, 0);
+
+      /* Watchdog */
+      (function(){
+        let _eligTimer = null;
+        function startEligibilityWatchdog(){
+          if (_eligTimer) clearInterval(_eligTimer);
+          _eligTimer = setInterval(() => { try { applyEligibility(); } catch {} }, 800);
+        }
+        startEligibilityWatchdog();
+      })();
+
+      // ===== Click en tarjeta para avanzar dorsal al siguiente RADIO =====
+      document.getElementById('grid').addEventListener('click', async (ev)=>{
+        const card = ev.target.closest('.card');
+        if (!card) return;
+        const val = card.dataset.value;
+        if (!val) return;
+        if (!card.classList.contains('radio-eligible')) return;
+
+        card.classList.add('radio-clicking');
+
+        const rIdx = getRadioIndex();
+        if (!radiosCol) return;
+        const docRef = radiosCol.doc(String(val));
+
+        try {
+          await db.runTransaction(async (tx)=>{
+            const snap = await tx.get(docRef);
+            const data = snap.exists ? (snap.data()||{}) : {};
+            let last = (typeof data.last==='number') ? data.last : 0;
+
+            if (!(last === (rIdx - 1))) {
+              if (rIdx === 1) {
+                const it = getItemByValue(val);
+                if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) { last = 0; }
+              }
+            }
+            if (last !== (rIdx - 1)) { throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`); }
+
+            tx.set(docRef, {
+              last: rIdx,
+              marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
+            }, { merge:true });
+          });
+
+          clickedSet.add(String(val));
+          saveClickedSet(clickedSet);
+
+          try {
+            const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
+            await aud.add({
+              actor: (getRadio() || ('RADIO '+rIdx)),
+              action: 'radio_click',
+              detail: { value: Number(val), radio: rIdx },
+              ts: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          } catch(e){}
+
+          toast(`Clic RADIO ${rIdx} → dorsal ${val}`, 'ok');
+
+        } catch (err) {
+          toast('No se pudo avanzar: ' + err.message, 'err');
+          card.classList.remove('radio-clicking');
+          return;
         }
 
-        const byIdText = document.getElementById('radioActual');
-        if (byIdText && byIdText.textContent) return String(byIdText.textContent).trim();
+        setTimeout(()=>{ applyEligibility(); }, 150);
+      });
 
-        const bodyAttr = document.body.getAttribute('data-radio');
-        if (bodyAttr) return String(bodyAttr).trim();
-
-        if (window.RADIO_ID) return String(window.RADIO_ID).trim();
-
+      /* ===== Botón BANDERA (envía aviso a alerts) ===== */
+      function getRadioIdForAlert(){
+        // usa DOM/var si existiera, si no localStorage (ambas claves)
+        const vDom = (window.RADIO_ID ? String(window.RADIO_ID).trim() : '');
+        if (vDom) return vDom;
         const qp = new URLSearchParams(location.search).get('radio');
         if (qp) return String(qp).trim();
-
-        const v2 = (localStorage.getItem('seced_radio_id') || '').trim(); if (v2) return v2;
-        const v1 = (localStorage.getItem('seced_radio') || '').trim(); if (v1) return v1;
-      }catch{}
-      return '';
-    }
-
-    // activar click para los botones predefinidos
-    document.querySelectorAll('[data-radio-id]').forEach(el=>{
-      el.addEventListener('click', ()=>{
-        storeRadio(el.getAttribute('data-radio-id'));
-      });
-    });
-
-    // Inicial: usa query/localStorage si existe
-    (function initRadioFromState(){
-      const initial = getRadioId();
-      if (initial) storeRadio(initial);
-    })();
-
-    // ---------- Auditoría opcional (no rompe si no existe) ----------
-    function logAudit(action, detail){
-      try{
-        const db = window._db;
-        if (!db) return;
-        const tramo = (window.TRAMO_ID || '1').toString();
-        db.collection('tramos').doc(tramo).collection('audit').add({
-          ts: firebase.firestore.FieldValue.serverTimestamp(),
-          clientTime: new Date().toISOString(),
-          actor: (window.OPERATOR || '—'),
-          action, detail: detail || {}
-        }).catch(()=>{});
-      }catch(e){}
-    }
-
-    // ---------- Publicar AVISO (radio + dorsal) ----------
-    async function publishRadioAlert(dorsal) {
-      try {
-        const radio = getRadioId();
-        if (!radio) { alert('No se ha detectado el número de RADIO seleccionado.\nSelecciona un radio e inténtalo de nuevo.'); return; }
-        if (!Number.isFinite(dorsal)) { alert('Dorsal inválido.'); return; }
-        const db = window._db;
-        if (!db) { alert('Firestore no está disponible en esta página.'); return; }
-
-        const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-        const payload = {
-          tramo,
-          radio: String(radio),
-          dorsal: Number(dorsal),
-          actor: (window.OPERATOR || '—'),
-          type: 'radio_alert',
-          clientTs: Date.now(),
-          ts: firebase.firestore.FieldValue.serverTimestamp()
-        };
-
-        await db.collection('tramos').doc(tramo).collection('alerts').add(payload);
-        try { logAudit('radio_alert_emit', { radio, dorsal }); } catch {}
-        toast(`Aviso enviado: R${radio} · D${dorsal}`, 'ok');
-      } catch (e) {
-        console.error('publishRadioAlert error', e);
-        alert('Error enviando AVISO. Revisa conexión y Firestore/Reglas.');
-        toast('No enviado', 'err');
+        const v2 = (localStorage.getItem('seced_radio_id') || '').trim();
+        if (v2) return v2;
+        const v1 = (localStorage.getItem('seced_radio') || '').trim();
+        if (v1) return v1;
+        return '';
       }
-    }
 
-    // ---------- Botón BANDERA ----------
-    function wireBandera(btn){
-      btn.onclick = (ev)=>{
-        ev.preventDefault();
-        const raw = prompt('Dorsal a avisar:');
-        if (raw === null) return;
-        const dorsal = Number((raw || '').trim());
-        if (!Number.isFinite(dorsal)) { alert('Introduce un dorsal válido (número).'); return; }
-        publishRadioAlert(dorsal);
-      };
-      btn.setAttribute('aria-label', 'Enviar AVISO de radio');
-    }
-    wireBandera(btnBandera);
+      async function publishRadioAlert() {
+        try {
+          const radio = getRadioIdForAlert();
+          if (!radio) { alert('No se ha detectado un número de RADIO.\nPulsa el botón RADIO y escribe 1, 2, 3…'); return; }
+          if (!window.firebase || !firebase.firestore) { alert('Firestore no está disponible en esta página.'); return; }
+
+          const tramo = TRAMO;
+          const payload = {
+            tramo,
+            radio,
+            actor: (localStorage.getItem('seced_operator') || window.OPERATOR || '—'),
+            type: 'radio_alert',
+            clientTs: Date.now(),
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+          };
+
+          await db.collection('tramos').doc(tramo).collection('alerts').add(payload);
+          alert(`¡BANDERA enviada!\nRADIO: ${radio}  |  TRAMO: ${tramo}`);
+        } catch (e) {
+          console.error('publishRadioAlert error', e);
+          alert('Error enviando AVISO. Revisa conexión y Firestore/Reglas.');
+        }
+      }
+
+      (function ensureBanderaButton(){
+        if (!document.body.classList.contains('radio-skin')) return;
+        let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
+        function wireClick(b){
+          b.onclick = (ev)=>{ ev.preventDefault(); publishRadioAlert(); };
+          b.setAttribute('aria-label', 'Enviar AVISO de radio');
+        }
+        if (!btn) {
+          btn = document.createElement('button');
+          btn.id = 'btnBandera'; btn.type = 'button'; btn.textContent = 'BANDERA';
+          Object.assign(btn.style, {
+            position: 'fixed', right: '16px', bottom: '16px', zIndex: 1000,
+            background: '#dc2626', color: '#fff', border: '1px solid #b91c1c',
+            borderRadius: '10px', padding: '12px 16px', fontWeight: '800',
+            letterSpacing: '0.5px', boxShadow: '0 8px 18px rgba(0,0,0,.35)', cursor: 'pointer'
+          });
+          wireClick(btn);
+          document.body.appendChild(btn);
+        } else {
+          btn.id = 'btnBandera'; btn.textContent = 'BANDERA'; wireClick(btn);
+        }
+      })();
+
+      /* ===== Tramo rápido desde botón si no hay menú flotante ===== */
+      const btnTramo = document.getElementById('btnTramo');
+      const tramoMenu = document.getElementById('tramoMenu');
+      function sanitizeTramo(t){ return (t||'').trim().toLowerCase().replace(/[^\w-]+/g,'-').slice(0,64); }
+      function goToTramo(t){
+        const tramo = sanitizeTramo(t); if(!tramo) return;
+        try{
+          const k='seced_tramos_recent';
+          const list=JSON.parse(localStorage.getItem(k)||'[]');
+          const next=[tramo, ...list.filter(x=>x!==tramo)].slice(0,10);
+          localStorage.setItem(k, JSON.stringify(next));
+        }catch{}
+        const p = new URLSearchParams(location.search);
+        p.set('tramo', tramo);
+        location.search = p.toString();
+      }
+      if (btnTramo) {
+        btnTramo.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setTimeout(() => {
+            if (!tramoMenu || tramoMenu.classList.contains('hidden')) {
+              const t = prompt('Indica el tramo (ej. 1 o tramo-1):', new URLSearchParams(location.search).get('tramo') || '1');
+              if (t !== null) goToTramo(t);
+            }
+          }, 150);
+        });
+      }
+
+      /* ===== Usuario (botón 👤) ===== */
+      const btnOperador = document.getElementById('btnOperador');
+      if (btnOperador) btnOperador.addEventListener('click', ()=>{
+        const name = prompt('Nombre o identificador del operador:', localStorage.getItem('seced_operator')||'');
+        if (name !== null) { try { localStorage.setItem('seced_operator', (name||'').trim()); } catch{} }
+      });
+    })();
   </script>
 </body>
 </html>
