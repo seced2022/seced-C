@@ -1,4 +1,4 @@
-/* -------------- app.js (v=17) -------------- */
+/* -------------- app.js (v=16) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -58,6 +58,7 @@ function applyModeUI(){
   const disableInput = (window.MODE === 'LLEGADA');
   if (input) input.disabled = disableInput;
   if (btnAgregar) btnAgregar.disabled = disableInput;
+
   if (btnResetRadios) btnResetRadios.style.display = (window.MODE === 'JEFE') ? '' : 'none';
 }
 (function initModeButtons(){
@@ -84,7 +85,7 @@ if (window.VIEWER) document.body.classList.add('viewer');
 
 function pad(n){ return String(n).padStart(2,'0'); }
 function fmtTime(ms){ const d=new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
-function renderClock(){ const d=new Date(nowNetMs()); if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+function renderClock(nowMs){ const d=new Date(nowNetMs()); if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
 async function syncTime(){
   try{
     if (clockSync) { clockSync.textContent='sincronizando…'; clockSync.className='sync'; }
@@ -101,8 +102,8 @@ async function syncTime(){
 }
 function startClock(){
   if (tickTimer) clearInterval(tickTimer);
-  tickTimer = setInterval(()=>renderClock(),1000);
-  renderClock();
+  tickTimer = setInterval(()=>renderClock(Date.now()),1000);
+  renderClock(Date.now());
   if (resyncTimer) clearInterval(resyncTimer);
   resyncTimer = setInterval(syncTime, 5*60*1000);
 }
@@ -230,7 +231,7 @@ window._radioMarks = new Map();
   }catch(e){ console.warn('radio marks subscribe error', e); }
 })();
 
-/* === Render tarjetas === */
+/* === Render tarjetas (igual que tu versión) === */
 function render() {
   if (countSalida) countSalida.textContent = String(items.length);
   if (countLlegada) countLlegada.textContent = String(items.filter(x => x.status !== 'abandon' && x.selected).length);
@@ -617,7 +618,7 @@ function setTramoBadge(name){
 }
 setTramoBadge(window.TRAMO_ID);
 
-/* === AVISO de Panel Radio -> Editor (banner + auto A) === */
+/* === AVISO de Panel Radio -> Editor (banner rojo) === */
 
 /* 1) Resolver radio de UI si existiese */
 function resolveSelectedRadioFromUI() {
@@ -650,8 +651,8 @@ function getRadioId() {
   return '';
 }
 
-/* 3) Banner en editor/visor (ahora acepta dorsal) */
-function showRadioAlertBanner(radio, dorsal) {
+/* 3) Banner en editor/visor */
+function showRadioAlertBanner(radio) {
   if (document.body.classList.contains('radio-skin')) return; // nunca en panel radio
   if (window.MODE !== 'JEFE') return; // solo en JEFE
 
@@ -671,17 +672,13 @@ function showRadioAlertBanner(radio, dorsal) {
     banner.appendChild(close); document.body.appendChild(banner);
   }
   const txt = banner.querySelector('#radioAlertBannerText');
-  const label = (dorsal && Number.isFinite(Number(dorsal)))
-    ? `AVISO RADIO ${radio} — DORSAL ${dorsal}`
-    : `AVISO RADIO: ${radio}`;
-  if (txt) txt.textContent = label;
-
+  if (txt) txt.textContent = `AVISO RADIO: ${radio}`;
   banner.style.display = 'flex';
   clearTimeout(banner._hideTimer);
   banner._hideTimer = setTimeout(() => { if (banner && banner.parentNode) banner.remove(); }, 15000);
 }
 
-/* 4) Suscripción a /alerts del tramo (con dorsal + auto A) */
+/* 4) Suscripción a /alerts del tramo (con ?tramo=) */
 (function subscribeRadioAlerts(){
   if (document.body.classList.contains('radio-skin')) return; // no escuchar en panel radio
   try{
@@ -698,36 +695,13 @@ function showRadioAlertBanner(radio, dorsal) {
         snap.docChanges().forEach(ch => {
           if (ch.type !== 'added') return;
           const data = ch.doc.data() || {};
-          const ts = (data.ts && data.ts.toMillis) ? data.ts.toMillis()
-                   : (typeof data.clientTs === 'number' ? data.clientTs : Date.now());
+          const ts = (data.ts && data.ts.toMillis) ? data.ts.toMillis() : (typeof data.clientTs === 'number' ? data.clientTs : Date.now());
           const radio = data.radio || 'RADIO';
-          const dorsal = (data.dorsal != null) ? Number(data.dorsal) : NaN;
-
           if (ts > lastSeen) {
             lastSeen = ts;
             try { localStorage.setItem(lastKey, String(ts)); } catch {}
-            try { logAudit('radio_alert_recv', { radio, dorsal, ts }); } catch {}
-
-            // Mostrar banner (si hay dorsal lo enseñamos)
-            showRadioAlertBanner(radio, Number.isFinite(dorsal) ? dorsal : undefined);
-
-            // Modo JEFE: auto-abandono del dorsal que llegó en el aviso
-            if (window.MODE === 'JEFE' && Number.isFinite(dorsal)) {
-              const idx = items.findIndex(x => Number(x.value) === dorsal);
-              if (idx !== -1 && items[idx].status !== 'abandon') {
-                items[idx].status = 'abandon';
-                items[idx].selected = false;
-                items[idx].rNumber = parseInt(radio, 10) || 0;
-                items[idx].tAbandono = nowNetMs();
-                render();
-                if (typeof syncSave === 'function') syncSave();
-                logAudit('abandono_auto_radio', {
-                  value: dorsal,
-                  rNumber: items[idx].rNumber,
-                  via: 'radio_alert'
-                });
-              }
-            }
+            try { logAudit('radio_alert_recv', { radio, ts }); } catch {}
+            showRadioAlertBanner(radio);
           }
         });
       }, err => console.warn('alerts listener error', err));
