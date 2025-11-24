@@ -1,4 +1,4 @@
-/* -------------- app.js (v=16) -------------- */
+/* -------------- app.js (v=16+beep) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -620,6 +620,41 @@ setTramoBadge(window.TRAMO_ID);
 
 /* === AVISO de Panel Radio -> Editor (banner rojo) === */
 
+/* Sonido de alerta (WebAudio, sin archivos) */
+let _alertAudioCtx = null;
+function playAlertSound() {
+  try {
+    _alertAudioCtx = _alertAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (_alertAudioCtx.state === 'suspended') {
+      const resumeOnce = () => {
+        _alertAudioCtx.resume().catch(()=>{});
+        window.removeEventListener('click', resumeOnce);
+        window.removeEventListener('touchstart', resumeOnce);
+        window.removeEventListener('keydown', resumeOnce);
+      };
+      window.addEventListener('click', resumeOnce, { once: true });
+      window.addEventListener('touchstart', resumeOnce, { once: true });
+      window.addEventListener('keydown', resumeOnce, { once: true });
+    }
+    const ctx = _alertAudioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    const t0 = ctx.currentTime + 0.01;
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.02);
+    osc.frequency.setValueAtTime(880, t0);
+    osc.frequency.setValueAtTime(660, t0 + 0.30);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.62);
+    osc.start(t0);
+    osc.stop(t0 + 0.64);
+  } catch (e) {
+    console.warn('playAlertSound error', e);
+  }
+}
+
 /* 1) Resolver radio de UI si existiese */
 function resolveSelectedRadioFromUI() {
   const checked = document.querySelector('[name="radio"]:checked');
@@ -654,7 +689,8 @@ function getRadioId() {
 /* 3) Banner en editor/visor */
 function showRadioAlertBanner(radio) {
   if (document.body.classList.contains('radio-skin')) return; // nunca en panel radio
-  if (window.MODE !== 'JEFE') return; // solo en JEFE
+  // Antes: solo JEFE. Ahora: JEFE o VISOR (VIEWER), para que el visor también lo vea/escuche.
+  if (window.MODE !== 'JEFE' && !window.VIEWER) return;
 
   let banner = document.getElementById('radioAlertBanner');
   if (!banner) {
@@ -676,6 +712,9 @@ function showRadioAlertBanner(radio) {
   banner.style.display = 'flex';
   clearTimeout(banner._hideTimer);
   banner._hideTimer = setTimeout(() => { if (banner && banner.parentNode) banner.remove(); }, 15000);
+
+  // Sonido de alerta
+  playAlertSound();
 }
 
 /* 4) Suscripción a /alerts del tramo (con ?tramo=) */
