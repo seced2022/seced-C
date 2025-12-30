@@ -1,56 +1,359 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SECeD · DC (Director de Carrera)</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SECeD · DC (Director de Carrera)</title>
 
-  <!-- Estilos base (colores y tipografía similares) -->
-  <link rel="stylesheet" href="dc.css" />
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Leaflet (mapa) -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+<!-- KMZ/KML -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/consbio/Leaflet.KMZ@gh-pages/src/leaflet-kmz.js"></script>
 
-  <!-- Plugin Leaflet-KMZ (carga KMZ/KML en Leaflet) -->
-  <script src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/consbio/Leaflet.KMZ@gh-pages/src/leaflet-kmz.js"></script>
+<!-- Firebase compat (misma que ya usas) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-  <!-- Firebase (usa la misma config que tu app: config.js debe existir) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="config.js"></script>
+<!-- Tu config pública (asegúrate que existe en misma carpeta) -->
+<script src="config.js"></script>
+
+<style>
+:root{
+  --bg:#0b120e;
+  --card:#0f1a14;
+  --border:#1d2d23;
+  --accent:#17a34a;   /* VERDE principal */
+  --accent-2:#0f5f2e; /* Verde oscuro */
+  --danger:#b91c1c;   /* Rojo alertas */
+  --text:#e6f2ea;
+  --muted:#a6cbb4;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif}
+
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 16px;border-bottom:1px solid var(--border);background:#0c1913;
+}
+.topbar h1{margin:0;font-size:18px;letter-spacing:.5px;font-weight:900}
+.clock{display:flex;align-items:center;gap:10px}
+.clock .sync{font-size:12px;opacity:.9;padding:2px 6px;border-radius:6px;background:#183323}
+.clock .sync.ok{background:#0f3a21}
+.clock .sync.err{background:#4a1c1c}
+.clock .time{font-size:36px;font-weight:900;letter-spacing:1px;line-height:1}
+.clock .tz{font-size:12px;color:var(--muted)}
+
+.content{padding:16px}
+.tramos{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px}
+
+.tramo-card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;display:flex;flex-direction:column;
+  box-shadow:0 10px 24px rgba(0,0,0,.25)
+}
+.tramo-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.tramo-title{font-weight:900;letter-spacing:.3px}
+.tramo-actions{display:flex;align-items:center;gap:8px}
+
+.btn{
+  appearance:none;border:1px solid var(--border);background:#123120;color:var(--text);
+  padding:8px 10px;border-radius:10px;font-weight:800;cursor:pointer
+}
+.btn-primary{background:#124d2d;border-color:#17603a}
+.btn-danger{background:#6b1111;border-color:#7f1d1d}
+.btn:active{transform:translateY(1px)}
+
+.map-wrap{height:320px}
+.map{height:100%;width:100%}
+
+.radio-list{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:#0b1a13}
+.radio-pill{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#122419;border:1px solid var(--border);border-radius:10px;padding:6px 8px}
+.radio-pill .name{font-weight:900}
+.radio-pill .last{color:#ffe59a;font-weight:900}
+.badge{font-size:11px;color:#fff;background:#1f3d2d;border-radius:999px;padding:2px 6px}
+
+.banner{
+  position:fixed;left:50%;top:14px;transform:translateX(-50%);
+  background:var(--danger);color:#fff;border:2px solid #7f1d1d;border-radius:12px;
+  padding:12px 16px;font-weight:900;letter-spacing:.3px;display:none;z-index:1000;
+  box-shadow:0 10px 24px rgba(0,0,0,.45)
+}
+
+/* Leaflet tweaks */
+.leaflet-control-attribution{display:none}
+.leaflet-container{background:#0b120e;color:#e6f2ea}
+.leaflet-popup-content,.leaflet-tooltip{color:#111!important}
+</style>
 </head>
 <body class="dc-skin">
-  <header class="topbar">
-    <h1>Director de Carrera</h1>
-    <div class="clock">
-      <div id="clockSync" class="sync">—</div>
-      <div id="clockTime" class="time">00:00:00</div>
-      <div id="clockTz" class="tz">Europe/Madrid</div>
-    </div>
-  </header>
+<header class="topbar">
+  <h1>Director de Carrera</h1>
+  <div class="clock">
+    <div id="clockSync" class="sync">—</div>
+    <div id="clockTime" class="time">00:00:00</div>
+    <div id="clockTz" class="tz">Europe/Madrid</div>
+  </div>
+</header>
 
-  <main class="content">
-    <!-- Panel de Tramos -->
-    <section id="tramosContainer" class="tramos"></section>
-  </main>
+<main class="content">
+  <section id="tramosContainer" class="tramos"></section>
+</main>
 
-  <!-- Sonido de alerta (para cuando queramos sonar en DC al recibir avisos) -->
-  <audio id="beep" preload="auto">
-    <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAACAAACaWZmZmZm" type="audio/wav" />
-  </audio>
+<audio id="beep" preload="auto">
+  <!-- tono corto neutro (data URI) -->
+  <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAACAAACaWZmZmZm" type="audio/wav"/>
+</audio>
 
-  <script src="dc.js"></script>
+<script>
+/* =================== CONFIG BÁSICA =================== */
+/* Edita esta lista a tu realidad: tracks y radios.
+   Sube tus KML/KMZ al mismo repo (evita CORS). */
+const DC_CONFIG = {
+  timezone: 'Europe/Madrid',
+  tramos: [
+    {
+      id: '1',
+      name: 'Tramo 1',
+      kmz: 'tracks/tramo1.kmz',        // ejemplo: archivo en tu repo
+      center: [40.4169, -3.7033],
+      zoom: 12,
+      radios: [
+        { id: '1', name: 'R1', lat: 40.4201, lng: -3.7059 },
+        { id: '2', name: 'R2', lat: 40.4109, lng: -3.6991 },
+      ],
+    },
+    {
+      id: '2',
+      name: 'Tramo 2',
+      kmz: 'tracks/tramo2.kmz',
+      center: [40.45, -3.70],
+      zoom: 12,
+      radios: [
+        { id: '1', name: 'R1', lat: 40.46, lng: -3.71 },
+        { id: '3', name: 'R3', lat: 40.44, lng: -3.69 },
+      ],
+    },
+  ],
+};
+
+/* =================== RELOJ (local + sync si hay red) =================== */
+const TIMEZONE = DC_CONFIG.timezone || 'Europe/Madrid';
+const clockTime = document.getElementById('clockTime');
+const clockTz   = document.getElementById('clockTz');
+const clockSync = document.getElementById('clockSync');
+if (clockTz) clockTz.textContent = TIMEZONE;
+
+let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
+function pad(n){ return String(n).padStart(2,'0'); }
+function nowNetMs(){ return Date.now() + (timeOffsetMs||0); }
+function renderClock(){
+  const d = new Date(nowNetMs());
+  if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+async function syncTime(){
+  // Si falla la API, mantenemos hora local y marcamos err, pero el reloj sigue.
+  try{
+    clockSync.textContent='sincronizando…'; clockSync.className='sync';
+    const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache:'no-store' });
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const apiMs = Date.parse(data.datetime);
+    const localMs = Date.now();
+    timeOffsetMs = apiMs - localMs;
+    clockSync.textContent='ok'; clockSync.className='sync ok';
+  }catch(e){
+    // sin red → offset 0 (hora local)
+    timeOffsetMs = 0;
+    clockSync.textContent='ok (local)'; clockSync.className='sync err';
+  }
+}
+function bootClock(){
+  if (tickTimer) clearInterval(tickTimer);
+  tickTimer = setInterval(renderClock, 1000);
+  renderClock();
+  if (resyncTimer) clearInterval(resyncTimer);
+  resyncTimer = setInterval(syncTime, 5*60*1000);
+}
+syncTime().then(bootClock);
+
+/* =================== UI TRAMOS =================== */
+const container = document.getElementById('tramosContainer');
+const tramoRefs = new Map(); // tramoId -> { map, kmzLayer, markers: Map<radioId, L.Marker>, lastByRadio: Map<radioId, dorsal> }
+
+function createTramoCard(cfg){
+  const card = document.createElement('div');
+  card.className = 'tramo-card'; card.dataset.tramo = cfg.id;
+
+  const head = document.createElement('div'); head.className='tramo-head';
+  const title = document.createElement('div'); title.className='tramo-title';
+  title.textContent = `TRAMO ${cfg.id} · ${cfg.name}`;
+
+  const actions = document.createElement('div'); actions.className='tramo-actions';
+  const btnStop = document.createElement('button');
+  btnStop.className='btn btn-danger'; btnStop.textContent='PARADA SALIDA';
+  btnStop.title='Emitir aviso de parada de salida para este tramo';
+  btnStop.addEventListener('click', ()=> emitParadaSalida(cfg.id));
+
+  const btnCenter = document.createElement('button');
+  btnCenter.className='btn btn-primary'; btnCenter.textContent='Centrar mapa';
+  btnCenter.addEventListener('click', ()=> centerMap(cfg.id));
+
+  actions.appendChild(btnStop); actions.appendChild(btnCenter);
+  head.appendChild(title); head.appendChild(actions);
+
+  const mapWrap = document.createElement('div'); mapWrap.className='map-wrap';
+  const mapDiv = document.createElement('div'); mapDiv.className='map'; mapDiv.id = `map_${cfg.id}`;
+  mapWrap.appendChild(mapDiv);
+
+  const rlist = document.createElement('div'); rlist.className='radio-list';
+  for (const r of cfg.radios){
+    const pill = document.createElement('div'); pill.className='radio-pill'; pill.dataset.radio = r.id;
+    const name = document.createElement('div'); name.className='name';
+    name.textContent = `${r.name} `; const badge = document.createElement('span'); badge.className='badge'; badge.textContent = `R${r.id}`;
+    name.appendChild(badge);
+    const last = document.createElement('div'); last.className='last'; last.textContent='—';
+    pill.appendChild(name); pill.appendChild(last); rlist.appendChild(pill);
+  }
+
+  card.appendChild(head); card.appendChild(mapWrap); card.appendChild(rlist);
+
+  // mapa
+  const map = L.map(mapDiv.id, { zoomControl:true, attributionControl:false, preferCanvas:true }).setView(cfg.center, cfg.zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+
+  // KMZ/KML
+  const kmzLayer = new L.KMZ();
+  kmzLayer.on('loaded', e => { map.addLayer(kmzLayer); try { map.fitBounds(e.layer.getBounds(), { padding:[20,20] }); } catch{} });
+  // Carga segura: si no hay archivo, no rompe el resto
+  try { kmzLayer.load(cfg.kmz); } catch{}
+
+  // markers radios
+  const markers = new Map();
+  for (const r of cfg.radios){
+    const m = L.marker([r.lat, r.lng]).addTo(map);
+    m.bindPopup(`<b>${r.name}</b><br/>R${r.id}<div class="last-dorsal">—</div>`);
+    markers.set(r.id, m);
+  }
+  tramoRefs.set(cfg.id, { map, kmzLayer, markers, lastByRadio:new Map() });
+  return card;
+}
+
+function buildUI(){
+  container.innerHTML = '';
+  DC_CONFIG.tramos.forEach(t => {
+    const card = createTramoCard(t);
+    container.appendChild(card);
+  });
+}
+function centerMap(tramoId){
+  const cfg = DC_CONFIG.tramos.find(t=>t.id===tramoId);
+  const ref = tramoRefs.get(tramoId);
+  if (!cfg || !ref) return;
+  ref.map.setView(cfg.center, cfg.zoom);
+}
+function setLastDorsalInUI(tramoId, radioId, dorsal){
+  const card = document.querySelector(`.tramo-card[data-tramo="${tramoId}"]`);
+  if (card){
+    const pill = card.querySelector(`.radio-pill[data-radio="${radioId}"] .last`);
+    if (pill) pill.textContent = dorsal || '—';
+  }
+  const tref = tramoRefs.get(tramoId);
+  if (tref){
+    const mk = tref.markers.get(radioId);
+    if (mk){
+      const html = `<b>R${radioId}</b><br/>Último dorsal: <div class="last-dorsal"><b>${dorsal||'—'}</b></div>`;
+      mk.bindPopup(html);
+    }
+    tref.lastByRadio.set(radioId, dorsal || '');
+  }
+}
+
+/* =================== FIREBASE (opcional) =================== */
+let db = null;
+(function initFirebaseSafe(){
+  try{
+    if (window.FIREBASE_CONFIG && firebase?.apps?.length === 0){
+      firebase.initializeApp(window.FIREBASE_CONFIG);
+    } else if (window.FIREBASE_CONFIG && !firebase.apps.length){
+      firebase.initializeApp(window.FIREBASE_CONFIG);
+    }
+    db = firebase.firestore();
+  }catch(e){
+    db = null; // sin firebase seguimos con la UI
+  }
+})();
+
+function subscribeAlertsFor(tramoId){
+  if (!db) return; // si no hay firebase, no escuchamos pero la UI sigue
+  db.collection('tramos').doc(tramoId).collection('alerts')
+    .orderBy('ts','desc').limit(100)
+    .onSnapshot(snap=>{
+      snap.docChanges().forEach(ch=>{
+        if (ch.type !== 'added') return;
+        const data = ch.doc.data() || {};
+        const type = (data.type||'').trim();
+        if (type === 'radio_alert'){
+          const radio = (data.radio||'').toString().trim();
+          const dorsal = (data.dorsal||'').toString().trim();
+          if (radio) setLastDorsalInUI(tramoId, radio, dorsal || '—');
+          // sonido sutil opcional al recibir radio:
+          try { document.getElementById('beep')?.play().catch(()=>{}); } catch {}
+        }
+        if (type === 'salida_parada'){
+          showBanner(`SALIDA PARADA · TRAMO ${tramoId}`);
+          try { document.getElementById('beep')?.play().catch(()=>{}); } catch {}
+        }
+      });
+    }, err => console.warn('alerts listener error', err));
+}
+
+async function emitParadaSalida(tramoId){
+  if (!db){
+    showBanner('No hay conexión con Firestore (solo UI).', true);
+    return;
+  }
+  try{
+    const payload = {
+      tramo: tramoId,
+      type: 'salida_parada',
+      actor: 'DC',
+      clientTs: Date.now(),
+      ts: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    await db.collection('tramos').doc(tramoId).collection('alerts').add(payload);
+    showBanner(`Aviso emitido: SALIDA PARADA · TRAMO ${tramoId}`);
+  }catch(e){
+    console.error(e);
+    showBanner('Error emitiendo aviso.', true);
+  }
+}
+
+/* =================== BANNER =================== */
+let bannerEl=null, bannerTimer=null;
+function ensureBanner(){
+  if (bannerEl) return bannerEl;
+  bannerEl = document.createElement('div');
+  bannerEl.className='banner';
+  document.body.appendChild(bannerEl);
+  return bannerEl;
+}
+function showBanner(text){
+  const el = ensureBanner();
+  el.textContent = text;
+  el.style.display='block';
+  if (bannerTimer) clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(()=>{ el.style.display='none'; }, 6000);
+}
+
+/* =================== INIT =================== */
+document.addEventListener('DOMContentLoaded', ()=>{
+  buildUI();
+  // Suscribir alertas tramo a tramo (si hay db)
+  DC_CONFIG.tramos.forEach(t => subscribeAlertsFor(t.id));
+});
+</script>
 </body>
 </html>
