@@ -7,21 +7,18 @@
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-    <script src="https://unpkg.com/leaflet-kmz@1.0.11/dist/leaflet-kmz.js"></script>
+    <script src="https://unpkg.com/leaflet-plugins@3.4.0/layer/vector/KML.js"></script>
 
     <style>
         :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; }
         body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
-        
         .topbar { padding:15px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
         
-        /* CONTENEDOR PARA DOS COLUMNAS */
+        /* DISEÑO: Dos columnas */
         .content { 
             padding:15px; 
             display: grid; 
-            grid-template-columns: 1fr 1fr; /* Crea dos columnas iguales */
+            grid-template-columns: 1fr 1fr; 
             gap: 15px; 
         }
 
@@ -39,11 +36,9 @@
         .btn-stop { 
             width:100%; padding:25px; background:var(--danger); color:white; border:none; 
             font-size:1.6rem; font-weight:bold; cursor:pointer; text-transform:uppercase;
-            border-top: 1px solid var(--border);
         }
 
-        /* Si la pantalla es pequeña (móvil), se pone uno abajo del otro */
-        @media (max-width: 800px) {
+        @media (max-width: 900px) {
             .content { grid-template-columns: 1fr; }
         }
     </style>
@@ -58,19 +53,18 @@
 <main class="content" id="contenedor"></main>
 
 <script>
-    // 1. Reloj
+    // Reloj
     setInterval(() => {
         document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
     }, 1000);
 
-    // 2. Configuración (Ruta directa a tus archivos KMZ en GitHub)
+    // Configuración: AJUSTA LOS NOMBRES DE ARCHIVO AQUÍ
     const BASE_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
     const TRAMOS = [
-        { id: '1', nombre: 'TRAMO A: EL VISO', archivo: 'tcAElViso.kmz' },
-        { id: '2', nombre: 'TRAMO B: PEDROCHE', archivo: 'tcBPedroche.kmz' }
+        { id: '1', nombre: 'TRAMO A: EL VISO', archivo: 'tcA_El Viso.kml' }, // Asegúrate de que coincida con GitHub
+        { id: '2', nombre: 'TRAMO B: PEDROCHE', archivo: 'tcBPedroche.kml' }
     ];
 
-    // 3. Crear Mapas
     TRAMOS.forEach(tramo => {
         const card = document.createElement('div');
         card.className = 'tramo-card';
@@ -81,20 +75,25 @@
         `;
         document.getElementById('contenedor').appendChild(card);
 
-        // Inicializar Leaflet
         const map = L.map(`mapa_${tramo.id}`).setView([40, -3], 5);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // Cargar KMZ usando JSZip para descompresión
-        const kmzLayer = L.kmzLayer().addTo(map);
-        
-        kmzLayer.on('load', function(e) {
-            console.log("Track cargado:", tramo.archivo);
-            map.fitBounds(e.layer.getBounds(), { padding: [20, 20] });
-        });
-
-        // Cargamos con un parámetro aleatorio para evitar que el navegador use una versión vieja del archivo
-        kmzLayer.load(BASE_URL + tramo.archivo + "?v=" + Math.random());
+        // CARGA DE KML
+        fetch(BASE_URL + tramo.archivo)
+            .then(res => res.text())
+            .then(kmlText => {
+                const parser = new DOMParser();
+                const kmlDom = parser.parseFromString(kmlText, 'text/xml');
+                const track = new L.KML(kmlDom);
+                map.addLayer(track);
+                
+                // Ajustar zoom automáticamente al track
+                const bounds = track.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds);
+                }
+            })
+            .catch(err => console.error("Error cargando el KML:", tramo.archivo));
     });
 </script>
 </body>
