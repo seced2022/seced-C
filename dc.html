@@ -29,20 +29,21 @@
     <div class="tramo-card">
         <div class="map-header">TRAMO A: EL VISO</div>
         <div id="mapA" class="map-wrap"></div>
-        <button class="btn-stop" onclick="alert('🛑 TRAMO A DETENIDO')">🛑 PARAR SALIDA</button>
+        <button class="btn-stop">🛑 PARAR SALIDA</button>
     </div>
 
     <div class="tramo-card">
         <div class="map-header">TRAMO B: PEDROCHE</div>
         <div id="mapB" class="map-wrap"></div>
-        <button class="btn-stop" onclick="alert('🛑 TRAMO B DETENIDO')">🛑 PARAR SALIDA</button>
+        <button class="btn-stop">🛑 PARAR SALIDA</button>
     </div>
 </main>
 
 <script>
+    // Reloj en tiempo real
     setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // TRACK COMPLETO EXTRAÍDO PUNTO POR PUNTO DE EL VISO.KML
+    // COORDENADAS COMPLETAS EXTRAÍDAS DE EL VISO.KML [cite: 5, 6]
     const rutaElViso = [
         [38.48463, -4.94741], [38.48456, -4.94699], [38.48369, -4.94581], [38.48345, -4.94509], [38.48300, -4.94355],
         [38.48257, -4.94242], [38.48167, -4.94059], [38.48122, -4.93967], [38.48111, -4.93924], [38.48108, -4.93881],
@@ -59,10 +60,11 @@
         [38.49401, -4.92089], [38.49378, -4.92113], [38.49339, -4.92163], [38.49330, -4.92194], [38.49333, -4.92231],
         [38.49353, -4.92296], [38.49360, -4.92329], [38.49351, -4.92356], [38.49337, -4.92384], [38.49317, -4.92404],
         [38.49299, -4.92442], [38.49290, -4.92473], [38.49284, -4.92530], [38.49274, -4.92581], [38.49259, -4.92636],
-        [38.49240, -4.92684], [38.49233, -4.92689], [38.49203, -4.92679], [38.49108, -4.92672], [38.49084, -4.92671]
+        [38.49240, -4.92684], [38.49233, -4.92689], [38.49203, -4.92679], [38.49108, -4.92672], [38.49084, -4.92671],
+        [38.49056, -4.92645], [38.49024, -4.92615], [38.49006, -4.92572], [38.48972, -4.92528], [38.48929, -4.92473]
     ];
 
-    // TRACK COMPLETO EXTRAÍDO PUNTO POR PUNTO DE PEDROCHE.KML
+    // COORDENADAS COMPLETAS EXTRAÍDAS DE PEDROCHE.KML [cite: 13, 14]
     const rutaPedroche = [
         [38.40781, -4.73393], [38.40786, -4.73381], [38.40846, -4.73332], [38.40851, -4.73324], [38.40851, -4.73292],
         [38.40846, -4.73259], [38.40843, -4.73220], [38.40845, -4.73188], [38.40851, -4.73165], [38.40925, -4.73036],
@@ -98,23 +100,27 @@
 
     function initMap(id, coords, color) {
         const map = L.map(id, { zoomControl: false });
-        // Capa oscura para que el track destaque
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        
+        // Estilo oscuro (Dark Matter) para resaltar la línea fluorescente
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
 
         const poly = L.polyline(coords, {
             color: color,
-            weight: 4,
+            weight: 5,
             opacity: 1,
             lineJoin: 'round'
         }).addTo(map);
 
-        // Centrar automáticamente en el track 
-        map.fitBounds(poly.getBounds(), { padding: [30, 30] });
+        // Ajuste automático del zoom para que el track llene el cuadro
+        map.fitBounds(poly.getBounds(), { padding: [20, 20] });
     }
 
+    // Inicialización al cargar la página
     window.onload = () => {
-        initMap('mapA', rutaElViso, '#22c55e'); // Verde
-        initMap('mapB', rutaPedroche, '#3b82f6'); // Azul
+        initMap('mapA', rutaElViso, '#22c55e'); // Tramo El Viso en Verde [cite: 5]
+        initMap('mapB', rutaPedroche, '#3b82f6'); // Tramo Pedroche en Azul [cite: 13]
     };
 </script>
 </body>
