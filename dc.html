@@ -11,7 +11,7 @@
         /* Cabecera */
         .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; height: 60px; box-sizing: border-box; }
         
-        /* Contenedor en paralelo */
+        /* Contenedor en dos columnas */
         .content { 
             display: grid; 
             grid-template-columns: 1fr 1fr; 
@@ -32,10 +32,10 @@
 
         .map-header { padding:10px; font-weight:bold; text-align:center; background: #111e17; font-size: 0.9rem; letter-spacing: 1px; }
         
-        /* Visor de Google Maps */
-        .google-map { flex-grow: 1; border: none; width: 100%; height: 100%; }
+        /* El mapa de Google */
+        .google-map { flex-grow: 1; border: none; width: 100%; height: 100%; background: #000; }
         
-        /* Filtro oscuro para que el mapa no deslumbre */
+        /* Efecto oscuro para el mapa */
         .dark-mode { filter: invert(90%) hue-rotate(180deg) brightness(95%) contrast(90%); }
 
         .btn-stop { 
@@ -62,19 +62,18 @@
 <main class="content">
     <div class="tramo-card">
         <div class="map-header">TRAMO A: EL VISO</div>
-        <iframe class="google-map dark-mode" src="https://www.google.com/maps/d/embed?mid=1v-VnS2e9rT7-UvQ_m_1"></iframe>
-        <button class="btn-stop" onclick="alert('🛑 EMERGENCIA: TRAMO A DETENIDO')">🛑 PARAR SALIDA</button>
+        <iframe class="google-map dark-mode" src="http://googleusercontent.com/maps.google.com/9"></iframe>
+        <button class="btn-stop" onclick="alert('🛑 TRAMO A DETENIDO')">🛑 PARAR SALIDA</button>
     </div>
 
     <div class="tramo-card">
         <div class="map-header">TRAMO B: PEDROCHE</div>
-        <iframe class="google-map dark-mode" src="https://www.google.com/maps/d/embed?mid=1v-VnS2e9rT7-UvQ_m_1"></iframe>
-        <button class="btn-stop" onclick="alert('🛑 EMERGENCIA: TRAMO B DETENIDO')">🛑 PARAR SALIDA</button>
+        <iframe class="google-map dark-mode" src="http://googleusercontent.com/maps.google.com/9"></iframe>
+        <button class="btn-stop" onclick="alert('🛑 TRAMO B DETENIDO')">🛑 PARAR SALIDA</button>
     </div>
 </main>
 
 <script>
-    // Actualización del reloj
     setInterval(() => { 
         document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); 
     }, 1000);
