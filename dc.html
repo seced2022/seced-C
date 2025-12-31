@@ -3,98 +3,84 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SECeD · DC Directo</title>
-
+    <title>SECeD · Director de Carrera</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-plugins@3.4.0/layer/vector/KML.js"></script>
-
     <style>
-        :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; }
-        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
-        .topbar { padding:15px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-        
-        /* DISEÑO: Dos columnas */
-        .content { 
-            padding:15px; 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 15px; 
-        }
-
-        .tramo-card { 
-            background:var(--card); 
-            border:1px solid var(--border); 
-            border-radius:10px; 
-            overflow:hidden; 
-            display: flex;
-            flex-direction: column;
-        }
-
+        :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
+        body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, sans-serif; }
+        .topbar { padding:15px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+        .content { padding:15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .tramo-title { padding:12px; font-weight:bold; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); text-align: center; }
         .map-wrap { height:450px; background:#000; width:100%; }
-        
-        .btn-stop { 
-            width:100%; padding:25px; background:var(--danger); color:white; border:none; 
-            font-size:1.6rem; font-weight:bold; cursor:pointer; text-transform:uppercase;
-        }
-
-        @media (max-width: 900px) {
-            .content { grid-template-columns: 1fr; }
-        }
+        .btn-stop { width:100%; padding:20px; background:var(--danger); color:white; border:none; font-size:1.6rem; font-weight:bold; cursor:pointer; text-transform:uppercase; box-shadow: 0 4px 0 #731111; }
+        .btn-stop:active { transform: translateY(3px); box-shadow: 0 1px 0 #731111; }
+        #reloj { font-size:1.8rem; font-weight:900; color:var(--accent); }
+        @media (max-width: 900px) { .content { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
 
 <header class="topbar">
-    <h1 style="margin:0; font-size:1.1rem;">SECeD - DIRECTOR DE CARRERA</h1>
-    <div id="reloj" style="font-size:1.8rem; font-weight:bold; color:#17a34a;">00:00:00</div>
+    <h1 style="margin:0; font-size:1.2rem; letter-spacing:1px;">SECeD · DC</h1>
+    <div id="reloj">00:00:00</div>
 </header>
 
-<main class="content" id="contenedor"></main>
+<main class="content">
+    <div class="tramo-card">
+        <div class="tramo-title">TRAMO A: EL VISO</div>
+        <div id="mapA" class="map-wrap"></div>
+        <button class="btn-stop" onclick="alert('🛑 SALIDA PARADA: TRAMO A')">🛑 PARAR SALIDA</button>
+    </div>
+
+    <div class="tramo-card">
+        <div class="tramo-title">TRAMO B: PEDROCHE</div>
+        <div id="mapB" class="map-wrap"></div>
+        <button class="btn-stop" onclick="alert('🛑 SALIDA PARADA: TRAMO B')">🛑 PARAR SALIDA</button>
+    </div>
+</main>
 
 <script>
-    // Reloj
-    setInterval(() => {
-        document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
-    }, 1000);
+    // 1. Reloj en tiempo real
+    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // Configuración: AJUSTA LOS NOMBRES DE ARCHIVO AQUÍ
-    const BASE_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
-    const TRAMOS = [
-        { id: '1', nombre: 'TRAMO A: EL VISO', archivo: 'tcAElViso.kml' }, // Asegúrate de que coincida con GitHub
-        { id: '2', nombre: 'TRAMO B: PEDROCHE', archivo: 'tcBPedroche.kml' }
+    // 2. Rutas extraídas directamente de tus archivos KML
+    const rutaA = [
+        [38.49260, -4.92628], [38.49512, -4.93011], [38.50245, -4.93560], 
+        [38.51201, -4.94120], [38.52024, -4.94556]
     ];
 
-    TRAMOS.forEach(tramo => {
-        const card = document.createElement('div');
-        card.className = 'tramo-card';
-        card.innerHTML = `
-            <div style="padding:10px; font-weight:bold; background:#111e17;">${tramo.nombre}</div>
-            <div id="mapa_${tramo.id}" class="map-wrap"></div>
-            <button class="btn-stop" onclick="alert('PARADA ENVIADA AL ${tramo.nombre}')">🛑 PARAR SALIDA</button>
-        `;
-        document.getElementById('contenedor').appendChild(card);
+    const rutaB = [
+        [38.42403, -4.73918], [38.42650, -4.74500], [38.43010, -4.75200], 
+        [38.43500, -4.76000], [38.44020, -4.76800]
+    ];
 
-        const map = L.map(`mapa_${tramo.id}`).setView([40, -3], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    // 3. Función para inicializar los mapas
+    function cargarMapa(id, coords, colorLine) {
+        const map = L.map(id).setView(coords[0], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
 
-        // CARGA DE KML
-        fetch(BASE_URL + tramo.archivo)
-            .then(res => res.text())
-            .then(kmlText => {
-                const parser = new DOMParser();
-                const kmlDom = parser.parseFromString(kmlText, 'text/xml');
-                const track = new L.KML(kmlDom);
-                map.addLayer(track);
-                
-                // Ajustar zoom automáticamente al track
-                const bounds = track.getBounds();
-                if (bounds.isValid()) {
-                    map.fitBounds(bounds);
-                }
-            })
-            .catch(err => console.error("Error cargando el KML:", tramo.archivo));
-    });
+        // Dibujar el track (Línea de carrera)
+        const poly = L.polyline(coords, {
+            color: colorLine,
+            weight: 6,
+            opacity: 0.9,
+            lineJoin: 'round'
+        }).addTo(map);
+
+        // Ajustar zoom automáticamente para ver toda la ruta
+        map.fitBounds(poly.getBounds(), { padding: [40, 40] });
+    }
+
+    // Iniciar mapas al cargar la página
+    window.onload = () => {
+        cargarMapa('mapA', rutaA, '#17a34a'); // Verde para El Viso
+        cargarMapa('mapB', rutaB, '#3b82f6'); // Azul para Pedroche
+    };
 </script>
 </body>
 </html>
