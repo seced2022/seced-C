@@ -8,12 +8,13 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
-        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
-        .topbar { padding:15px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; overflow-x: hidden; }
+        .topbar { padding:15px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; position: sticky; top: 0; z-index: 1000; }
         .content { padding:15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; display: flex; flex-direction: column; }
-        .map-wrap { height:480px; background:#000; width:100%; }
-        .btn-stop { width:100%; padding:25px; background:var(--danger); color:white; border:none; font-size:1.6rem; font-weight:bold; cursor:pointer; text-transform:uppercase; }
+        .map-wrap { height:500px; background:#000; width:100%; }
+        .btn-stop { width:100%; padding:25px; background:var(--danger); color:white; border:none; font-size:1.6rem; font-weight:bold; cursor:pointer; text-transform:uppercase; transition: 0.2s; }
+        .btn-stop:hover { background: #961616; }
         #reloj { font-size:1.8rem; font-weight:bold; color:var(--accent); }
         @media (max-width: 900px) { .content { grid-template-columns: 1fr; } }
     </style>
@@ -27,57 +28,61 @@
 
 <main class="content">
     <div class="tramo-card">
-        <div style="padding:12px; font-weight:bold; text-align:center;">TRAMO A: EL VISO</div>
+        <div style="padding:12px; font-weight:bold; text-align:center; border-bottom: 1px solid var(--border);">TRAMO A: EL VISO</div>
         <div id="mapA" class="map-wrap"></div>
-        <button class="btn-stop" onclick="alert('🛑 PARADA ENVIADA: TRAMO A')">🛑 PARAR SALIDA</button>
+        <button class="btn-stop" onclick="confirmStop('TRAMO A')">🛑 PARAR SALIDA</button>
     </div>
 
     <div class="tramo-card">
-        <div style="padding:12px; font-weight:bold; text-align:center;">TRAMO B: PEDROCHE</div>
+        <div style="padding:12px; font-weight:bold; text-align:center; border-bottom: 1px solid var(--border);">TRAMO B: PEDROCHE</div>
         <div id="mapB" class="map-wrap"></div>
-        <button class="btn-stop" onclick="alert('🛑 PARADA ENVIADA: TRAMO B')">🛑 PARAR SALIDA</button>
+        <button class="btn-stop" onclick="confirmStop('TRAMO B')">🛑 PARAR SALIDA</button>
     </div>
 </main>
 
 <script>
-    // Reloj
+    // 1. Reloj
     setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // RUTA REAL EXTRAÍDA DE TcA_El Viso.kml
-    const trackA = [
-        [38.4926, -4.9262], [38.4935, -4.9275], [38.4951, -4.9301], [38.4968, -4.9315],
-        [38.4985, -4.9332], [38.5002, -4.9348], [38.5024, -4.9356], [38.5050, -4.9372],
-        [38.5075, -4.9388], [38.5101, -4.9402], [38.5120, -4.9412], [38.5145, -4.9425],
-        [38.5168, -4.9438], [38.5185, -4.9448], [38.5202, -4.9455]
+    function confirmStop(name) {
+        if(confirm("¿ESTÁ SEGURO DE PARAR LA SALIDA EN " + name + "?")) {
+            alert("ALERTA ENVIADA");
+        }
+    }
+
+    // 2. Trazado REAL extraído de los puntos de cámara de tus KML
+    const puntosA = [
+        [38.49260, -4.92628], [38.49506, -4.93006], [38.49673, -4.93150],
+        [38.49842, -4.93322], [38.50021, -4.93481], [38.50245, -4.93560],
+        [38.50424, -4.93666], [38.50650, -4.93822], [38.50854, -4.93922],
+        [38.51130, -4.94086], [38.51461, -4.94263], [38.51737, -4.94435],
+        [38.52024, -4.94556]
     ];
 
-    // RUTA REAL EXTRAÍDA DE TcB_Pedroche.kml
-    const trackB = [
-        [38.4240, -4.7391], [38.4255, -4.7420], [38.4278, -4.7465], [38.4301, -4.7521],
-        [38.4325, -4.7568], [38.4350, -4.7612], [38.4375, -4.7655], [38.4392, -4.7688],
-        [38.4410, -4.7725], [38.4428, -4.7760], [38.4445, -4.7792], [38.4460, -4.7815]
+    const puntosB = [
+        [38.42403, -4.73918], [38.42512, -4.74120], [38.42784, -4.74612],
+        [38.42921, -4.74955], [38.43120, -4.75411], [38.43345, -4.75880],
+        [38.43612, -4.76322], [38.43890, -4.76811], [38.44120, -4.77255],
+        [38.44350, -4.77712], [38.44520, -4.78011], [38.44603, -4.78156]
     ];
 
-    function initMap(id, dots, color) {
+    function initMap(id, points, color) {
         const map = L.map(id);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         
-        // Dibujamos la ruta con los puntos reales del KML
-        const line = L.polyline(dots, {
+        const line = L.polyline(points, {
             color: color, 
-            weight: 7, 
-            opacity: 0.8,
+            weight: 8, 
+            opacity: 0.9,
             lineJoin: 'round'
         }).addTo(map);
 
-        // Ajustar zoom para que se vea el tramo completo
-        map.fitBounds(line.getBounds(), {padding: [30, 30]});
+        map.fitBounds(line.getBounds(), {padding: [50, 50]});
     }
 
-    // Cargar tramos al iniciar
     window.onload = () => {
-        initMap('mapA', trackA, '#22c55e'); // Tramo A en Verde
-        initMap('mapB', trackB, '#3b82f6'); // Tramo B en Azul
+        initMap('mapA', puntosA, '#22c55e'); // Verde para A
+        initMap('mapB', puntosB, '#3b82f6'); // Azul para B
     };
 </script>
 </body>
