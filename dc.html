@@ -7,68 +7,100 @@
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <script src="https://unpkg.com/leaflet-kmz@1.0.11/dist/leaflet-kmz.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-plugins/3.4.0/layer/vector/KML.js"></script>
 
     <style>
         :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; }
         body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
+        
         .topbar { padding:15px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-        .content { padding:10px; display: flex; flex-direction: column; gap: 20px; }
-        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
-        .map-wrap { height:350px; background:#000; width:100%; }
-        .btn-stop { width:100%; padding:20px; background:var(--danger); color:white; border:none; font-size:1.5rem; font-weight:bold; cursor:pointer; }
+        
+        /* DISEÑO EN LÍNEA: Flexbox para poner uno al lado del otro */
+        .content { 
+            padding:20px; 
+            display: flex; 
+            flex-direction: row; 
+            flex-wrap: wrap; 
+            gap: 20px; 
+            justify-content: center;
+        }
+
+        .tramo-card { 
+            background:var(--card); 
+            border:1px solid var(--border); 
+            border-radius:10px; 
+            overflow:hidden; 
+            width: 48%; /* Casi la mitad para que quepan dos por línea */
+            min-width: 400px; /* Para que en móvil se pongan uno abajo del otro */
+        }
+
+        .map-wrap { height:400px; background:#000; width:100%; }
+        
+        .btn-stop { 
+            width:100%; padding:20px; background:var(--danger); color:white; border:none; 
+            font-size:1.5rem; font-weight:bold; cursor:pointer; text-transform:uppercase;
+        }
+        .btn-stop:hover { background: #961616; }
+
+        @media (max-width: 900px) {
+            .tramo-card { width: 100%; }
+        }
     </style>
 </head>
 <body>
 
 <header class="topbar">
-    <h1 style="margin:0; font-size:1rem;">SECeD - DIRECTOR DE CARRERA</h1>
-    <div id="relojActual" style="font-size:1.5rem; font-weight:bold;">00:00:00</div>
+    <h1 style="margin:0; font-size:1.2rem; font-weight: 900;">DIRECTOR DE CARRERA</h1>
+    <div id="relojActual" style="font-size:1.8rem; font-weight:900; color:#17a34a;">00:00:00</div>
 </header>
 
 <main class="content" id="contenedor"></main>
 
 <script>
-    // 1. Reloj que no falla
+    // 1. Reloj
     function actualizarReloj() {
-        const ahora = new Date();
-        document.getElementById('relojActual').innerText = ahora.toLocaleTimeString();
+        document.getElementById('relojActual').innerText = new Date().toLocaleTimeString();
     }
     setInterval(actualizarReloj, 1000);
     actualizarReloj();
 
-    // 2. Configuración
+    // 2. Configuración (Asegúrate de haber subido los archivos .kml)
     const BASE_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
     const TRAMOS = [
-        { id: '1', nombre: 'TRAMO A: EL VISO', archivo: 'tcAElViso.kmz' },
-        { id: '2', nombre: 'TRAMO B: PEDROCHE', archivo: 'tcBPedroche.kmz' }
+        { id: '1', nombre: 'TRAMO A: EL VISO', archivo: 'tcAElViso.kml' },
+        { id: '2', nombre: 'TRAMO B: PEDROCHE', archivo: 'tcBPedroche.kml' }
     ];
 
-    // 3. Función para crear mapas
+    // 3. Función de carga
     TRAMOS.forEach(tramo => {
-        // Crear HTML
         const card = document.createElement('div');
         card.className = 'tramo-card';
         card.innerHTML = `
-            <div style="padding:10px; font-weight:bold;">${tramo.nombre}</div>
+            <div style="padding:15px; font-weight:bold; background:#111e17;">${tramo.nombre}</div>
             <div id="mapa_${tramo.id}" class="map-wrap"></div>
             <button class="btn-stop" onclick="alert('PARADA ENVIADA AL ${tramo.nombre}')">🛑 PARAR SALIDA</button>
         `;
         document.getElementById('contenedor').appendChild(card);
 
-        // Crear Mapa
         const map = L.map(`mapa_${tramo.id}`).setView([40, -3], 5);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // Intentar cargar KMZ
-        try {
-            const kmz = L.kmzLayer().addTo(map);
-            kmz.load(BASE_URL + tramo.archivo);
-            kmz.on('load', (e) => map.fitBounds(e.layer.getBounds()));
-        } catch (e) {
-            console.error("Error cargando librería KMZ");
-        }
+        // Cargar KML
+        fetch(BASE_URL + tramo.archivo)
+            .then(res => res.text())
+            .then(kmlText => {
+                const parser = new DOMParser();
+                const kml = parser.parseFromString(kmlText, 'text/xml');
+                const track = new L.KML(kml);
+                map.addLayer(track);
+                
+                // Ajustar vista al track
+                const bounds = track.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds);
+                }
+            })
+            .catch(err => console.error("Error cargando KML:", tramo.archivo));
     });
 </script>
 </body>
