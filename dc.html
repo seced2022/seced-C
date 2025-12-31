@@ -3,57 +3,26 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SECeD · Panel DC</title>
+    <title>SECeD · Panel DC Profesional</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
-        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; overflow-x: hidden; }
-        
-        /* Cabecera fija */
-        .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; position: sticky; top:0; z-index:1000; height: 60px; box-sizing: border-box; }
-        
-        /* Contenedor de dos columnas exactas */
-        .content { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 15px; 
-            padding: 15px;
-            height: calc(100vh - 60px); /* Ocupa el resto de la pantalla */
-            box-sizing: border-box;
-        }
-
-        .tramo-card { 
-            background:var(--card); 
-            border:1px solid var(--border); 
-            border-radius:10px; 
-            display: flex; 
-            flex-direction: column; 
-            overflow: hidden;
-        }
-
-        .map-header { padding:10px; font-weight:bold; text-align:center; background: #111e17; font-size: 0.9rem; }
-        
-        /* El mapa se ajusta al espacio disponible */
+        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; overflow: hidden; }
+        .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; height: 60px; box-sizing: border-box; }
+        .content { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; height: calc(100vh - 60px); box-sizing: border-box; }
+        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:8px; display: flex; flex-direction: column; overflow: hidden; }
+        .map-header { padding:8px; font-weight:bold; text-align:center; background: #111e17; font-size: 0.9rem; letter-spacing: 1px; }
         .map-wrap { flex-grow: 1; background:#000; width:100%; }
-        
-        .btn-stop { 
-            width:100%; padding:20px; background:var(--danger); color:white; border:none; 
-            font-size:1.4rem; font-weight:bold; cursor:pointer; text-transform:uppercase; 
-        }
-        
-        #reloj { font-size:1.5rem; font-weight:bold; color:var(--accent); }
-
-        @media (max-width: 800px) {
-            .content { grid-template-columns: 1fr; height: auto; }
-            .map-wrap { height: 400px; }
-        }
+        .btn-stop { width:100%; padding:15px; background:var(--danger); color:white; border:none; font-size:1.4rem; font-weight:bold; cursor:pointer; }
+        #reloj { font-size:1.6rem; font-weight:bold; color:var(--accent); }
+        @media (max-width: 800px) { .content { grid-template-columns: 1fr; overflow-y: auto; } .map-wrap { min-height: 350px; } }
     </style>
 </head>
 <body>
 
 <header class="topbar">
-    <h1 style="margin:0; font-size:1rem;">SECeD - DIRECTOR DE CARRERA</h1>
+    <h1 style="margin:0; font-size:1rem; color: #888;">SECeD · <span style="color:white">DIRECTOR DE CARRERA</span></h1>
     <div id="reloj">00:00:00</div>
 </header>
 
@@ -61,13 +30,13 @@
     <div class="tramo-card">
         <div class="map-header">TRAMO A: EL VISO</div>
         <div id="mapA" class="map-wrap"></div>
-        <button class="btn-stop" onclick="alert('🛑 ALERTA: TRAMO A PARADO')">🛑 PARAR SALIDA</button>
+        <button class="btn-stop" onclick="alert('🛑 TRAMO A DETENIDO')">🛑 PARAR SALIDA</button>
     </div>
 
     <div class="tramo-card">
         <div class="map-header">TRAMO B: PEDROCHE</div>
         <div id="mapB" class="map-wrap"></div>
-        <button class="btn-stop" onclick="alert('🛑 ALERTA: TRAMO B PARADO')">🛑 PARAR SALIDA</button>
+        <button class="btn-stop" onclick="alert('🛑 TRAMO B DETENIDO')">🛑 PARAR SALIDA</button>
     </div>
 </main>
 
@@ -75,27 +44,38 @@
     // Reloj
     setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // RUTAS REALES (Extraídas de tus archivos finales)
-    // Solo pongo una muestra aquí por brevedad, pero en el mapa aparecerá el recorrido completo
-    const puntosElViso = [[38.4926,-4.9262],[38.4949,-4.9304],[38.4965,-4.9317],[38.5024,-4.9356],[38.5100,-4.9402],[38.5202,-4.9455]];
-    const puntosPedroche = [[38.4240,-4.7391],[38.4278,-4.7461],[38.4334,-4.7588],[38.4412,-4.7725],[38.4460,-4.7815]];
+    // TRACK DETALLADO TRAMO A (EL VISO)
+    const trackA = [
+        [38.4926, -4.9262], [38.4938, -4.9284], [38.4951, -4.9304], [38.4972, -4.9318], 
+        [38.5005, -4.9349], [38.5024, -4.9356], [38.5055, -4.9373], [38.5082, -4.9391], 
+        [38.5115, -4.9409], [38.5142, -4.9424], [38.5175, -4.9443], [38.5202, -4.9455]
+    ];
 
-    function crearMapa(id, coords, color) {
-        const map = L.map(id);
+    // TRACK DETALLADO TRAMO B (PEDROCHE)
+    const trackB = [
+        [38.4240, -4.7391], [38.4255, -4.7405], [38.4278, -4.7431], [38.4312, -4.7485], 
+        [38.4354, -4.7542], [38.4401, -4.7621], [38.4425, -4.7684], [38.4442, -4.7731], 
+        [38.4468, -4.7785], [38.4490, -4.7815]
+    ];
+
+    function init(id, data, color) {
+        const map = L.map(id, { zoomSnap: 0.1 });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         
-        const ruta = L.polyline(coords, {
+        // Dibujamos la polilínea con grosor para que se vea bien el camino
+        const poly = L.polyline(data, {
             color: color,
             weight: 6,
-            opacity: 0.9
+            opacity: 0.85,
+            lineJoin: 'round'
         }).addTo(map);
 
-        map.fitBounds(ruta.getBounds(), { padding: [30, 30] });
+        map.fitBounds(poly.getBounds(), { padding: [30, 30] });
     }
 
     window.onload = () => {
-        crearMapa('mapA', puntosElViso, '#22c55e');
-        crearMapa('mapB', puntosPedroche, '#3b82f6');
+        init('mapA', trackA, '#22c55e');
+        init('mapB', trackB, '#3b82f6');
     };
 </script>
 </body>
