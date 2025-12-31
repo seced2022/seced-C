@@ -8,15 +8,14 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
-        body { margin:0; background:var(--bg); color:var(--text); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
+        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; overflow: hidden; }
         .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; height: 60px; box-sizing: border-box; }
         .content { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; height: calc(100vh - 60px); box-sizing: border-box; }
-        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .map-header { padding:12px; font-weight:bold; text-align:center; background: #111e17; font-size: 1rem; border-bottom: 1px solid var(--border); letter-spacing: 1px; }
+        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; display: flex; flex-direction: column; overflow: hidden; }
+        .map-header { padding:12px; font-weight:bold; text-align:center; background: #111e17; border-bottom: 1px solid var(--border); }
         .map-wrap { flex-grow: 1; background:#111; width:100%; }
-        .btn-stop { width:100%; padding:18px; background:var(--danger); color:white; border:none; font-size:1.3rem; font-weight:bold; cursor:pointer; text-transform:uppercase; transition: background 0.3s; }
-        .btn-stop:hover { background: #991b1b; }
-        #reloj { font-size:1.8rem; font-weight:bold; color:var(--accent); font-family: monospace; }
+        .btn-stop { width:100%; padding:15px; background:var(--danger); color:white; border:none; font-size:1.1rem; font-weight:bold; cursor:pointer; }
+        #reloj { font-size:1.5rem; font-weight:bold; color:var(--accent); font-family: monospace; }
     </style>
 </head>
 <body>
@@ -41,10 +40,9 @@
 </main>
 
 <script>
-    // Reloj digital en tiempo real
     setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // COORDENADAS COMPLETAS EXTRAÍDAS DE El Viso.kml [cite: 5, 6]
+    // TRACK COMPLETO: EL VISO [cite: 5, 6]
     const rutaElViso = [
         [38.48463, -4.94741], [38.48456, -4.94699], [38.48369, -4.94581], [38.48345, -4.94509], [38.48300, -4.94355],
         [38.48257, -4.94242], [38.48167, -4.94059], [38.48122, -4.93967], [38.48111, -4.93924], [38.48108, -4.93881],
@@ -66,7 +64,7 @@
         [38.48912, -4.92443], [38.48903, -4.92400]
     ];
 
-    // COORDENADAS COMPLETAS EXTRAÍDAS DE Pedroche.kml [cite: 13, 14, 15]
+    // TRACK COMPLETO: PEDROCHE [cite: 13, 14]
     const rutaPedroche = [
         [38.40781, -4.73393], [38.40786, -4.73381], [38.40846, -4.73332], [38.40851, -4.73324], [38.40851, -4.73292],
         [38.40846, -4.73259], [38.40843, -4.73220], [38.40845, -4.73188], [38.40851, -4.73165], [38.40925, -4.73036],
@@ -101,36 +99,23 @@
     ];
 
     function initMap(id, coords, color) {
-        // Inicializar el mapa centrado en el primer punto
-        const map = L.map(id, { zoomControl: true });
+        const map = L.map(id).setView(coords[0], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
         
-        // Capa de mapa oscuro (CartoDB Dark Matter)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
-        }).addTo(map);
-
-        // Dibujar el Polyline con todas las coordenadas
         const poly = L.polyline(coords, {
             color: color,
-            weight: 6,
-            opacity: 0.9,
-            lineJoin: 'round',
-            lineCap: 'round'
+            weight: 5,
+            opacity: 0.8,
+            lineJoin: 'round'
         }).addTo(map);
-
-        // Ajustar la vista automáticamente para que todo el track sea visible
-        map.fitBounds(poly.getBounds(), { padding: [30, 30] });
-
-        // Marcadores de Salida y Meta (Opcional)
-        L.circleMarker(coords[0], { radius: 6, color: 'green', fillOpacity: 1 }).addTo(map).bindPopup('SALIDA');
-        L.circleMarker(coords[coords.length - 1], { radius: 6, color: 'red', fillOpacity: 1 }).addTo(map).bindPopup('META');
+        
+        map.fitBounds(poly.getBounds(), { padding: [20, 20] });
     }
 
-    // Inicialización al cargar el DOM
-    window.addEventListener('DOMContentLoaded', () => {
-        initMap('mapA', rutaElViso, '#22c55e'); // Verde flúor
-        initMap('mapB', rutaPedroche, '#3b82f6'); // Azul flúor
-    });
+    window.onload = () => {
+        initMap('mapA', rutaElViso, '#2ecc71');
+        initMap('mapB', rutaPedroche, '#3498db');
+    };
 </script>
 </body>
 </html>
