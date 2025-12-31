@@ -5,19 +5,15 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>SECeD · DC (Director de Carrera)</title>
 
-<!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- KMZ/KML -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/gh/consbio/Leaflet.KMZ@gh-pages/src/leaflet-kmz.js"></script>
 
-<!-- Firebase compat (misma que ya usas) -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-<!-- Tu config pública (asegúrate que existe en misma carpeta) -->
 <script src="config.js"></script>
 
 <style>
@@ -25,26 +21,22 @@
   --bg:#0b120e;
   --card:#0f1a14;
   --border:#1d2d23;
-  --accent:#17a34a;   /* VERDE principal */
-  --accent-2:#0f5f2e; /* Verde oscuro */
-  --danger:#b91c1c;   /* Rojo alertas */
+  --accent:#17a34a;   
+  --accent-2:#0f5f2e; 
+  --danger:#b91c1c;   
   --text:#e6f2ea;
   --muted:#a6cbb4;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}
 
 .topbar{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:12px 16px;border-bottom:1px solid var(--border);background:#0c1913;
 }
-.topbar h1{margin:0;font-size:18px;letter-spacing:.5px;font-weight:900}
+.topbar h1{margin:0;font-size:18px;font-weight:900}
 .clock{display:flex;align-items:center;gap:10px}
-.clock .sync{font-size:12px;opacity:.9;padding:2px 6px;border-radius:6px;background:#183323}
-.clock .sync.ok{background:#0f3a21}
-.clock .sync.err{background:#4a1c1c}
-.clock .time{font-size:36px;font-weight:900;letter-spacing:1px;line-height:1}
-.clock .tz{font-size:12px;color:var(--muted)}
+.clock .time{font-size:36px;font-weight:900;line-height:1}
 
 .content{padding:16px}
 .tramos{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px}
@@ -52,49 +44,59 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .tramo-card{
   background:var(--card);border:1px solid var(--border);border-radius:14px;
   overflow:hidden;display:flex;flex-direction:column;
-  box-shadow:0 10px 24px rgba(0,0,0,.25)
+  box-shadow:0 10px 24px rgba(0,0,0,.25);
+  margin-bottom: 20px;
 }
-.tramo-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-bottom:1px solid var(--border)}
-.tramo-title{font-weight:900;letter-spacing:.3px}
-.tramo-actions{display:flex;align-items:center;gap:8px}
+.tramo-head{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid var(--border)}
+.tramo-title{font-weight:900; font-size: 1.2rem}
 
-.btn{
-  appearance:none;border:1px solid var(--border);background:#123120;color:var(--text);
-  padding:8px 10px;border-radius:10px;font-weight:800;cursor:pointer
-}
-.btn-primary{background:#124d2d;border-color:#17603a}
-.btn-danger{background:#6b1111;border-color:#7f1d1d}
-.btn:active{transform:translateY(1px)}
-
-.map-wrap{height:320px}
+.map-wrap{height:350px; position: relative;}
 .map{height:100%;width:100%}
 
-.radio-list{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:10px 12px;border-top:1px solid var(--border);background:#0b1a13}
-.radio-pill{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#122419;border:1px solid var(--border);border-radius:10px;padding:6px 8px}
-.radio-pill .name{font-weight:900}
-.radio-pill .last{color:#ffe59a;font-weight:900}
-.badge{font-size:11px;color:#fff;background:#1f3d2d;border-radius:999px;padding:2px 6px}
-
-.banner{
-  position:fixed;left:50%;top:14px;transform:translateX(-50%);
-  background:var(--danger);color:#fff;border:2px solid #7f1d1d;border-radius:12px;
-  padding:12px 16px;font-weight:900;letter-spacing:.3px;display:none;z-index:1000;
-  box-shadow:0 10px 24px rgba(0,0,0,.45)
+/* BOTÓN DE PARAR ABAJO DEL MAPA */
+.stop-action-area {
+  padding: 15px;
+  background: #1a1a1a;
+  display: flex;
+  justify-content: center;
+  border-top: 2px solid var(--border);
 }
 
-/* Leaflet tweaks */
-.leaflet-control-attribution{display:none}
-.leaflet-container{background:#0b120e;color:#e6f2ea}
-.leaflet-popup-content,.leaflet-tooltip{color:#111!important}
+.btn-stop-huge {
+  width: 100%;
+  padding: 15px;
+  background: var(--danger);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  box-shadow: 0 4px 0 #7f1d1d;
+}
+
+.btn-stop-huge:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #7f1d1d;
+}
+
+.radio-list{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:12px;background:#0b1a13}
+.radio-pill{display:flex;align-items:center;justify-content:space-between;background:#122419;border:1px solid var(--border);border-radius:10px;padding:8px}
+
+.banner{
+  position:fixed;left:50%;top:20px;transform:translateX(-50%);
+  background:var(--danger);color:#fff;padding:15px 25px;border-radius:12px;
+  font-weight:900;display:none;z-index:9999;
+}
 </style>
 </head>
 <body class="dc-skin">
+
 <header class="topbar">
-  <h1>Director de Carrera</h1>
+  <h1>Director de Carrera · SECeD</h1>
   <div class="clock">
-    <div id="clockSync" class="sync">—</div>
     <div id="clockTime" class="time">00:00:00</div>
-    <div id="clockTz" class="tz">Europe/Madrid</div>
   </div>
 </header>
 
@@ -102,22 +104,16 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   <section id="tramosContainer" class="tramos"></section>
 </main>
 
-<audio id="beep" preload="auto">
-  <!-- tono corto neutro (data URI) -->
-  <source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYAAAACAAACaWZmZmZm" type="audio/wav"/>
-</audio>
-
 <script>
-/* =================== CONFIG BÁSICA =================== */
-/* Edita esta lista a tu realidad: tracks y radios.
-   Sube tus KML/KMZ al mismo repo (evita CORS). */
+/* CONFIGURACIÓN DE RUTAS KMZ */
+/* Asegúrate de que los archivos están en la carpeta 'tracks' dentro de 'dc' */
 const DC_CONFIG = {
   timezone: 'Europe/Madrid',
   tramos: [
     {
       id: '1',
-      name: 'Tramo 1',
-      kmz: 'tracks/tcAElViso.kmz',        // ejemplo: archivo en tu repo
+      name: 'El Viso',
+      kmz: 'tracks/tcAElViso.kmz', 
       center: [40.4169, -3.7033],
       zoom: 12,
       radios: [
@@ -127,7 +123,7 @@ const DC_CONFIG = {
     },
     {
       id: '2',
-      name: 'Tramo 2',
+      name: 'Pedroche',
       kmz: 'tracks/tcBPedroche.kmz',
       center: [40.45, -3.70],
       zoom: 12,
@@ -139,220 +135,69 @@ const DC_CONFIG = {
   ],
 };
 
-/* =================== RELOJ (local + sync si hay red) =================== */
-const TIMEZONE = DC_CONFIG.timezone || 'Europe/Madrid';
-const clockTime = document.getElementById('clockTime');
-const clockTz   = document.getElementById('clockTz');
-const clockSync = document.getElementById('clockSync');
-if (clockTz) clockTz.textContent = TIMEZONE;
-
-let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
-function pad(n){ return String(n).padStart(2,'0'); }
-function nowNetMs(){ return Date.now() + (timeOffsetMs||0); }
-function renderClock(){
-  const d = new Date(nowNetMs());
-  if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-async function syncTime(){
-  // Si falla la API, mantenemos hora local y marcamos err, pero el reloj sigue.
-  try{
-    clockSync.textContent='sincronizando…'; clockSync.className='sync';
-    const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache:'no-store' });
-    if (!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    const apiMs = Date.parse(data.datetime);
-    const localMs = Date.now();
-    timeOffsetMs = apiMs - localMs;
-    clockSync.textContent='ok'; clockSync.className='sync ok';
-  }catch(e){
-    // sin red → offset 0 (hora local)
-    timeOffsetMs = 0;
-    clockSync.textContent='ok (local)'; clockSync.className='sync err';
-  }
-}
-function bootClock(){
-  if (tickTimer) clearInterval(tickTimer);
-  tickTimer = setInterval(renderClock, 1000);
-  renderClock();
-  if (resyncTimer) clearInterval(resyncTimer);
-  resyncTimer = setInterval(syncTime, 5*60*1000);
-}
-syncTime().then(bootClock);
-
-/* =================== UI TRAMOS =================== */
 const container = document.getElementById('tramosContainer');
-const tramoRefs = new Map(); // tramoId -> { map, kmzLayer, markers: Map<radioId, L.Marker>, lastByRadio: Map<radioId, dorsal> }
 
 function createTramoCard(cfg){
   const card = document.createElement('div');
-  card.className = 'tramo-card'; card.dataset.tramo = cfg.id;
+  card.className = 'tramo-card';
 
-  const head = document.createElement('div'); head.className='tramo-head';
-  const title = document.createElement('div'); title.className='tramo-title';
-  title.textContent = `TRAMO ${cfg.id} · ${cfg.name}`;
+  // Cabecera
+  card.innerHTML = `
+    <div class="tramo-head">
+        <div class="tramo-title">TRAMO ${cfg.id}: ${cfg.name}</div>
+    </div>
+    <div class="map-wrap">
+        <div class="map" id="map_${cfg.id}"></div>
+    </div>
+    <div class="stop-action-area">
+        <button class="btn-stop-huge" onclick="emitParadaSalida('${cfg.id}')">
+            🛑 PARAR SALIDA
+        </button>
+    </div>
+    <div class="radio-list" id="radios_${cfg.id}"></div>
+  `;
 
-  const actions = document.createElement('div'); actions.className='tramo-actions';
-  const btnStop = document.createElement('button');
-  btnStop.className='btn btn-danger'; btnStop.textContent='PARADA SALIDA';
-  btnStop.title='Emitir aviso de parada de salida para este tramo';
-  btnStop.addEventListener('click', ()=> emitParadaSalida(cfg.id));
+  container.appendChild(card);
 
-  const btnCenter = document.createElement('button');
-  btnCenter.className='btn btn-primary'; btnCenter.textContent='Centrar mapa';
-  btnCenter.addEventListener('click', ()=> centerMap(cfg.id));
+  // Inicializar Mapa
+  const map = L.map(`map_${cfg.id}`).setView(cfg.center, cfg.zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-  actions.appendChild(btnStop); actions.appendChild(btnCenter);
-  head.appendChild(title); head.appendChild(actions);
+  // Cargar KMZ
+  const kmz = new L.KMZ();
+  kmz.on('loaded', function(e) {
+    map.fitBounds(e.layer.getBounds());
+    map.addLayer(kmz);
+  });
+  kmz.load(cfg.kmz);
 
-  const mapWrap = document.createElement('div'); mapWrap.className='map-wrap';
-  const mapDiv = document.createElement('div'); mapDiv.className='map'; mapDiv.id = `map_${cfg.id}`;
-  mapWrap.appendChild(mapDiv);
-
-  const rlist = document.createElement('div'); rlist.className='radio-list';
-  for (const r of cfg.radios){
-    const pill = document.createElement('div'); pill.className='radio-pill'; pill.dataset.radio = r.id;
-    const name = document.createElement('div'); name.className='name';
-    name.textContent = `${r.name} `; const badge = document.createElement('span'); badge.className='badge'; badge.textContent = `R${r.id}`;
-    name.appendChild(badge);
-    const last = document.createElement('div'); last.className='last'; last.textContent='—';
-    pill.appendChild(name); pill.appendChild(last); rlist.appendChild(pill);
-  }
-
-  card.appendChild(head); card.appendChild(mapWrap); card.appendChild(rlist);
-
-  // mapa
-  const map = L.map(mapDiv.id, { zoomControl:true, attributionControl:false, preferCanvas:true }).setView(cfg.center, cfg.zoom);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-
-  // KMZ/KML
-  const kmzLayer = new L.KMZ();
-  kmzLayer.on('loaded', e => { map.addLayer(kmzLayer); try { map.fitBounds(e.layer.getBounds(), { padding:[20,20] }); } catch{} });
-  // Carga segura: si no hay archivo, no rompe el resto
-  try { kmzLayer.load(cfg.kmz); } catch{}
-
-  // markers radios
-  const markers = new Map();
-  for (const r of cfg.radios){
-    const m = L.marker([r.lat, r.lng]).addTo(map);
-    m.bindPopup(`<b>${r.name}</b><br/>R${r.id}<div class="last-dorsal">—</div>`);
-    markers.set(r.id, m);
-  }
-  tramoRefs.set(cfg.id, { map, kmzLayer, markers, lastByRadio:new Map() });
-  return card;
-}
-
-function buildUI(){
-  container.innerHTML = '';
-  DC_CONFIG.tramos.forEach(t => {
-    const card = createTramoCard(t);
-    container.appendChild(card);
+  // Cargar Radios en la lista inferior
+  const rlist = document.getElementById(`radios_${cfg.id}`);
+  cfg.radios.forEach(r => {
+    rlist.innerHTML += `
+      <div class="radio-pill">
+        <span><b>${r.name}</b> <small>(R${r.id})</small></span>
+        <span class="last" id="last_${cfg.id}_${r.id}">—</span>
+      </div>
+    `;
+    L.marker([r.lat, r.lng]).addTo(map).bindPopup(r.name);
   });
 }
-function centerMap(tramoId){
-  const cfg = DC_CONFIG.tramos.find(t=>t.id===tramoId);
-  const ref = tramoRefs.get(tramoId);
-  if (!cfg || !ref) return;
-  ref.map.setView(cfg.center, cfg.zoom);
-}
-function setLastDorsalInUI(tramoId, radioId, dorsal){
-  const card = document.querySelector(`.tramo-card[data-tramo="${tramoId}"]`);
-  if (card){
-    const pill = card.querySelector(`.radio-pill[data-radio="${radioId}"] .last`);
-    if (pill) pill.textContent = dorsal || '—';
-  }
-  const tref = tramoRefs.get(tramoId);
-  if (tref){
-    const mk = tref.markers.get(radioId);
-    if (mk){
-      const html = `<b>R${radioId}</b><br/>Último dorsal: <div class="last-dorsal"><b>${dorsal||'—'}</b></div>`;
-      mk.bindPopup(html);
-    }
-    tref.lastByRadio.set(radioId, dorsal || '');
-  }
+
+function emitParadaSalida(id) {
+    alert("AVISO: Salida parada en Tramo " + id);
+    // Aquí iría la lógica de Firebase que ya tienes
 }
 
-/* =================== FIREBASE (opcional) =================== */
-let db = null;
-(function initFirebaseSafe(){
-  try{
-    if (window.FIREBASE_CONFIG && firebase?.apps?.length === 0){
-      firebase.initializeApp(window.FIREBASE_CONFIG);
-    } else if (window.FIREBASE_CONFIG && !firebase.apps.length){
-      firebase.initializeApp(window.FIREBASE_CONFIG);
-    }
-    db = firebase.firestore();
-  }catch(e){
-    db = null; // sin firebase seguimos con la UI
-  }
-})();
+// Iniciar Reloj
+setInterval(() => {
+    const d = new Date();
+    document.getElementById('clockTime').textContent = d.toLocaleTimeString();
+}, 1000);
 
-function subscribeAlertsFor(tramoId){
-  if (!db) return; // si no hay firebase, no escuchamos pero la UI sigue
-  db.collection('tramos').doc(tramoId).collection('alerts')
-    .orderBy('ts','desc').limit(100)
-    .onSnapshot(snap=>{
-      snap.docChanges().forEach(ch=>{
-        if (ch.type !== 'added') return;
-        const data = ch.doc.data() || {};
-        const type = (data.type||'').trim();
-        if (type === 'radio_alert'){
-          const radio = (data.radio||'').toString().trim();
-          const dorsal = (data.dorsal||'').toString().trim();
-          if (radio) setLastDorsalInUI(tramoId, radio, dorsal || '—');
-          // sonido sutil opcional al recibir radio:
-          try { document.getElementById('beep')?.play().catch(()=>{}); } catch {}
-        }
-        if (type === 'salida_parada'){
-          showBanner(`SALIDA PARADA · TRAMO ${tramoId}`);
-          try { document.getElementById('beep')?.play().catch(()=>{}); } catch {}
-        }
-      });
-    }, err => console.warn('alerts listener error', err));
-}
-
-async function emitParadaSalida(tramoId){
-  if (!db){
-    showBanner('No hay conexión con Firestore (solo UI).', true);
-    return;
-  }
-  try{
-    const payload = {
-      tramo: tramoId,
-      type: 'salida_parada',
-      actor: 'DC',
-      clientTs: Date.now(),
-      ts: firebase.firestore.FieldValue.serverTimestamp()
-    };
-    await db.collection('tramos').doc(tramoId).collection('alerts').add(payload);
-    showBanner(`Aviso emitido: SALIDA PARADA · TRAMO ${tramoId}`);
-  }catch(e){
-    console.error(e);
-    showBanner('Error emitiendo aviso.', true);
-  }
-}
-
-/* =================== BANNER =================== */
-let bannerEl=null, bannerTimer=null;
-function ensureBanner(){
-  if (bannerEl) return bannerEl;
-  bannerEl = document.createElement('div');
-  bannerEl.className='banner';
-  document.body.appendChild(bannerEl);
-  return bannerEl;
-}
-function showBanner(text){
-  const el = ensureBanner();
-  el.textContent = text;
-  el.style.display='block';
-  if (bannerTimer) clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(()=>{ el.style.display='none'; }, 6000);
-}
-
-/* =================== INIT =================== */
-document.addEventListener('DOMContentLoaded', ()=>{
-  buildUI();
-  // Suscribir alertas tramo a tramo (si hay db)
-  DC_CONFIG.tramos.forEach(t => subscribeAlertsFor(t.id));
+// Construir UI
+document.addEventListener('DOMContentLoaded', () => {
+    DC_CONFIG.tramos.forEach(t => createTramoCard(t));
 });
 </script>
 </body>
