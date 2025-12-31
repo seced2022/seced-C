@@ -7,18 +7,17 @@
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://unpkg.com/leaflet-kmz@1.0.11/dist/leaflet-kmz.js"></script>
+<script src="https://unpkg.com/leaflet-kmz@latest/dist/leaflet-kmz.js"></script>
 
 <style>
 :root{ --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; }
 body{ margin:0; background:var(--bg); color:var(--text); font-family:sans-serif; }
 .topbar{ padding:15px; border-bottom:1px solid var(--border); background:#0c1913; display:flex; justify-content:space-between; align-items:center; }
 .content{ padding:20px; display:grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap:20px; }
-.tramo-card{ background:var(--card); border:1px solid var(--border); border-radius:15px; overflow:hidden; }
-.tramo-title{ padding:15px; font-weight:bold; font-size:1.2em; border-bottom:1px solid var(--border); }
-.map-wrap{ height:400px; width:100%; background:#000; }
-.stop-area{ padding:15px; background:#121212; }
+.tramo-card{ background:var(--card); border:1px solid var(--border); border-radius:15px; overflow:hidden; margin-bottom:10px;}
+.tramo-title{ padding:15px; font-weight:bold; font-size:1.2em; border-bottom:1px solid var(--border); background:#111e17; }
+.map-wrap{ height:450px; width:100%; background:#000; }
+.stop-area{ padding:15px; background:#0c1913; }
 .btn-stop{ width:100%; padding:20px; background:var(--danger); color:white; border:none; border-radius:10px; font-size:1.3em; font-weight:bold; cursor:pointer; text-transform:uppercase; box-shadow:0 5px 0 #7f1d1d; }
 .btn-stop:active{ transform:translateY(3px); box-shadow:0 2px 0 #7f1d1d; }
 </style>
@@ -27,56 +26,62 @@ body{ margin:0; background:var(--bg); color:var(--text); font-family:sans-serif;
 
 <header class="topbar">
     <h1>SECeD - DIRECTOR DE CARRERA</h1>
-    <div id="reloj" style="font-size:1.5em; font-weight:bold;">00:00:00</div>
+    <div id="reloj" style="font-size:1.5em; font-weight:bold; color:#17a34a;">00:00:00</div>
 </header>
 
 <main class="content" id="tramosContainer"></main>
 
 <script>
-const REPO_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
+// URL BASE DEL REPOSITORIO
+const BASE_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
 
 const TRAMOS = [
     { id: '1', name: 'TRAMO A: EL VISO', file: 'tcAElViso.kmz' },
     { id: '2', name: 'TRAMO B: PEDROCHE', file: 'tcBPedroche.kmz' }
 ];
 
-function crearTramo(cfg) {
+function inicializarMapa(cfg) {
     const container = document.getElementById('tramosContainer');
-    const html = `
-        <div class="tramo-card">
-            <div class="tramo-title">${cfg.name}</div>
-            <div class="map-wrap" id="map_${cfg.id}"></div>
-            <div class="stop-area">
-                <button class="btn-stop" onclick="alert('PARADA ENVIADA AL TRAMO ${cfg.id}')">
-                   🛑 PARAR SALIDA
-                </button>
-            </div>
+    
+    // Crear el HTML de la card
+    const card = document.createElement('div');
+    card.className = 'tramo-card';
+    card.innerHTML = `
+        <div class="tramo-title">${cfg.name}</div>
+        <div class="map-wrap" id="map_${cfg.id}"></div>
+        <div class="stop-area">
+            <button class="btn-stop" onclick="alert('AVISO ENVIADO: PARADA SALIDA ${cfg.name}')">
+               🛑 PARAR SALIDA
+            </button>
         </div>
     `;
-    container.innerHTML += html;
+    container.appendChild(card);
 
-    // Retrasamos un poco la carga del mapa para asegurar que el HTML existe
-    setTimeout(() => {
-        const map = L.map(`map_${cfg.id}`).setView([40, -3], 6);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    // Configuración del Mapa
+    const map = L.map(`map_${cfg.id}`, {
+        preferCanvas: true
+    }).setView([40, -3], 5);
 
-        // Control de KMZ
-        const kmz = L.kmzLayer().addTo(map);
-        const urlFinal = REPO_URL + cfg.file;
-        
-        kmz.on('load', function(e) {
-            console.log("Cargado:", cfg.file);
-            map.fitBounds(e.layer.getBounds()); // Centra el mapa en el track automáticamente
-        });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+    }).addTo(map);
 
-        kmz.load(urlFinal);
-    }, 100);
+    // Configuración de la capa KMZ
+    const kmzControl = L.kmzLayer().addTo(map);
+
+    kmzControl.on('load', function(e) {
+        console.log("Track cargado: " + cfg.file);
+        map.fitBounds(e.layer.getBounds(), { padding: [20, 20] });
+    });
+
+    // Cargamos el archivo usando la URL que confirmamos que funciona
+    kmzControl.load(BASE_URL + cfg.file);
 }
 
-// Iniciar todo
-TRAMOS.forEach(t => crearTramo(t));
+// Arrancar todos los tramos
+TRAMOS.forEach(t => inicializarMapa(t));
 
-// Reloj simple
+// Reloj en tiempo real
 setInterval(() => {
     document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
 }, 1000);
