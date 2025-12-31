@@ -3,11 +3,13 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SECeD · DC</title>
+    <title>SECeD · DC Directo</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-plugins/3.4.0/layer/vector/KML.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://unpkg.com/leaflet-kmz@1.0.11/dist/leaflet-kmz.js"></script>
 
     <style>
         :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; }
@@ -15,14 +17,12 @@
         
         .topbar { padding:15px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
         
-        /* DISEÑO EN LÍNEA: Flexbox para poner uno al lado del otro */
+        /* CONTENEDOR PARA DOS COLUMNAS */
         .content { 
-            padding:20px; 
-            display: flex; 
-            flex-direction: row; 
-            flex-wrap: wrap; 
-            gap: 20px; 
-            justify-content: center;
+            padding:15px; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; /* Crea dos columnas iguales */
+            gap: 15px; 
         }
 
         .tramo-card { 
@@ -30,77 +30,71 @@
             border:1px solid var(--border); 
             border-radius:10px; 
             overflow:hidden; 
-            width: 48%; /* Casi la mitad para que quepan dos por línea */
-            min-width: 400px; /* Para que en móvil se pongan uno abajo del otro */
+            display: flex;
+            flex-direction: column;
         }
 
-        .map-wrap { height:400px; background:#000; width:100%; }
+        .map-wrap { height:450px; background:#000; width:100%; }
         
         .btn-stop { 
-            width:100%; padding:20px; background:var(--danger); color:white; border:none; 
-            font-size:1.5rem; font-weight:bold; cursor:pointer; text-transform:uppercase;
+            width:100%; padding:25px; background:var(--danger); color:white; border:none; 
+            font-size:1.6rem; font-weight:bold; cursor:pointer; text-transform:uppercase;
+            border-top: 1px solid var(--border);
         }
-        .btn-stop:hover { background: #961616; }
 
-        @media (max-width: 900px) {
-            .tramo-card { width: 100%; }
+        /* Si la pantalla es pequeña (móvil), se pone uno abajo del otro */
+        @media (max-width: 800px) {
+            .content { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
 <header class="topbar">
-    <h1 style="margin:0; font-size:1.2rem; font-weight: 900;">DIRECTOR DE CARRERA</h1>
-    <div id="relojActual" style="font-size:1.8rem; font-weight:900; color:#17a34a;">00:00:00</div>
+    <h1 style="margin:0; font-size:1.1rem;">SECeD - DIRECTOR DE CARRERA</h1>
+    <div id="reloj" style="font-size:1.8rem; font-weight:bold; color:#17a34a;">00:00:00</div>
 </header>
 
 <main class="content" id="contenedor"></main>
 
 <script>
     // 1. Reloj
-    function actualizarReloj() {
-        document.getElementById('relojActual').innerText = new Date().toLocaleTimeString();
-    }
-    setInterval(actualizarReloj, 1000);
-    actualizarReloj();
+    setInterval(() => {
+        document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
+    }, 1000);
 
-    // 2. Configuración (Asegúrate de haber subido los archivos .kml)
+    // 2. Configuración (Ruta directa a tus archivos KMZ en GitHub)
     const BASE_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
     const TRAMOS = [
-        { id: '1', nombre: 'TRAMO A: EL VISO', archivo: 'tcAElViso.kml' },
-        { id: '2', nombre: 'TRAMO B: PEDROCHE', archivo: 'tcBPedroche.kml' }
+        { id: '1', nombre: 'TRAMO A: EL VISO', archivo: 'tcAElViso.kmz' },
+        { id: '2', nombre: 'TRAMO B: PEDROCHE', archivo: 'tcBPedroche.kmz' }
     ];
 
-    // 3. Función de carga
+    // 3. Crear Mapas
     TRAMOS.forEach(tramo => {
         const card = document.createElement('div');
         card.className = 'tramo-card';
         card.innerHTML = `
-            <div style="padding:15px; font-weight:bold; background:#111e17;">${tramo.nombre}</div>
+            <div style="padding:10px; font-weight:bold; background:#111e17;">${tramo.nombre}</div>
             <div id="mapa_${tramo.id}" class="map-wrap"></div>
             <button class="btn-stop" onclick="alert('PARADA ENVIADA AL ${tramo.nombre}')">🛑 PARAR SALIDA</button>
         `;
         document.getElementById('contenedor').appendChild(card);
 
+        // Inicializar Leaflet
         const map = L.map(`mapa_${tramo.id}`).setView([40, -3], 5);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // Cargar KML
-        fetch(BASE_URL + tramo.archivo)
-            .then(res => res.text())
-            .then(kmlText => {
-                const parser = new DOMParser();
-                const kml = parser.parseFromString(kmlText, 'text/xml');
-                const track = new L.KML(kml);
-                map.addLayer(track);
-                
-                // Ajustar vista al track
-                const bounds = track.getBounds();
-                if (bounds.isValid()) {
-                    map.fitBounds(bounds);
-                }
-            })
-            .catch(err => console.error("Error cargando KML:", tramo.archivo));
+        // Cargar KMZ usando JSZip para descompresión
+        const kmzLayer = L.kmzLayer().addTo(map);
+        
+        kmzLayer.on('load', function(e) {
+            console.log("Track cargado:", tramo.archivo);
+            map.fitBounds(e.layer.getBounds(), { padding: [20, 20] });
+        });
+
+        // Cargamos con un parámetro aleatorio para evitar que el navegador use una versión vieja del archivo
+        kmzLayer.load(BASE_URL + tramo.archivo + "?v=" + Math.random());
     });
 </script>
 </body>
