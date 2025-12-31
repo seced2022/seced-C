@@ -1,90 +1,110 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>SECeD · DC Directo</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SECeD · Director de Carrera</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-kmz@latest/dist/leaflet-kmz.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-kmz@1.0.11/dist/leaflet-kmz.js"></script>
 
-<style>
-:root{ --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; }
-body{ margin:0; background:var(--bg); color:var(--text); font-family:sans-serif; }
-.topbar{ padding:15px; border-bottom:1px solid var(--border); background:#0c1913; display:flex; justify-content:space-between; align-items:center; }
-.content{ padding:20px; display:grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap:20px; }
-.tramo-card{ background:var(--card); border:1px solid var(--border); border-radius:15px; overflow:hidden; margin-bottom:10px;}
-.tramo-title{ padding:15px; font-weight:bold; font-size:1.2em; border-bottom:1px solid var(--border); background:#111e17; }
-.map-wrap{ height:450px; width:100%; background:#000; }
-.stop-area{ padding:15px; background:#0c1913; }
-.btn-stop{ width:100%; padding:20px; background:var(--danger); color:white; border:none; border-radius:10px; font-size:1.3em; font-weight:bold; cursor:pointer; text-transform:uppercase; box-shadow:0 5px 0 #7f1d1d; }
-.btn-stop:active{ transform:translateY(3px); box-shadow:0 2px 0 #7f1d1d; }
-</style>
+    <style>
+        :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
+        body { margin:0; padding:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
+        
+        .topbar { padding:15px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+        .topbar h1 { margin:0; font-size:1.2rem; letter-spacing:1px; }
+        #clock { font-size:1.5rem; font-weight:900; color:var(--accent); }
+
+        .content { padding:20px; display:grid; grid-template-columns: repeat(auto-fill, minmax(450px, 1fr)); gap:25px; }
+        
+        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; display:flex; flex-direction:column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .tramo-header { padding:15px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); font-weight:bold; }
+        
+        .map-container { height:400px; width:100%; background:#000; position:relative; }
+        
+        .action-bar { padding:20px; background:#080e0a; border-top:1px solid var(--border); }
+        .btn-stop { 
+            width:100%; padding:18px; background:var(--danger); color:white; border:none; border-radius:8px; 
+            font-size:1.4rem; font-weight:bold; cursor:pointer; text-transform:uppercase;
+            transition: all 0.2s; box-shadow: 0 4px 0 #731111;
+        }
+        .btn-stop:active { transform: translateY(3px); box-shadow: 0 1px 0 #731111; }
+        
+        /* Estilo para los avisos en el mapa */
+        .map-error { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(0,0,0,0.8); padding:10px; border-radius:5px; color:var(--danger); z-index:1000; text-align:center; display:none; }
+    </style>
 </head>
 <body>
 
 <header class="topbar">
-    <h1>SECeD - DIRECTOR DE CARRERA</h1>
-    <div id="reloj" style="font-size:1.5em; font-weight:bold; color:#17a34a;">00:00:00</div>
+    <h1>SECeD · DIRECTOR DE CARRERA</h1>
+    <div id="clock">00:00:00</div>
 </header>
 
 <main class="content" id="tramosContainer"></main>
 
 <script>
-// URL BASE DEL REPOSITORIO
-const BASE_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
+    // URL exacta donde confirmaste que se descargan los archivos
+    const BASE_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
 
-const TRAMOS = [
-    { id: '1', name: 'TRAMO A: EL VISO', file: 'tcAElViso.kmz' },
-    { id: '2', name: 'TRAMO B: PEDROCHE', file: 'tcBPedroche.kmz' }
-];
+    const TRAMOS_DATA = [
+        { id: 'A', name: 'TRAMO A: EL VISO', file: 'tcAElViso.kmz' },
+        { id: 'B', name: 'TRAMO B: PEDROCHE', file: 'tcBPedroche.kmz' }
+    ];
 
-function inicializarMapa(cfg) {
-    const container = document.getElementById('tramosContainer');
-    
-    // Crear el HTML de la card
-    const card = document.createElement('div');
-    card.className = 'tramo-card';
-    card.innerHTML = `
-        <div class="tramo-title">${cfg.name}</div>
-        <div class="map-wrap" id="map_${cfg.id}"></div>
-        <div class="stop-area">
-            <button class="btn-stop" onclick="alert('AVISO ENVIADO: PARADA SALIDA ${cfg.name}')">
-               🛑 PARAR SALIDA
-            </button>
-        </div>
-    `;
-    container.appendChild(card);
+    function createTramo(cfg) {
+        const container = document.getElementById('tramosContainer');
+        
+        // Estructura HTML
+        const card = document.createElement('div');
+        card.className = 'tramo-card';
+        card.innerHTML = `
+            <div class="tramo-header">${cfg.name}</div>
+            <div class="map-container">
+                <div id="map_${cfg.id}" style="height:100%; width:100%;"></div>
+                <div id="error_${cfg.id}" class="map-error">Error al cargar track</div>
+            </div>
+            <div class="action-bar">
+                <button class="btn-stop" onclick="alert('PARADA ENVIADA: ${cfg.name}')">🛑 PARAR SALIDA</button>
+            </div>
+        `;
+        container.appendChild(card);
 
-    // Configuración del Mapa
-    const map = L.map(`map_${cfg.id}`, {
-        preferCanvas: true
-    }).setView([40, -3], 5);
+        // Inicializar Mapa Leaflet
+        const map = L.map(`map_${cfg.id}`).setView([40.41, -3.70], 6);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-    }).addTo(map);
+        // Capa KMZ con controlador de errores
+        const kmz = L.kmzLayer().addTo(map);
 
-    // Configuración de la capa KMZ
-    const kmzControl = L.kmzLayer().addTo(map);
+        kmz.on('load', function(e) {
+            console.log("Cargado correctamente:", cfg.file);
+            map.fitBounds(e.layer.getBounds(), { padding: [30, 30] });
+        });
 
-    kmzControl.on('load', function(e) {
-        console.log("Track cargado: " + cfg.file);
-        map.fitBounds(e.layer.getBounds(), { padding: [20, 20] });
-    });
+        kmz.on('error', function(e) {
+            console.error("Error en KMZ:", cfg.file);
+            document.getElementById(`error_${cfg.id}`).style.display = 'block';
+            document.getElementById(`error_${cfg.id}`).innerText = "No se pudo leer el archivo .kmz";
+        });
 
-    // Cargamos el archivo usando la URL que confirmamos que funciona
-    kmzControl.load(BASE_URL + cfg.file);
-}
+        // Intentar cargar
+        const finalUrl = BASE_URL + cfg.file;
+        kmz.load(finalUrl);
+    }
 
-// Arrancar todos los tramos
-TRAMOS.forEach(t => inicializarMapa(t));
+    // Ejecutar carga
+    TRAMOS_DATA.forEach(t => createTramo(t));
 
-// Reloj en tiempo real
-setInterval(() => {
-    document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
-}, 1000);
+    // Reloj
+    setInterval(() => {
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString();
+    }, 1000);
 </script>
 
 </body>
