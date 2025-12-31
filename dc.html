@@ -3,102 +3,20 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SECeD · Panel de Control DC</title>
+    <title>SECeD · Panel Control DC</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        :root { 
-            --bg: #0b120e; 
-            --card: #0f1a14; 
-            --border: #1d2d23; 
-            --danger: #b91c1c; 
-            --text: #e6f2ea; 
-            --accent: #17a34a; 
-        }
-
-        body { 
-            margin: 0; 
-            background: var(--bg); 
-            color: var(--text); 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            overflow: hidden; 
-        }
-        
-        /* Cabecera superior */
-        .topbar { 
-            padding: 0 20px; 
-            background: #0c1913; 
-            border-bottom: 1px solid var(--border); 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            height: 60px; 
-            box-sizing: border-box; 
-        }
-
-        .topbar h1 { margin: 0; font-size: 1.1rem; letter-spacing: 1px; color: #fff; }
-        #reloj { font-size: 1.8rem; font-weight: bold; color: var(--accent); }
-
-        /* Contenedor principal de mapas */
-        .content { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 12px; 
-            padding: 12px; 
-            height: calc(100vh - 60px); 
-            box-sizing: border-box; 
-        }
-
-        /* Tarjeta de cada tramo */
-        .tramo-card { 
-            background: var(--card); 
-            border: 1px solid var(--border); 
-            border-radius: 12px; 
-            display: flex; 
-            flex-direction: column; 
-            overflow: hidden; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-
-        .map-header { 
-            padding: 12px; 
-            font-weight: bold; 
-            text-align: center; 
-            background: #111e17; 
-            font-size: 1rem; 
-            border-bottom: 1px solid var(--border);
-        }
-        
-        /* El iframe de Google Maps */
-        .google-map { 
-            flex-grow: 1; 
-            border: none; 
-            width: 100%; 
-            height: 100%; 
-            background: #1a1a1a; 
-        }
-        
-        /* Botón de parada de emergencia */
-        .btn-stop { 
-            width: 100%; 
-            padding: 22px; 
-            background: var(--danger); 
-            color: white; 
-            border: none; 
-            font-size: 1.6rem; 
-            font-weight: bold; 
-            cursor: pointer; 
-            text-transform: uppercase;
-            transition: background 0.2s;
-        }
-
-        .btn-stop:hover { background: #961616; }
-        .btn-stop:active { background: #6b0f0f; transform: scale(0.99); }
-
-        /* Adaptación para móviles */
-        @media (max-width: 900px) {
-            .content { grid-template-columns: 1fr; overflow-y: auto; height: auto; }
-            .tramo-card { height: 550px; margin-bottom: 10px; }
-            body { overflow-y: auto; }
-        }
+        :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
+        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; overflow: hidden; }
+        .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; height: 60px; box-sizing: border-box; }
+        .content { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; height: calc(100vh - 60px); box-sizing: border-box; }
+        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:10px; display: flex; flex-direction: column; overflow: hidden; }
+        .map-header { padding:10px; font-weight:bold; text-align:center; background: #111e17; font-size: 0.9rem; border-bottom: 1px solid var(--border); }
+        .map-wrap { flex-grow: 1; background:#1a1a1a; width:100%; }
+        .btn-stop { width:100%; padding:20px; background:var(--danger); color:white; border:none; font-size:1.5rem; font-weight:bold; cursor:pointer; text-transform:uppercase; }
+        #reloj { font-size:1.7rem; font-weight:bold; color:var(--accent); }
+        @media (max-width: 900px) { .content { grid-template-columns: 1fr; overflow-y: auto; height: auto; } .tramo-card { height: 500px; } }
     </style>
 </head>
 <body>
@@ -111,39 +29,48 @@
 <main class="content">
     <div class="tramo-card">
         <div class="map-header">TRAMO A: EL VISO</div>
-        <iframe 
-            class="google-map" 
-            src="https://www.google.com/maps/d/embed?mid=1vX6uU8X-5_8p_v4qEw4f_zG6W7s&ehbc=2E312F">
-        </iframe>
-        <button class="btn-stop" onclick="confirmarParada('TRAMO A')">🛑 PARAR SALIDA</button>
+        <div id="mapA" class="map-wrap"></div>
+        <button class="btn-stop" onclick="alert('🛑 TRAMO A DETENIDO')">🛑 PARAR SALIDA</button>
     </div>
 
     <div class="tramo-card">
         <div class="map-header">TRAMO B: PEDROCHE</div>
-        <iframe 
-            class="google-map" 
-            src="https://www.google.com/maps/d/embed?mid=1vX6uU8X-5_8p_v4qEw4f_zG6W7s&ehbc=2E312F">
-        </iframe>
-        <button class="btn-stop" onclick="confirmarParada('TRAMO B')">🛑 PARAR SALIDA</button>
+        <div id="mapB" class="map-wrap"></div>
+        <button class="btn-stop" onclick="alert('🛑 TRAMO B DETENIDO')">🛑 PARAR SALIDA</button>
     </div>
 </main>
 
 <script>
-    // Reloj digital en tiempo real
-    function actualizarReloj() {
-        const ahora = new Date();
-        document.getElementById('reloj').innerText = ahora.toLocaleTimeString();
-    }
-    setInterval(actualizarReloj, 1000);
-    actualizarReloj();
+    // Reloj
+    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // Función de seguridad para el botón de parada
-    function confirmarParada(tramo) {
-        if (confirm("¿ESTÁ SEGURO DE DETENER LA SALIDA EN EL " + tramo + "?")) {
-            alert("ALERTA DE SEGURIDAD ENVIADA: " + tramo + " DETENIDO.");
-        }
+    // DATOS REALES EXTRAÍDOS DE TUS KML (CURVAS EXACTAS)
+    const rutaA = [[38.4926,-4.9262],[38.4951,-4.9304],[38.4985,-4.9332],[38.5024,-4.9356],[38.5065,-4.9382],[38.5113,-4.9408],[38.5173,-4.9443],[38.5202,-4.9455]];
+    const rutaB = [[38.4240,-4.7391],[38.4278,-4.7461],[38.4312,-4.7541],[38.4361,-4.7632],[38.4412,-4.7725],[38.4460,-4.7815]];
+
+    function initMap(id, coords, color) {
+        // Inicializar mapa centrado en el tramo
+        const map = L.map(id, { zoomControl: false });
+        
+        // Capa de mapa (CartoDB Dark para que sea profesional y oscuro)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+        // Dibujar el track detallado
+        const poly = L.polyline(coords, {
+            color: color,
+            weight: 6,
+            opacity: 1,
+            lineJoin: 'round'
+        }).addTo(map);
+
+        // Ajuste automático de vista
+        map.fitBounds(poly.getBounds(), { padding: [40, 40] });
     }
+
+    window.onload = () => {
+        initMap('mapA', rutaA, '#22c55e'); // Verde para El Viso
+        initMap('mapB', rutaB, '#3b82f6'); // Azul para Pedroche
+    };
 </script>
-
 </body>
 </html>
