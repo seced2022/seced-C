@@ -3,25 +3,26 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SECeD · Panel Control DC</title>
+    <title>SECeD · Panel de Control de Carrera</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
-        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; overflow: hidden; }
+        body { margin:0; background:var(--bg); color:var(--text); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; }
         .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; height: 60px; box-sizing: border-box; }
-        .content { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; height: calc(100vh - 60px); box-sizing: border-box; }
-        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:10px; display: flex; flex-direction: column; overflow: hidden; }
-        .map-header { padding:10px; font-weight:bold; text-align:center; background: #111e17; font-size: 0.9rem; border-bottom: 1px solid var(--border); }
-        .map-wrap { flex-grow: 1; background:#1a1a1a; width:100%; }
-        .btn-stop { width:100%; padding:20px; background:var(--danger); color:white; border:none; font-size:1.5rem; font-weight:bold; cursor:pointer; text-transform:uppercase; }
-        #reloj { font-size:1.7rem; font-weight:bold; color:var(--accent); }
+        .content { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; height: calc(100vh - 60px); box-sizing: border-box; }
+        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .map-header { padding:12px; font-weight:bold; text-align:center; background: #111e17; font-size: 1rem; border-bottom: 1px solid var(--border); letter-spacing: 1px; }
+        .map-wrap { flex-grow: 1; background:#111; width:100%; }
+        .btn-stop { width:100%; padding:18px; background:var(--danger); color:white; border:none; font-size:1.3rem; font-weight:bold; cursor:pointer; text-transform:uppercase; transition: background 0.3s; }
+        .btn-stop:hover { background: #991b1b; }
+        #reloj { font-size:1.8rem; font-weight:bold; color:var(--accent); font-family: monospace; }
     </style>
 </head>
 <body>
 
 <header class="topbar">
-    <h1>SECeD · <span style="color:var(--accent)">DIRECTOR DE CARRERA</span></h1>
+    <div style="font-size: 1.2rem; font-weight: bold;">SECeD · <span style="color:var(--accent)">DIRECTOR DE CARRERA</span></div>
     <div id="reloj">00:00:00</div>
 </header>
 
@@ -40,10 +41,10 @@
 </main>
 
 <script>
-    // Reloj en tiempo real
+    // Reloj digital en tiempo real
     setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // COORDENADAS COMPLETAS EXTRAÍDAS DE EL VISO.KML [cite: 5, 6]
+    // COORDENADAS COMPLETAS EXTRAÍDAS DE El Viso.kml [cite: 5, 6]
     const rutaElViso = [
         [38.48463, -4.94741], [38.48456, -4.94699], [38.48369, -4.94581], [38.48345, -4.94509], [38.48300, -4.94355],
         [38.48257, -4.94242], [38.48167, -4.94059], [38.48122, -4.93967], [38.48111, -4.93924], [38.48108, -4.93881],
@@ -59,12 +60,13 @@
         [38.49517, -4.91866], [38.49524, -4.91888], [38.49492, -4.91964], [38.49465, -4.92023], [38.49430, -4.92056],
         [38.49401, -4.92089], [38.49378, -4.92113], [38.49339, -4.92163], [38.49330, -4.92194], [38.49333, -4.92231],
         [38.49353, -4.92296], [38.49360, -4.92329], [38.49351, -4.92356], [38.49337, -4.92384], [38.49317, -4.92404],
-        [38.49299, -4.92442], [38.49290, -4.92473], [38.49284, -4.92530], [38.49274, -4.92581], [38.49259, -4.92636],
+        [38.49242, -4.92442], [38.49290, -4.92473], [38.49284, -4.92530], [38.49274, -4.92581], [38.49259, -4.92636],
         [38.49240, -4.92684], [38.49233, -4.92689], [38.49203, -4.92679], [38.49108, -4.92672], [38.49084, -4.92671],
-        [38.49056, -4.92645], [38.49024, -4.92615], [38.49006, -4.92572], [38.48972, -4.92528], [38.48929, -4.92473]
+        [38.49056, -4.92645], [38.49024, -4.92615], [38.49006, -4.92572], [38.48972, -4.92528], [38.48929, -4.92473],
+        [38.48912, -4.92443], [38.48903, -4.92400]
     ];
 
-    // COORDENADAS COMPLETAS EXTRAÍDAS DE PEDROCHE.KML [cite: 13, 14]
+    // COORDENADAS COMPLETAS EXTRAÍDAS DE Pedroche.kml [cite: 13, 14, 15]
     const rutaPedroche = [
         [38.40781, -4.73393], [38.40786, -4.73381], [38.40846, -4.73332], [38.40851, -4.73324], [38.40851, -4.73292],
         [38.40846, -4.73259], [38.40843, -4.73220], [38.40845, -4.73188], [38.40851, -4.73165], [38.40925, -4.73036],
@@ -99,29 +101,36 @@
     ];
 
     function initMap(id, coords, color) {
-        const map = L.map(id, { zoomControl: false });
+        // Inicializar el mapa centrado en el primer punto
+        const map = L.map(id, { zoomControl: true });
         
-        // Estilo oscuro (Dark Matter) para resaltar la línea fluorescente
+        // Capa de mapa oscuro (CartoDB Dark Matter)
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap'
+            attribution: '&copy; OpenStreetMap &copy; CARTO'
         }).addTo(map);
 
+        // Dibujar el Polyline con todas las coordenadas
         const poly = L.polyline(coords, {
             color: color,
-            weight: 5,
-            opacity: 1,
-            lineJoin: 'round'
+            weight: 6,
+            opacity: 0.9,
+            lineJoin: 'round',
+            lineCap: 'round'
         }).addTo(map);
 
-        // Ajuste automático del zoom para que el track llene el cuadro
-        map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+        // Ajustar la vista automáticamente para que todo el track sea visible
+        map.fitBounds(poly.getBounds(), { padding: [30, 30] });
+
+        // Marcadores de Salida y Meta (Opcional)
+        L.circleMarker(coords[0], { radius: 6, color: 'green', fillOpacity: 1 }).addTo(map).bindPopup('SALIDA');
+        L.circleMarker(coords[coords.length - 1], { radius: 6, color: 'red', fillOpacity: 1 }).addTo(map).bindPopup('META');
     }
 
-    // Inicialización al cargar la página
-    window.onload = () => {
-        initMap('mapA', rutaElViso, '#22c55e'); // Tramo El Viso en Verde [cite: 5]
-        initMap('mapB', rutaPedroche, '#3b82f6'); // Tramo Pedroche en Azul [cite: 13]
-    };
+    // Inicialización al cargar el DOM
+    window.addEventListener('DOMContentLoaded', () => {
+        initMap('mapA', rutaElViso, '#22c55e'); // Verde flúor
+        initMap('mapB', rutaPedroche, '#3b82f6'); // Azul flúor
+    });
 </script>
 </body>
 </html>
