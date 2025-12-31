@@ -3,202 +3,84 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>SECeD · DC (Director de Carrera)</title>
+<title>SECeD · DC Directo</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/consbio/Leaflet.KMZ@gh-pages/src/leaflet-kmz.js"></script>
-
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-
-<script src="config.js"></script>
+<script src="https://unpkg.com/leaflet-kmz@1.0.11/dist/leaflet-kmz.js"></script>
 
 <style>
-:root{
-  --bg:#0b120e;
-  --card:#0f1a14;
-  --border:#1d2d23;
-  --accent:#17a34a;   
-  --accent-2:#0f5f2e; 
-  --danger:#b91c1c;   
-  --text:#e6f2ea;
-  --muted:#a6cbb4;
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif}
-
-.topbar{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:12px 16px;border-bottom:1px solid var(--border);background:#0c1913;
-}
-.topbar h1{margin:0;font-size:18px;font-weight:900}
-.clock{display:flex;align-items:center;gap:10px}
-.clock .time{font-size:36px;font-weight:900;line-height:1}
-
-.content{padding:16px}
-.tramos{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:16px}
-
-.tramo-card{
-  background:var(--card);border:1px solid var(--border);border-radius:14px;
-  overflow:hidden;display:flex;flex-direction:column;
-  box-shadow:0 10px 24px rgba(0,0,0,.25);
-  margin-bottom: 20px;
-}
-.tramo-head{display:flex;align-items:center;justify-content:space-between;padding:12px;border-bottom:1px solid var(--border)}
-.tramo-title{font-weight:900; font-size: 1.2rem}
-
-.map-wrap{height:350px; position: relative;}
-.map{height:100%;width:100%}
-
-/* BOTÓN DE PARAR ABAJO DEL MAPA */
-.stop-action-area {
-  padding: 15px;
-  background: #1a1a1a;
-  display: flex;
-  justify-content: center;
-  border-top: 2px solid var(--border);
-}
-
-.btn-stop-huge {
-  width: 100%;
-  padding: 15px;
-  background: var(--danger);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 1.2rem;
-  font-weight: bold;
-  cursor: pointer;
-  text-transform: uppercase;
-  box-shadow: 0 4px 0 #7f1d1d;
-}
-
-.btn-stop-huge:active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 0 #7f1d1d;
-}
-
-.radio-list{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:12px;background:#0b1a13}
-.radio-pill{display:flex;align-items:center;justify-content:space-between;background:#122419;border:1px solid var(--border);border-radius:10px;padding:8px}
-
-.banner{
-  position:fixed;left:50%;top:20px;transform:translateX(-50%);
-  background:var(--danger);color:#fff;padding:15px 25px;border-radius:12px;
-  font-weight:900;display:none;z-index:9999;
-}
+:root{ --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; }
+body{ margin:0; background:var(--bg); color:var(--text); font-family:sans-serif; }
+.topbar{ padding:15px; border-bottom:1px solid var(--border); background:#0c1913; display:flex; justify-content:space-between; align-items:center; }
+.content{ padding:20px; display:grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap:20px; }
+.tramo-card{ background:var(--card); border:1px solid var(--border); border-radius:15px; overflow:hidden; }
+.tramo-title{ padding:15px; font-weight:bold; font-size:1.2em; border-bottom:1px solid var(--border); }
+.map-wrap{ height:400px; width:100%; background:#000; }
+.stop-area{ padding:15px; background:#121212; }
+.btn-stop{ width:100%; padding:20px; background:var(--danger); color:white; border:none; border-radius:10px; font-size:1.3em; font-weight:bold; cursor:pointer; text-transform:uppercase; box-shadow:0 5px 0 #7f1d1d; }
+.btn-stop:active{ transform:translateY(3px); box-shadow:0 2px 0 #7f1d1d; }
 </style>
 </head>
-<body class="dc-skin">
+<body>
 
 <header class="topbar">
-  <h1>Director de Carrera · SECeD</h1>
-  <div class="clock">
-    <div id="clockTime" class="time">00:00:00</div>
-  </div>
+    <h1>SECeD - DIRECTOR DE CARRERA</h1>
+    <div id="reloj" style="font-size:1.5em; font-weight:bold;">00:00:00</div>
 </header>
 
-<main class="content">
-  <section id="tramosContainer" class="tramos"></section>
-</main>
+<main class="content" id="tramosContainer"></main>
 
 <script>
-/* CONFIGURACIÓN DE RUTAS KMZ */
-/* Asegúrate de que los archivos están en la carpeta 'tracks' dentro de 'dc' */
-const DC_CONFIG = {
-  timezone: 'Europe/Madrid',
-  tramos: [
-    {
-      id: '1',
-      name: 'El Viso',
-      kmz: 'tcAElViso.kmz', 
-      center: [40.4169, -3.7033],
-      zoom: 12,
-      radios: [
-        { id: '1', name: 'R1', lat: 40.4201, lng: -3.7059 },
-        { id: '2', name: 'R2', lat: 40.4109, lng: -3.6991 },
-      ],
-    },
-    {
-      id: '2',
-      name: 'Pedroche',
-      kmz: 'tcBPedroche.kmz',
-      center: [40.45, -3.70],
-      zoom: 12,
-      radios: [
-        { id: '1', name: 'R1', lat: 40.46, lng: -3.71 },
-        { id: '3', name: 'R3', lat: 40.44, lng: -3.69 },
-      ],
-    },
-  ],
-};
+const REPO_URL = "https://raw.githubusercontent.com/seced2022/seced-C/main/dc/tracks/";
 
-const container = document.getElementById('tramosContainer');
+const TRAMOS = [
+    { id: '1', name: 'TRAMO A: EL VISO', file: 'tcAElViso.kmz' },
+    { id: '2', name: 'TRAMO B: PEDROCHE', file: 'tcBPedroche.kmz' }
+];
 
-function createTramoCard(cfg){
-  const card = document.createElement('div');
-  card.className = 'tramo-card';
-
-  // Cabecera
-  card.innerHTML = `
-    <div class="tramo-head">
-        <div class="tramo-title">TRAMO ${cfg.id}: ${cfg.name}</div>
-    </div>
-    <div class="map-wrap">
-        <div class="map" id="map_${cfg.id}"></div>
-    </div>
-    <div class="stop-action-area">
-        <button class="btn-stop-huge" onclick="emitParadaSalida('${cfg.id}')">
-            🛑 PARAR SALIDA
-        </button>
-    </div>
-    <div class="radio-list" id="radios_${cfg.id}"></div>
-  `;
-
-  container.appendChild(card);
-
-  // Inicializar Mapa
-  const map = L.map(`map_${cfg.id}`).setView(cfg.center, cfg.zoom);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-  // Cargar KMZ
-  const kmz = new L.KMZ();
-  kmz.on('loaded', function(e) {
-    map.fitBounds(e.layer.getBounds());
-    map.addLayer(kmz);
-  });
-  kmz.load(cfg.kmz);
-
-  // Cargar Radios en la lista inferior
-  const rlist = document.getElementById(`radios_${cfg.id}`);
-  cfg.radios.forEach(r => {
-    rlist.innerHTML += `
-      <div class="radio-pill">
-        <span><b>${r.name}</b> <small>(R${r.id})</small></span>
-        <span class="last" id="last_${cfg.id}_${r.id}">—</span>
-      </div>
+function crearTramo(cfg) {
+    const container = document.getElementById('tramosContainer');
+    const html = `
+        <div class="tramo-card">
+            <div class="tramo-title">${cfg.name}</div>
+            <div class="map-wrap" id="map_${cfg.id}"></div>
+            <div class="stop-area">
+                <button class="btn-stop" onclick="alert('PARADA ENVIADA AL TRAMO ${cfg.id}')">
+                   🛑 PARAR SALIDA
+                </button>
+            </div>
+        </div>
     `;
-    L.marker([r.lat, r.lng]).addTo(map).bindPopup(r.name);
-  });
+    container.innerHTML += html;
+
+    // Retrasamos un poco la carga del mapa para asegurar que el HTML existe
+    setTimeout(() => {
+        const map = L.map(`map_${cfg.id}`).setView([40, -3], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        // Control de KMZ
+        const kmz = L.kmzLayer().addTo(map);
+        const urlFinal = REPO_URL + cfg.file;
+        
+        kmz.on('load', function(e) {
+            console.log("Cargado:", cfg.file);
+            map.fitBounds(e.layer.getBounds()); // Centra el mapa en el track automáticamente
+        });
+
+        kmz.load(urlFinal);
+    }, 100);
 }
 
-function emitParadaSalida(id) {
-    alert("AVISO: Salida parada en Tramo " + id);
-    // Aquí iría la lógica de Firebase que ya tienes
-}
+// Iniciar todo
+TRAMOS.forEach(t => crearTramo(t));
 
-// Iniciar Reloj
+// Reloj simple
 setInterval(() => {
-    const d = new Date();
-    document.getElementById('clockTime').textContent = d.toLocaleTimeString();
+    document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
 }, 1000);
-
-// Construir UI
-document.addEventListener('DOMContentLoaded', () => {
-    DC_CONFIG.tramos.forEach(t => createTramoCard(t));
-});
 </script>
+
 </body>
 </html>
