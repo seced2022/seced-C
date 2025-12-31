@@ -41,40 +41,48 @@
 </main>
 
 <script>
+    // Reloj
     setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // COORDENADAS REALES EXTRAÍDAS DE TUS ARCHIVOS KML
-    // Estas listas contienen los puntos necesarios para dibujar las curvas correctamente.
-    const rutaElViso = [
-        [38.4926, -4.9262], [38.4933, -4.9275], [38.4945, -4.9297], [38.4951, -4.9304], 
-        [38.4965, -4.9315], [38.4984, -4.9332], [38.5002, -4.9348], [38.5024, -4.9356], 
-        [38.5050, -4.9372], [38.5075, -4.9388], [38.5101, -4.9402], [38.5135, -4.9425], 
-        [38.5168, -4.9443], [38.5202, -4.9455]
+    // TRACKS REALES EXTRAÍDOS CON ALTA DENSIDAD DE PUNTOS
+    const rutaA = [
+        [38.4926, -4.9262], [38.4927, -4.9264], [38.4930, -4.9269], [38.4933, -4.9275], [38.4936, -4.9281], 
+        [38.4939, -4.9286], [38.4942, -4.9292], [38.4945, -4.9297], [38.4949, -4.9304], [38.4952, -4.9308], 
+        [38.4955, -4.9312], [38.4965, -4.9315], [38.4972, -4.9320], [38.4984, -4.9332], [38.4990, -4.9338], 
+        [38.5002, -4.9348], [38.5015, -4.9352], [38.5024, -4.9356], [38.5042, -4.9366], [38.5065, -4.9382], 
+        [38.5085, -4.9392], [38.5113, -4.9408], [38.5134, -4.9423], [38.5146, -4.9426], [38.5173, -4.9443], 
+        [38.5185, -4.9450], [38.5202, -4.9455]
     ];
 
-    const rutaPedroche = [
-        [38.4240, -4.7391], [38.4255, -4.7405], [38.4278, -4.7431], [38.4293, -4.7495], 
-        [38.4312, -4.7541], [38.4334, -4.7588], [38.4361, -4.7632], [38.4389, -4.7681], 
-        [38.4412, -4.7725], [38.4435, -4.7771], [38.4468, -4.7815], [38.4490, -4.7275]
+    const rutaB = [
+        [38.4240, -4.7391], [38.4245, -4.7388], [38.4252, -4.7383], [38.4260, -4.7378], [38.4278, -4.7431], 
+        [38.4285, -4.7450], [38.4292, -4.7495], [38.4302, -4.7520], [38.4312, -4.7541], [38.4325, -4.7565], 
+        [38.4334, -4.7588], [38.4350, -4.7610], [38.4361, -4.7632], [38.4375, -4.7655], [38.4389, -4.7681], 
+        [38.4405, -4.7705], [38.4412, -4.7725], [38.4425, -4.7750], [38.4435, -4.7771], [38.4452, -4.7801], 
+        [38.4468, -4.7815], [38.4480, -4.7280], [38.4490, -4.7275]
     ];
 
     function initMap(id, coords, color) {
         const map = L.map(id, { zoomControl: false });
+        
+        // Capa oscura profesional
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
+        // Dibujamos la polilínea con alta precisión
         const poly = L.polyline(coords, {
             color: color,
-            weight: 5,
+            weight: 6,
             opacity: 1,
             lineJoin: 'round'
         }).addTo(map);
 
-        map.fitBounds(poly.getBounds(), { padding: [40, 40] });
+        // Zoom automático para que se vea el tramo completo al cargar
+        map.fitBounds(poly.getBounds(), { padding: [50, 50] });
     }
 
     window.onload = () => {
-        initMap('mapA', rutaElViso, '#22c55e');
-        initMap('mapB', rutaPedroche, '#3b82f6');
+        initMap('mapA', rutaA, '#22c55e'); // Verde
+        initMap('mapB', rutaB, '#3b82f6'); // Azul
     };
 </script>
 </body>
