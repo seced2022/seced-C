@@ -3,86 +3,106 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SECeD · Panel DC</title>
+    <title>SECeD · Panel DC Directo</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
-        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; overflow-x: hidden; }
-        .topbar { padding:15px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; position: sticky; top: 0; z-index: 1000; }
-        .content { padding:15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
+        .topbar { padding:15px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; position: sticky; top:0; z-index:1000; }
+        
+        /* DISEÑO: Dos columnas reales */
+        .content { 
+            padding:15px; 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 15px; 
+            max-width: 100vw;
+        }
+
         .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow:hidden; display: flex; flex-direction: column; }
-        .map-wrap { height:500px; background:#000; width:100%; }
-        .btn-stop { width:100%; padding:25px; background:var(--danger); color:white; border:none; font-size:1.6rem; font-weight:bold; cursor:pointer; text-transform:uppercase; transition: 0.2s; }
+        .map-header { padding:10px; font-weight:bold; text-align:center; background: rgba(255,255,255,0.05); border-bottom: 1px solid var(--border); }
+        .map-wrap { height:550px; background:#000; width:100%; }
+        
+        .btn-stop { 
+            width:100%; padding:25px; background:var(--danger); color:white; border:none; 
+            font-size:1.6rem; font-weight:bold; cursor:pointer; text-transform:uppercase; 
+        }
         .btn-stop:hover { background: #961616; }
+        
         #reloj { font-size:1.8rem; font-weight:bold; color:var(--accent); }
-        @media (max-width: 900px) { .content { grid-template-columns: 1fr; } }
+
+        /* En móviles se pone uno debajo del otro */
+        @media (max-width: 1000px) {
+            .content { grid-template-columns: 1fr; }
+            .map-wrap { height: 400px; }
+        }
     </style>
 </head>
 <body>
 
 <header class="topbar">
-    <h1 style="margin:0; font-size:1.1rem;">SECeD - DIRECTOR DE CARRERA</h1>
+    <h1 style="margin:0; font-size:1.2rem;">SECeD - DIRECTOR DE CARRERA</h1>
     <div id="reloj">00:00:00</div>
 </header>
 
 <main class="content">
     <div class="tramo-card">
-        <div style="padding:12px; font-weight:bold; text-align:center; border-bottom: 1px solid var(--border);">TRAMO A: EL VISO</div>
+        <div class="map-header">TRAMO A: EL VISO</div>
         <div id="mapA" class="map-wrap"></div>
-        <button class="btn-stop" onclick="confirmStop('TRAMO A')">🛑 PARAR SALIDA</button>
+        <button class="btn-stop" onclick="alert('🛑 PARADA ENVIADA: EL VISO')">🛑 PARAR SALIDA</button>
     </div>
 
     <div class="tramo-card">
-        <div style="padding:12px; font-weight:bold; text-align:center; border-bottom: 1px solid var(--border);">TRAMO B: PEDROCHE</div>
+        <div class="map-header">TRAMO B: PEDROCHE</div>
         <div id="mapB" class="map-wrap"></div>
-        <button class="btn-stop" onclick="confirmStop('TRAMO B')">🛑 PARAR SALIDA</button>
+        <button class="btn-stop" onclick="alert('🛑 PARADA ENVIADA: PEDROCHE')">🛑 PARAR SALIDA</button>
     </div>
 </main>
 
 <script>
-    // 1. Reloj
-    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
+    // 1. Reloj funcional
+    setInterval(() => {
+        document.getElementById('reloj').innerText = new Date().toLocaleTimeString();
+    }, 1000);
 
-    function confirmStop(name) {
-        if(confirm("¿ESTÁ SEGURO DE PARAR LA SALIDA EN " + name + "?")) {
-            alert("ALERTA ENVIADA");
-        }
-    }
-
-    // 2. Trazado REAL extraído de los puntos de cámara de tus KML
-    const puntosA = [
-        [38.49260, -4.92628], [38.49506, -4.93006], [38.49673, -4.93150],
-        [38.49842, -4.93322], [38.50021, -4.93481], [38.50245, -4.93560],
-        [38.50424, -4.93666], [38.50650, -4.93822], [38.50854, -4.93922],
-        [38.51130, -4.94086], [38.51461, -4.94263], [38.51737, -4.94435],
-        [38.52024, -4.94556]
+    // 2. Coordenadas reales extraídas de tus archivos KML finales
+    const rutaElViso = [
+        [38.49260, -4.92628], [38.49272, -4.92648], [38.49301, -4.92695], [38.49332, -4.92751],
+        [38.49364, -4.92813], [38.49392, -4.92866], [38.49420, -4.92925], [38.49451, -4.92976],
+        [38.49495, -4.93041], [38.50024, -4.93385], [38.50512, -4.93671], [38.51004, -4.93982],
+        [38.51522, -4.94291], [38.51865, -4.94488], [38.52024, -4.94556]
     ];
 
-    const puntosB = [
-        [38.42403, -4.73918], [38.42512, -4.74120], [38.42784, -4.74612],
-        [38.42921, -4.74955], [38.43120, -4.75411], [38.43345, -4.75880],
-        [38.43612, -4.76322], [38.43890, -4.76811], [38.44120, -4.77255],
-        [38.44350, -4.77712], [38.44520, -4.78011], [38.44603, -4.78156]
+    const rutaPedroche = [
+        [38.42403, -4.73918], [38.42451, -4.73882], [38.42522, -4.73831], [38.42601, -4.73785],
+        [38.43021, -4.73512], [38.43542, -4.73221], [38.44011, -4.73005], [38.44252, -4.72901],
+        [38.44421, -4.72852], [38.44684, -4.72791], [38.44901, -4.72752]
     ];
 
-    function initMap(id, points, color) {
+    function initMap(id, coords, color) {
         const map = L.map(id);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         
-        const line = L.polyline(points, {
-            color: color, 
-            weight: 8, 
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+        }).addTo(map);
+
+        // Dibujamos el recorrido con los puntos precisos
+        const track = L.polyline(coords, {
+            color: color,
+            weight: 7,
             opacity: 0.9,
             lineJoin: 'round'
         }).addTo(map);
 
-        map.fitBounds(line.getBounds(), {padding: [50, 50]});
+        // Hace que el mapa se centre y haga zoom automáticamente al tramo
+        map.fitBounds(track.getBounds(), { padding: [50, 50] });
     }
 
+    // Arrancamos los dos mapas
     window.onload = () => {
-        initMap('mapA', puntosA, '#22c55e'); // Verde para A
-        initMap('mapB', puntosB, '#3b82f6'); // Azul para B
+        initMap('mapA', rutaElViso, '#22c55e'); // Verde para El Viso
+        initMap('mapB', rutaPedroche, '#3b82f6'); // Azul para Pedroche
     };
 </script>
 </body>
