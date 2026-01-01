@@ -7,26 +7,27 @@
   <link rel="stylesheet" href="styles.css">
   <meta name="theme-color" content="#0b1f12">
 
-  <!-- Solo para el VISOR: desactivar clics y ocultar historial -->
   <style>
     /* Desactiva cualquier interacción sobre las tarjetas en el visor */
     .viewer .card { cursor: default !important; }
     .viewer .card * { pointer-events: none !important; }
-
-    /* o responsive solo en visor */
     .viewer .card { font-size: clamp(12px, 2.6vw, 24px) !important; }
 
     /* Oculta el botón de historial y su tooltip */
     .viewer .card .hist-btn,
-    .viewer .card .tooltip {
+    .viewer .card .tooltip,
+    .viewer .menu-btn,
+    .viewer .menu {
       display: none !important;
     }
   </style>
 </head>
-<body>
+<body class="viewer">
   <main class="app">
-    <div class="brand"><img src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/></div>
-    <h1>SECeD - Visor</h1>
+    <div class="brand">
+      <img id="mainLogo" src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
+    </div>
+    <h1 id="mainTitle">SECeD - Visor</h1>
 
     <div class="clock-bar">
       <div class="clock">
@@ -56,35 +57,49 @@
     <section id="grid" class="grid" aria-live="polite"></section>
   </main>
 
-<!-- SDK Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js?v=3"></script>
 
-<!-- Marcar modo VISOR ANTES de cargar la lógica -->
 <script>
-  window.VIEWER = true;
-  // añade clase viewer para activar las reglas CSS
-  document.addEventListener('DOMContentLoaded', () => {
-    document.body.classList.add('viewer');
-  });
+  (function(){
+    if (!firebase.apps.length) {
+        firebase.initializeApp(window.FIREBASE_CONFIG);
+    }
+    const db = firebase.firestore();
+    const urlParams = new URLSearchParams(window.location.search);
+    let rallyId = urlParams.get('id');
+
+    // Si no hay ID en la URL, se lo pedimos al usuario
+    if (!rallyId) {
+        rallyId = prompt("Introduce el ID del Rally para el Visor:");
+        if (rallyId) {
+            const separator = window.location.href.includes('?') ? '&' : '?';
+            window.location.href = window.location.href + separator + "id=" + rallyId;
+        }
+    }
+
+    // Cargar Identidad del Rally
+    if (rallyId) {
+        db.collection("config_rallies").doc(rallyId).get().then(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                if (data.logo) document.getElementById('mainLogo').src = data.logo;
+                if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+                console.log("Visor configurado para:", data.nombre);
+            }
+        }).catch(err => console.error("Error cargando identidad en visor:", err));
+    }
+  })();
 </script>
 
-<!-- Desactivar interacciones y ocultar menús en el visor -->
-<style>
-  .viewer .card,
-  .viewer .card * { pointer-events: none !important; cursor: default !important; }
-  .viewer .menu-btn,
-  .viewer .menu,
-  .viewer .hist-btn,
-  .viewer .tooltip { display: none !important; }
-</style>
+<script>
+  window.VIEWER = true;
+  // Aseguramos que la clase esté puesta
+  document.body.classList.add('viewer');
+</script>
 
-<!-- Tu lógica (no tocar) -->
 <script src="sync.js?v=3"></script>
-
-<script>window.VIEWER = true; document.body.classList.add('viewer');</script>
-  
 <script src="app.js?v=3"></script>
 
 </body>
