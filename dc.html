@@ -2,79 +2,100 @@
 <html lang="es">
 <head>
     <meta charset="utf-8" />
-    <title>SECeD - Panel DC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SECeD - Editor de Rallies</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <style>
-        :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --text:#e6f2ea; --accent:#17a34a; }
-        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
-        .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
-        .content { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; }
-        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow: hidden; display: flex; flex-direction: column; min-height: 450px; }
-        .map-header { padding:12px; font-weight:bold; text-align:center; background: #111e17; }
-        .map-wrap { flex-grow: 1; width:100%; background: #000; }
-        .btn-stop { width:100%; padding:15px; background:#b91c1c; color:white; border:none; font-weight:bold; cursor:pointer; }
+        :root { --bg: #0b120e; --card: #0f1a14; --border: #1d2d23; --accent: #17a34a; --text: #e6f2ea; }
+        body { background-color: var(--bg); color: var(--text); font-family: sans-serif; padding: 20px; }
+        .header-box { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px; }
+        input[type="text"] { width: 100%; padding: 10px; background: #000; border: 1px solid var(--border); color: white; border-radius: 6px; margin-bottom: 10px; }
+        .tc-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; position: relative; }
+        .map-editor { height: 400px; width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #333; }
+        .btn { padding: 12px 20px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; }
+        .btn-add { background: #1e293b; color: white; margin-bottom: 20px; }
+        .btn-save { background: var(--accent); color: white; font-size: 1.2rem; }
+        .btn-remove { background: #7f1d1d; color: white; width: auto; position: absolute; top: 10px; right: 10px; padding: 5px 10px; }
     </style>
 </head>
 <body>
 
-<header class="topbar">
-    <div style="display:flex; align-items:center;">
-        <img id="rallyLogo" src="" style="height:40px; margin-right:15px;" onerror="this.style.display='none'">
-        <div style="font-size:1.2rem; font-weight:bold;">SECeD · <span id="rallyNombre" style="color:var(--accent)">Cargando...</span></div>
+<div style="max-width: 900px; margin: auto;">
+    <div class="header-box">
+        <h1>Configurador de Rally</h1>
+        <input type="text" id="rallyId" placeholder="ID Único (ej: rally-cordoba-25)">
+        <input type="text" id="rallyNombre" placeholder="Nombre del Rally">
+        <input type="text" id="rallyLogo" placeholder="URL del Logo">
     </div>
-    <div id="reloj" style="font-family:monospace; font-size:1.4rem;">00:00:00</div>
-</header>
 
-<main id="gridTramos" class="content"></main>
+    <div id="tramosList"></div>
+    <button class="btn btn-add" onclick="agregarTramo()">+ AÑADIR NUEVO TRAMO (TC)</button>
+    <button class="btn btn-save" onclick="guardarRallyEnFirebase()">💾 GUARDAR RALLY COMPLETO</button>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
 <script>
     if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
     const db = firebase.firestore();
-    const urlParams = new URLSearchParams(window.location.search);
-    let rallyId = urlParams.get('id');
+    let tramoCount = 0;
 
-    if (!rallyId) {
-        rallyId = prompt("Introduce el ID del Rally:");
-        if (rallyId) window.location.search = `?id=${rallyId}`;
+    function agregarTramo() {
+        tramoCount++;
+        const idMap = `map_${tramoCount}`;
+        const tramoHtml = `<div class="tc-card" id="card_${idMap}">
+            <button class="btn btn-remove" onclick="document.getElementById('card_${idMap}').remove()">Eliminar</button>
+            <input type="text" class="tc-name" placeholder="Nombre del Tramo (ej: TC1)">
+            <div id="${idMap}" class="map-editor"></div>
+            <input type="hidden" class="tc-track-data">
+        </div>`;
+        document.getElementById('tramosList').insertAdjacentHTML('beforeend', tramoHtml);
+        setTimeout(() => inicializarMapaEditor(idMap), 50);
     }
 
-    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
-
-    if (rallyId) {
-        db.collection("config_rallies").doc(rallyId).onSnapshot(doc => {
-            if (doc.exists) {
-                const data = doc.data();
-                document.getElementById('rallyNombre').innerText = data.nombre || rallyId;
-                document.getElementById('rallyLogo').src = data.logo || "";
-                renderizarMapas(data.tramos);
-            }
+    function inicializarMapaEditor(mapId) {
+        const map = L.map(mapId).setView([37.88, -4.77], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        const drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+        const drawControl = new L.Control.Draw({
+            draw: { polyline: { shapeOptions: { color: '#17a34a', weight: 5 } }, polygon: false, circle: false, rectangle: false, marker: false, circlemarker: false },
+            edit: { featureGroup: drawnItems }
+        });
+        map.addControl(drawControl);
+        map.on(L.Draw.Event.CREATED, function (e) {
+            drawnItems.clearLayers();
+            drawnItems.addLayer(e.layer);
+            // IMPORTANTE: Guardamos como array de objetos {lat, lng} para evitar el error de Firestore
+            const coords = e.layer.getLatLngs().map(latlng => ({ lat: latlng.lat, lng: latlng.lng }));
+            document.querySelector(`#card_${mapId} .tc-track-data`).value = JSON.stringify(coords);
         });
     }
 
-    function renderizarMapas(tramos) {
-        const container = document.getElementById('gridTramos');
-        container.innerHTML = '';
-        tramos.forEach((t, i) => {
-            const mid = `map_${i}`;
-            const card = document.createElement('div');
-            card.className = 'tramo-card';
-            card.innerHTML = `<div class="map-header">${t.nombre}</div><div id="${mid}" class="map-wrap"></div><button class="btn-stop">🛑 PARAR SALIDA</button>`;
-            container.appendChild(card);
-
-            setTimeout(() => {
-                const map = L.map(mid).setView(t.track[0] || [0,0], 13);
-                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-                if (t.track.length) {
-                    const p = L.polyline(t.track, {color: '#2ecc71', weight: 5}).addTo(map);
-                    map.fitBounds(p.getBounds(), {padding: [30,30]});
-                }
-            }, 100);
+    async function guardarRallyEnFirebase() {
+        const id = document.getElementById('rallyId').value.trim();
+        if (!id) return alert("Falta ID del Rally");
+        const tramos = [];
+        document.querySelectorAll('.tc-card').forEach(card => {
+            const trackStr = card.querySelector('.tc-track-data').value;
+            tramos.push({ 
+                nombre: card.querySelector('.tc-name').value, 
+                track: trackStr ? JSON.parse(trackStr) : [] 
+            });
         });
+        try {
+            await db.collection("config_rallies").doc(id).set({
+                nombre: document.getElementById('rallyNombre').value,
+                logo: document.getElementById('rallyLogo').value,
+                tramos: tramos
+            });
+            alert("Rally guardado correctamente en Firebase.");
+        } catch (e) { alert("Error al guardar: " + e.message); }
     }
 </script>
 </body>
