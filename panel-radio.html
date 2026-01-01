@@ -70,9 +70,9 @@
     <span id="radioBadge" class="radio-badge" aria-hidden="true" hidden>RADIO: —</span>
 
     <div class="brand">
-      <img src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
+      <img id="mainLogo" src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
     </div>
-    <h1>SECeD - Panel Radio</h1>
+    <h1 id="mainTitle">SECeD - Panel Radio</h1>
 
     <div class="clock-bar">
       <div class="clock">
@@ -111,15 +111,45 @@
 
   <div id="toast"></div>
 
-  <!-- SDK Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=16"></script>
 
-  <!-- Marcar este HTML como panel radio (viewer) y fallback de config -->
+  <script>
+    (function(){
+      if (!firebase.apps.length) {
+          firebase.initializeApp(window.FIREBASE_CONFIG);
+      }
+      const db = firebase.firestore();
+      const urlParams = new URLSearchParams(window.location.search);
+      let rallyId = urlParams.get('id');
+
+      // Si no hay ID, lo pide
+      if (!rallyId) {
+          rallyId = prompt("Introduce el ID del Rally:");
+          if (rallyId) {
+              const sep = window.location.href.includes('?') ? '&' : '?';
+              window.location.href = window.location.href + sep + "id=" + rallyId;
+          }
+      }
+
+      // Cargar Nombre y Logo
+      if (rallyId) {
+          db.collection("config_rallies").doc(rallyId).get().then(doc => {
+              if (doc.exists) {
+                  const data = doc.data();
+                  if (data.logo) document.getElementById('mainLogo').src = data.logo;
+                  if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+              }
+          });
+      }
+    })();
+  </script>
+
   <script>
     window.VIEWER = true;
     document.body.classList.add('viewer');
-
+    // Fallback por si firebase-config.js fallara
     if (!window.FIREBASE_CONFIG) {
       window.FIREBASE_CONFIG = {
         apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
@@ -131,13 +161,8 @@
         measurementId: "G-XB0C93FM9W"
       };
     }
-    try { if (firebase && firebase.apps && firebase.apps.length === 0) { firebase.initializeApp(window.FIREBASE_CONFIG); } } catch(e){}
   </script>
 
-  <!-- Tu config (si existe) sobreescribe el fallback -->
-  <script src="firebase-config.js?v=16"></script>
-
-  <!-- Listener de resets globales de radios -->
   <script>
     (function(){
       document.addEventListener('DOMContentLoaded', function(){
@@ -171,11 +196,9 @@
     })();
   </script>
 
-  <!-- Sincronización y lógica compartida -->
   <script src="sync.js?v=16"></script>
   <script src="app.js?v=16"></script>
 
-  <!-- Lógica específica del Panel Radio -->
   <script>
     (function(){
       /* ===== Reloj online ===== */
@@ -420,7 +443,6 @@
 
       /* ===== Botón BANDERA (envía aviso a alerts) ===== */
       function getRadioIdForAlert(){
-        // usa DOM/var si existiera, si no localStorage (ambas claves)
         const vDom = (window.RADIO_ID ? String(window.RADIO_ID).trim() : '');
         if (vDom) return vDom;
         const qp = new URLSearchParams(location.search).get('radio');
@@ -436,8 +458,6 @@
         try {
           const radio = getRadioIdForAlert();
           if (!radio) { alert('No se ha detectado un número de RADIO.\nPulsa el botón RADIO y escribe 1, 2, 3…'); return; }
-          if (!window.firebase || !firebase.firestore) { alert('Firestore no está disponible en esta página.'); return; }
-
           const tramo = TRAMO;
           const payload = {
             tramo,
@@ -447,12 +467,11 @@
             clientTs: Date.now(),
             ts: firebase.firestore.FieldValue.serverTimestamp()
           };
-
           await db.collection('tramos').doc(tramo).collection('alerts').add(payload);
           alert(`¡BANDERA enviada!\nRADIO: ${radio}  |  TRAMO: ${tramo}`);
         } catch (e) {
           console.error('publishRadioAlert error', e);
-          alert('Error enviando AVISO. Revisa conexión y Firestore/Reglas.');
+          alert('Error enviando AVISO.');
         }
       }
 
@@ -461,7 +480,6 @@
         let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
         function wireClick(b){
           b.onclick = (ev)=>{ ev.preventDefault(); publishRadioAlert(); };
-          b.setAttribute('aria-label', 'Enviar AVISO de radio');
         }
         if (!btn) {
           btn = document.createElement('button');
@@ -478,41 +496,6 @@
           btn.id = 'btnBandera'; btn.textContent = 'BANDERA'; wireClick(btn);
         }
       })();
-
-      /* ===== Tramo rápido desde botón si no hay menú flotante ===== */
-      const btnTramo = document.getElementById('btnTramo');
-      const tramoMenu = document.getElementById('tramoMenu');
-      function sanitizeTramo(t){ return (t||'').trim().toLowerCase().replace(/[^\w-]+/g,'-').slice(0,64); }
-      function goToTramo(t){
-        const tramo = sanitizeTramo(t); if(!tramo) return;
-        try{
-          const k='seced_tramos_recent';
-          const list=JSON.parse(localStorage.getItem(k)||'[]');
-          const next=[tramo, ...list.filter(x=>x!==tramo)].slice(0,10);
-          localStorage.setItem(k, JSON.stringify(next));
-        }catch{}
-        const p = new URLSearchParams(location.search);
-        p.set('tramo', tramo);
-        location.search = p.toString();
-      }
-      if (btnTramo) {
-        btnTramo.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setTimeout(() => {
-            if (!tramoMenu || tramoMenu.classList.contains('hidden')) {
-              const t = prompt('Indica el tramo (ej. 1 o tramo-1):', new URLSearchParams(location.search).get('tramo') || '1');
-              if (t !== null) goToTramo(t);
-            }
-          }, 150);
-        });
-      }
-
-      /* ===== Usuario (botón 👤) ===== */
-      const btnOperador = document.getElementById('btnOperador');
-      if (btnOperador) btnOperador.addEventListener('click', ()=>{
-        const name = prompt('Nombre o identificador del operador:', localStorage.getItem('seced_operator')||'');
-        if (name !== null) { try { localStorage.setItem('seced_operator', (name||'').trim()); } catch{} }
-      });
     })();
   </script>
 </body>
