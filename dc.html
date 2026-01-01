@@ -7,15 +7,75 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --danger:#b91c1c; --text:#e6f2ea; --accent:#17a34a; }
-        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; overflow: hidden; }
-        .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; height: 60px; box-sizing: border-box; }
-        .content { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; height: calc(100vh - 60px); box-sizing: border-box; }
-        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; display: flex; flex-direction: column; overflow: hidden; }
-        .map-header { padding:12px; font-weight:bold; text-align:center; background: #111e17; border-bottom: 1px solid var(--border); }
-        .map-wrap { flex-grow: 1; background:#111; width:100%; }
-        .btn-stop { width:100%; padding:15px; background:var(--danger); color:white; border:none; font-size:1.1rem; font-weight:bold; cursor:pointer; }
-        #reloj { font-size:1.5rem; font-weight:bold; color:var(--accent); font-family: monospace; }
+        :root { 
+            --bg:#0b120e; 
+            --card:#0f1a14; 
+            --border:#1d2d23; 
+            --danger:#b91c1c; 
+            --text:#e6f2ea; 
+            --accent:#17a34a; 
+        }
+        body { 
+            margin:0; 
+            background:var(--bg); 
+            color:var(--text); 
+            font-family: sans-serif; 
+            overflow: hidden; 
+        }
+        .topbar { 
+            padding:10px 20px; 
+            background:#0c1913; 
+            border-bottom:1px solid var(--border); 
+            display:flex; 
+            justify-content:space-between; 
+            align-items:center; 
+            height: 60px; 
+            box-sizing: border-box; 
+        }
+        .content { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 15px; 
+            padding: 15px; 
+            height: calc(100vh - 60px); 
+            box-sizing: border-box; 
+        }
+        .tramo-card { 
+            background:var(--card); 
+            border:1px solid var(--border); 
+            border-radius:12px; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+        .map-header { 
+            padding:12px; 
+            font-weight:bold; 
+            text-align:center; 
+            background: #111e17; 
+            border-bottom: 1px solid var(--border); 
+        }
+        .map-wrap { 
+            flex-grow: 1; 
+            background:#111; 
+            width:100%; 
+        }
+        .btn-stop { 
+            width:100%; 
+            padding:15px; 
+            background:var(--danger); 
+            color:white; 
+            border:none; 
+            font-size:1.1rem; 
+            font-weight:bold; 
+            cursor:pointer; 
+        }
+        #reloj { 
+            font-size:1.5rem; 
+            font-weight:bold; 
+            color:var(--accent); 
+            font-family: monospace; 
+        }
     </style>
 </head>
 <body>
@@ -40,9 +100,12 @@
 </main>
 
 <script>
-    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
+    // Reloj en tiempo real
+    setInterval(() => { 
+        document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); 
+    }, 1000);
 
-    // TRACK COMPLETO: EL VISO [cite: 5, 6]
+    // TRACK COMPLETO: EL VISO
     const rutaElViso = [
         [38.48463, -4.94741], [38.48456, -4.94699], [38.48369, -4.94581], [38.48345, -4.94509], [38.48300, -4.94355],
         [38.48257, -4.94242], [38.48167, -4.94059], [38.48122, -4.93967], [38.48111, -4.93924], [38.48108, -4.93881],
@@ -53,7 +116,7 @@
         [38.48069, -4.92324], [38.48160, -4.92259], [38.48227, -4.92202], [38.48357, -4.92067], [38.48578, -4.91826],
         [38.48594, -4.91855], [38.48607, -4.91781], [38.48651, -4.91734], [38.48689, -4.91688], [38.48701, -4.91645],
         [38.48709, -4.91590], [38.48718, -4.91538], [38.48735, -4.91493], [38.48754, -4.91447], [38.48779, -4.91404],
-        [38.48817, -4.91370], [38.48856, -4.91341], [38.48895, -4.91324], [38.48962, -4.91256], [38.48998, -4.91215],
+        [38.4817, -4.91370], [38.48856, -4.91341], [38.48895, -4.91324], [38.48962, -4.91256], [38.48998, -4.91215],
         [38.49027, -4.91170], [38.49045, -4.91130], [38.49064, -4.91104], [38.49078, -4.91102], [38.49157, -4.91238],
         [38.49517, -4.91866], [38.49524, -4.91888], [38.49492, -4.91964], [38.49465, -4.92023], [38.49430, -4.92056],
         [38.49401, -4.92089], [38.49378, -4.92113], [38.49339, -4.92163], [38.49330, -4.92194], [38.49333, -4.92231],
@@ -64,7 +127,7 @@
         [38.48912, -4.92443], [38.48903, -4.92400]
     ];
 
-    // TRACK COMPLETO: PEDROCHE [cite: 13, 14]
+    // TRACK COMPLETO: PEDROCHE
     const rutaPedroche = [
         [38.40781, -4.73393], [38.40786, -4.73381], [38.40846, -4.73332], [38.40851, -4.73324], [38.40851, -4.73292],
         [38.40846, -4.73259], [38.40843, -4.73220], [38.40845, -4.73188], [38.40851, -4.73165], [38.40925, -4.73036],
@@ -99,9 +162,15 @@
     ];
 
     function initMap(id, coords, color) {
+        // Inicializamos el mapa en la primera coordenada
         const map = L.map(id).setView(coords[0], 13);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
         
+        // Capa de mapa oscuro (CartoDB DarkMatter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Dibujamos la polilínea del track
         const poly = L.polyline(coords, {
             color: color,
             weight: 5,
@@ -109,9 +178,20 @@
             lineJoin: 'round'
         }).addTo(map);
         
-        map.fitBounds(poly.getBounds(), { padding: [20, 20] });
+        // Función crítica para ajustar el track al tamaño del contenedor
+        function ajustarVista() {
+            map.invalidateSize(); // Corrige errores de renderizado en layouts Grid/Flex
+            map.fitBounds(poly.getBounds(), { padding: [30, 30] }); // Ajusta el zoom para que quepa todo el track
+        }
+
+        // Ejecutamos el ajuste después de un breve retardo para asegurar que el DOM esté listo
+        setTimeout(ajustarVista, 200);
+
+        // Si el usuario cambia el tamaño de la ventana, el mapa se reajusta solo
+        window.addEventListener('resize', ajustarVista);
     }
 
+    // Al cargar la página, inicializamos ambos mapas
     window.onload = () => {
         initMap('mapA', rutaElViso, '#2ecc71');
         initMap('mapB', rutaPedroche, '#3498db');
