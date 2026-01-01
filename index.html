@@ -11,8 +11,10 @@
 </head>
 <body>
   <main class="app" aria-label="Aplicación de tarjetas numéricas">
-    <div class="brand"><img src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/></div>
-    <h1>SECeD - Control</h1>
+    <div class="brand">
+      <img src="logo.svg" alt="SECeD" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
+    </div>
+    <h1 id="mainTitle">SECeD - Control</h1>
 
     <div class="clock-bar">
       <div class="clock">
@@ -22,7 +24,6 @@
       </div>
 
       <div class="controls-right">
-        <!-- TRAMO arriba y mostrando el nombre -->
         <div class="tramo-picker">
           <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
           <div id="tramoMenu" class="tramo-menu hidden" role="menu" aria-label="Seleccionar tramo">
@@ -56,19 +57,14 @@
       <button id="btnAgregar" type="button">Agregar</button>
     </div>
 
-    <p class="help">
-      
-    </p>
+    <p class="help"></p>
 
-    <div class="toolbar">
-      </div>
+    <div class="toolbar"></div>
 
     <section id="grid" class="grid" aria-live="polite"></section>
 
     <div class="export-bar">
-      
-      <button id="btnResetRadios" type="button" class="btn btn-warn" style="display:none">
-       Reset dorsales</button>
+      <button id="btnResetRadios" type="button" class="btn btn-warn" style="display:none">Reset dorsales</button>
       <button id="btnLimpiar" class="secondary">Limpiar</button>
       <button id="btnExportar" type="button" class="primary">Exportar a PDF</button>
       <button id="btnFullscreen" type="button" class="secondary btn-fullscreen" title="Pantalla completa">Pantalla completa</button>
@@ -101,10 +97,57 @@
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=2"></script>
-<script src="alerts-listener.js"></script>  
-<script src="sync.js?v=2"></script>
-<script src="app.js?v=2"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=2"></script>
+
+  <script>
+    if (!firebase.apps.length) {
+        firebase.initializeApp(window.FIREBASE_CONFIG);
+    }
+    const db = firebase.firestore();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let rallyId = urlParams.get('id');
+
+    // Si no hay ID en la URL, se solicita
+    if (!rallyId) {
+        rallyId = prompt("Introduce el ID del Rally para cargar la configuración:");
+        if (rallyId) {
+            const separator = window.location.href.includes('?') ? '&' : '?';
+            window.location.href = window.location.href + separator + "id=" + rallyId;
+        }
+    }
+
+    // Cargar Nombre y Logo dinámicamente
+    if (rallyId) {
+        db.collection("config_rallies").doc(rallyId).get().then(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                
+                // Actualizar Logo
+                const logoImg = document.getElementById('mainLogo');
+                if (logoImg && data.logo) {
+                    logoImg.src = data.logo;
+                }
+
+                // Actualizar Título
+                const titleH1 = id="mainTitle"; 
+                // Usamos querySelector por seguridad si el ID fallara
+                const header = document.querySelector('h1');
+                if (header && data.nombre) {
+                    header.innerText = data.nombre;
+                }
+                
+                console.log("Configuración de Rally '" + rallyId + "' aplicada.");
+            } else {
+                console.error("El ID de rally no existe en la base de datos.");
+            }
+        }).catch(err => console.error("Error al cargar datos del rally:", err));
+    }
+  </script>
+
+  <script src="alerts-listener.js"></script>  
+  <script src="sync.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
