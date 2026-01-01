@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SECeD - Editor de Rallies</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    
+    <style>
+        :root {
+            --bg: #0b120e;
+            --card: #0f1a14;
+            --border: #1d2d23;
+            --accent: #17a34a;
+            --text: #e6f2ea;
+            --secondary: #1e293b;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header-box {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        h1 { color: var(--accent); margin-top: 0; }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9rem; }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background: #000;
+            border: 1px solid var(--border);
+            color: white;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        .tc-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .map-editor {
+            height: 400px;
+            width: 100%;
+            border-radius: 8px;
+            margin-top: 10px;
+            border: 1px solid #333;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border-radius: 6px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+
+        .btn-add { background: var(--secondary); color: white; width: 100%; margin-bottom: 20px; }
+        .btn-save { background: var(--accent); color: white; width: 100%; font-size: 1.2rem; }
+        .btn-remove { 
+            background: #7f1d1d; color: white; 
+            position: absolute; top: 10px; right: 10px; padding: 5px 10px; 
+        }
+
+        .btn:hover { opacity: 0.8; }
+
+        .hint { font-size: 0.8rem; color: #888; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-box">
+        <h1>Configurador de Rally</h1>
+        <div class="form-group">
+            <label>ID DEL RALLY (Sin espacios, ej: rally-alicante-2024)</label>
+            <input type="text" id="rallyId" placeholder="Este ID se usará para cargar el panel DC">
+        </div>
+        <div class="form-group">
+            <label>NOMBRE DEL RALLY</label>
+            <input type="text" id="rallyNombre" placeholder="Ej: 30º Rallye Sierra Morena">
+        </div>
+        <div class="form-group">
+            <label>URL DEL LOGO/IMAGEN DEL RALLY</label>
+            <input type="text" id="rallyLogo" placeholder="https://miweb.com/logo.png">
+        </div>
+    </div>
+
+    <div id="tramosList">
+        </div>
+
+    <button class="btn btn-add" onclick="agregarTramo()">+ AÑADIR NUEVO TRAMO (TC)</button>
+    
+    <div style="margin-top: 40px;">
+        <button class="btn btn-save" onclick="guardarRallyEnFirebase()">💾 GUARDAR RALLY COMPLETO</button>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+<script>
+    const db = firebase.firestore();
+    let tramoCount = 0;
+
+    function agregarTramo() {
+        tramoCount++;
+        const idMap = `map_${tramoCount}`;
+        const tramoHtml = `
+            <div class="tc-card" id="card_${idMap}">
+                <button class="btn btn-remove" onclick="eliminarTramo('card_${idMap}')">Eliminar</button>
+                <div class="form-group">
+                    <label>NOMBRE DEL TRAMO (TC)</label>
+                    <input type="text" class="tc-name" placeholder="Ej: TC1 - Villaviciosa">
+                </div>
+                <div id="${idMap}" class="map-editor"></div>
+                <input type="hidden" class="tc-track-data">
+                <p class="hint">Instrucciones: Haz clic en el icono de línea a la izquierda del mapa para empezar a dibujar el track.</p>
+            </div>
+        `;
+        
+        document.getElementById('tramosList').insertAdjacentHTML('beforeend', tramoHtml);
+        inicializarMapaEditor(idMap);
+    }
+
+    function inicializarMapaEditor(mapId) {
+        // Inicializar mapa centrado en una zona genérica (puedes ajustarlo)
+        const map = L.map(mapId).setView([38.0, -1.0], 8);
+        
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: 'SECeD Editor'
+        }).addTo(map);
+
+        // Capa donde se guardará lo que dibujemos
+        const drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+
+        // Configurar herramientas de dibujo
+        const drawControl = new L.Control.Draw({
+            draw: {
+                polygon: false,
+                circle: false,
+                rectangle: false,
+                marker: false,
+                circlemarker: false,
+                polyline: {
+                    shapeOptions: {
+                        color: '#17a34a',
+                        weight: 4
+                    }
+                }
+            },
+            edit: {
+                featureGroup: drawnItems
+            }
+        });
+        map.addControl(drawControl);
+
+        // Evento cuando se termina de dibujar la línea
+        map.on(L.Draw.Event.CREATED, function (e) {
+            const layer = e.layer;
+            drawnItems.clearLayers(); // Solo permitimos un track por tramo
+            drawnItems.addLayer(layer);
+            
+            // Extraer coordenadas y guardarlas en el input oculto del tramo
+            const coords = layer.getLatLngs().map(latlng => [latlng.lat, latlng.lng]);
+            document.querySelector(`#card_${mapId} .tc-track-data`).value = JSON.stringify(coords);
+        });
+    }
+
+    function eliminarTramo(id) {
+        if(confirm("¿Seguro que quieres eliminar este tramo?")) {
+            document.getElementById(id).remove();
+        }
+    }
+
+    async function guardarRallyEnFirebase() {
+        const id = document.getElementById('rallyId').value.trim();
+        const nombre = document.getElementById('rallyNombre').value.trim();
+        const logo = document.getElementById('rallyLogo').value.trim();
+
+        if (!id || !nombre) {
+            alert("Por favor, introduce al menos el ID y el Nombre del Rally.");
+            return;
+        }
+
+        const tramos = [];
+        document.querySelectorAll('.tc-card').forEach(card => {
+            const nombreTC = card.querySelector('.tc-name').value;
+            const trackStr = card.querySelector('.tc-track-data').value;
+            
+            tramos.push({
+                nombre: nombreTC,
+                track: trackStr ? JSON.parse(trackStr) : []
+            });
+        });
+
+        const rallyData = {
+            nombre: nombre,
+            logo: logo,
+            tramos: tramos,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+
+        try {
+            await db.collection("config_rallies").doc(id).set(rallyData);
+            alert("¡Rally guardado con éxito! ID: " + id);
+        } catch (error) {
+            console.error("Error guardando:", error);
+            alert("Error al guardar en Firebase. Revisa la consola.");
+        }
+    }
+</script>
+
+</body>
+</html>
