@@ -71,7 +71,8 @@
         map.on(L.Draw.Event.CREATED, function (e) {
             drawnItems.clearLayers();
             drawnItems.addLayer(e.layer);
-            const coords = e.layer.getLatLngs().map(latlng => [latlng.lat, latlng.lng]);
+            // IMPORTANTE: Guardamos como array de objetos {lat, lng} para evitar el error de Firestore
+            const coords = e.layer.getLatLngs().map(latlng => ({ lat: latlng.lat, lng: latlng.lng }));
             document.querySelector(`#card_${mapId} .tc-track-data`).value = JSON.stringify(coords);
         });
     }
@@ -82,7 +83,10 @@
         const tramos = [];
         document.querySelectorAll('.tc-card').forEach(card => {
             const trackStr = card.querySelector('.tc-track-data').value;
-            tramos.push({ nombre: card.querySelector('.tc-name').value, track: trackStr ? JSON.parse(trackStr) : [] });
+            tramos.push({ 
+                nombre: card.querySelector('.tc-name').value, 
+                track: trackStr ? JSON.parse(trackStr) : [] 
+            });
         });
         try {
             await db.collection("config_rallies").doc(id).set({
@@ -90,8 +94,8 @@
                 logo: document.getElementById('rallyLogo').value,
                 tramos: tramos
             });
-            alert("Rally guardado.");
-        } catch (e) { alert("Error: " + e.message); }
+            alert("Rally guardado correctamente en Firebase.");
+        } catch (e) { alert("Error al guardar: " + e.message); }
     }
 </script>
 </body>
