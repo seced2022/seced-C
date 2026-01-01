@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>SECeD · Panel de Control de Carrera</title>
+    <title>SECeD · Panel DC Dinámico</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -32,6 +32,7 @@
             height: 60px; 
             box-sizing: border-box; 
         }
+        .brand-logo { height: 40px; margin-right: 15px; }
         .content { 
             display: grid; 
             grid-template-columns: 1fr 1fr; 
@@ -39,6 +40,7 @@
             padding: 15px; 
             height: calc(100vh - 60px); 
             box-sizing: border-box; 
+            overflow-y: auto;
         }
         .tramo-card { 
             background:var(--card); 
@@ -47,6 +49,7 @@
             display: flex; 
             flex-direction: column; 
             overflow: hidden; 
+            min-height: 400px;
         }
         .map-header { 
             padding:12px; 
@@ -76,126 +79,108 @@
             color:var(--accent); 
             font-family: monospace; 
         }
+        .loading-overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%;
+            background: var(--bg); display: flex; justify-content: center;
+            align-items: center; z-index: 9999; font-size: 1.5rem;
+        }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
 
+<div id="loading" class="loading-overlay">Cargando configuración del Rally...</div>
+
 <header class="topbar">
-    <div style="font-size: 1.2rem; font-weight: bold;">SECeD · <span style="color:var(--accent)">DIRECTOR DE CARRERA</span></div>
+    <div style="display:flex; align-items:center;">
+        <img src="logo.svg" alt="Logo" class="brand-logo" id="rallyLogo" onerror="this.src='logo.png'">
+        <div style="font-size: 1.2rem; font-weight: bold;">SECeD · <span id="rallyNombre" style="color:var(--accent)">CARGANDO...</span></div>
+    </div>
     <div id="reloj">00:00:00</div>
 </header>
 
-<main class="content">
-    <div class="tramo-card">
-        <div class="map-header">TRAMO A: EL VISO</div>
-        <div id="mapA" class="map-wrap"></div>
-        <button class="btn-stop">🛑 PARAR SALIDA</button>
-    </div>
+<main id="gridTramos" class="content">
+    </main>
 
-    <div class="tramo-card">
-        <div class="map-header">TRAMO B: PEDROCHE</div>
-        <div id="mapB" class="map-wrap"></div>
-        <button class="btn-stop">🛑 PARAR SALIDA</button>
-    </div>
-</main>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 
 <script>
-    // Reloj en tiempo real
+    const db = firebase.firestore();
+    const urlParams = new URLSearchParams(window.location.search);
+    const rallyId = urlParams.get('id'); // Ejemplo: dc.html?id=sierra-morena-25
+
+    // 1. Reloj en tiempo real
     setInterval(() => { 
         document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); 
     }, 1000);
 
-    // TRACK COMPLETO: EL VISO
-    const rutaElViso = [
-        [38.48463, -4.94741], [38.48456, -4.94699], [38.48369, -4.94581], [38.48345, -4.94509], [38.48300, -4.94355],
-        [38.48257, -4.94242], [38.48167, -4.94059], [38.48122, -4.93967], [38.48111, -4.93924], [38.48108, -4.93881],
-        [38.48043, -4.93751], [38.47982, -4.93651], [38.47922, -4.93544], [38.47871, -4.93427], [38.47829, -4.93351],
-        [38.47854, -4.93324], [38.47848, -4.93277], [38.47825, -4.93206], [38.47812, -4.93155], [38.47805, -4.93076],
-        [38.47806, -4.93013], [38.47818, -4.92950], [38.47823, -4.92876], [38.47836, -4.92752], [38.47842, -4.92660],
-        [38.47857, -4.92577], [38.47857, -4.92539], [38.47876, -4.92492], [38.47904, -4.92431], [38.47947, -4.92399],
-        [38.48069, -4.92324], [38.48160, -4.92259], [38.48227, -4.92202], [38.48357, -4.92067], [38.48578, -4.91826],
-        [38.48594, -4.91855], [38.48607, -4.91781], [38.48651, -4.91734], [38.48689, -4.91688], [38.48701, -4.91645],
-        [38.48709, -4.91590], [38.48718, -4.91538], [38.48735, -4.91493], [38.48754, -4.91447], [38.48779, -4.91404],
-        [38.4817, -4.91370], [38.48856, -4.91341], [38.48895, -4.91324], [38.48962, -4.91256], [38.48998, -4.91215],
-        [38.49027, -4.91170], [38.49045, -4.91130], [38.49064, -4.91104], [38.49078, -4.91102], [38.49157, -4.91238],
-        [38.49517, -4.91866], [38.49524, -4.91888], [38.49492, -4.91964], [38.49465, -4.92023], [38.49430, -4.92056],
-        [38.49401, -4.92089], [38.49378, -4.92113], [38.49339, -4.92163], [38.49330, -4.92194], [38.49333, -4.92231],
-        [38.49353, -4.92296], [38.49360, -4.92329], [38.49351, -4.92356], [38.49337, -4.92384], [38.49317, -4.92404],
-        [38.49242, -4.92442], [38.49290, -4.92473], [38.49284, -4.92530], [38.49274, -4.92581], [38.49259, -4.92636],
-        [38.49240, -4.92684], [38.49233, -4.92689], [38.49203, -4.92679], [38.49108, -4.92672], [38.49084, -4.92671],
-        [38.49056, -4.92645], [38.49024, -4.92615], [38.49006, -4.92572], [38.48972, -4.92528], [38.48929, -4.92473],
-        [38.48912, -4.92443], [38.48903, -4.92400]
-    ];
-
-    // TRACK COMPLETO: PEDROCHE
-    const rutaPedroche = [
-        [38.40781, -4.73393], [38.40786, -4.73381], [38.40846, -4.73332], [38.40851, -4.73324], [38.40851, -4.73292],
-        [38.40846, -4.73259], [38.40843, -4.73220], [38.40845, -4.73188], [38.40851, -4.73165], [38.40925, -4.73036],
-        [38.40932, -4.73018], [38.40931, -4.72989], [38.40933, -4.72945], [38.40931, -4.72902], [38.40921, -4.72842],
-        [38.40916, -4.72777], [38.40906, -4.72722], [38.40887, -4.72656], [38.40871, -4.72607], [38.40867, -4.72578],
-        [38.40860, -4.72532], [38.40854, -4.72492], [38.40844, -4.72442], [38.40844, -4.72397], [38.40851, -4.72362],
-        [38.40869, -4.72329], [38.40913, -4.72262], [38.40949, -4.72220], [38.40982, -4.72184], [38.41002, -4.72153],
-        [38.41009, -4.72149], [38.41016, -4.72196], [38.41036, -4.72294], [38.41056, -4.72396], [38.41072, -4.72459],
-        [38.41086, -4.72516], [38.41117, -4.72581], [38.41130, -4.72618], [38.41144, -4.72648], [38.41150, -4.72678],
-        [38.41157, -4.72702], [38.41174, -4.72723], [38.41186, -4.72740], [38.41193, -4.72758], [38.41196, -4.72773],
-        [38.41208, -4.72802], [38.41222, -4.72840], [38.41234, -4.72884], [38.41244, -4.72914], [38.41250, -4.72937],
-        [38.41260, -4.72961], [38.41281, -4.73003], [38.41286, -4.73016], [38.41296, -4.73052], [38.41300, -4.73071],
-        [38.41311, -4.73106], [38.41321, -4.73131], [38.41326, -4.73146], [38.41328, -4.73160], [38.41327, -4.73178],
-        [38.41328, -4.73185], [38.41345, -4.73211], [38.41359, -4.73228], [38.41379, -4.73247], [38.41391, -4.73260],
-        [38.41410, -4.73285], [38.41431, -4.73307], [38.41446, -4.73318], [38.41463, -4.73330], [38.41478, -4.73346],
-        [38.41484, -4.73361], [38.41496, -4.73408], [38.41506, -4.73440], [38.41518, -4.73463], [38.41527, -4.73481],
-        [38.41534, -4.73504], [38.41538, -4.73520], [38.41574, -4.73577], [38.41598, -4.73612], [38.41624, -4.73649],
-        [38.41648, -4.73677], [38.41664, -4.73706], [38.41699, -4.73760], [38.41717, -4.73786], [38.41728, -4.73809],
-        [38.41747, -4.73827], [38.41771, -4.73848], [38.41784, -4.73856], [38.41799, -4.73870], [38.41812, -4.73887],
-        [38.41822, -4.73901], [38.41830, -4.73929], [38.41840, -4.73959], [38.41861, -4.74001], [38.41877, -4.74029],
-        [38.41888, -4.74052], [38.41906, -4.74090], [38.41916, -4.74105], [38.41922, -4.74132], [38.41937, -4.74160],
-        [38.41958, -4.74197], [38.41976, -4.74228], [38.41990, -4.74252], [38.42008, -4.74272], [38.42035, -4.74300],
-        [38.42061, -4.74316], [38.42093, -4.74338], [38.42118, -4.74360], [38.42135, -4.74379], [38.42161, -4.74418],
-        [38.42179, -4.74459], [38.42191, -4.74487], [38.42196, -4.74501], [38.42197, -4.74517], [38.42188, -4.74548],
-        [38.42180, -4.74577], [38.42175, -4.74595], [38.42173, -4.74611], [38.42181, -4.74646], [38.42191, -4.74687],
-        [38.42205, -4.74745], [38.42210, -4.74749], [38.42217, -4.74729], [38.42229, -4.74685], [38.42238, -4.74665],
-        [38.42245, -4.74649], [38.42254, -4.74621], [38.42265, -4.74589], [38.42281, -4.74554], [38.42298, -4.74525],
-        [38.42304, -4.74505], [38.42305, -4.74485], [38.42296, -4.74431], [38.42293, -4.74403], [38.42293, -4.74383],
-        [38.42295, -4.74361], [38.42299, -4.74330], [38.42303, -4.74294], [38.42307, -4.74263], [38.42311, -4.74235],
-        [38.42316, -4.74196], [38.42318, -4.74171], [38.42317, -4.74149], [38.42309, -4.74113], [38.42297, -4.74075],
-        [38.42295, -4.74067], [38.42295, -4.74044]
-    ];
-
-    function initMap(id, coords, color) {
-        // Inicializamos el mapa en la primera coordenada
-        const map = L.map(id).setView(coords[0], 13);
-        
-        // Capa de mapa oscuro (CartoDB DarkMatter)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
-        
-        // Dibujamos la polilínea del track
-        const poly = L.polyline(coords, {
-            color: color,
-            weight: 5,
-            opacity: 0.8,
-            lineJoin: 'round'
-        }).addTo(map);
-        
-        // Función crítica para ajustar el track al tamaño del contenedor
-        function ajustarVista() {
-            map.invalidateSize(); // Corrige errores de renderizado en layouts Grid/Flex
-            map.fitBounds(poly.getBounds(), { padding: [30, 30] }); // Ajusta el zoom para que quepa todo el track
-        }
-
-        // Ejecutamos el ajuste después de un breve retardo para asegurar que el DOM esté listo
-        setTimeout(ajustarVista, 200);
-
-        // Si el usuario cambia el tamaño de la ventana, el mapa se reajusta solo
-        window.addEventListener('resize', ajustarVista);
+    // 2. Cargar datos desde Firebase
+    if (rallyId) {
+        db.collection("config_rallies").doc(rallyId).onSnapshot(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                document.getElementById('loading').classList.add('hidden');
+                inicializarPanel(data);
+            } else {
+                document.getElementById('loading').innerText = "Error: ID de Rally no encontrado.";
+            }
+        }, error => {
+            console.error("Error Firebase:", error);
+            document.getElementById('loading').innerText = "Error de conexión con la base de datos.";
+        });
+    } else {
+        document.getElementById('loading').innerHTML = "Falta el ID del rally en la URL.<br>Usa: dc.html?id=TU_ID";
     }
 
-    // Al cargar la página, inicializamos ambos mapas
-    window.onload = () => {
-        initMap('mapA', rutaElViso, '#2ecc71');
-        initMap('mapB', rutaPedroche, '#3498db');
-    };
+    function inicializarPanel(rally) {
+        // Actualizar Cabecera
+        if(rally.nombre) document.getElementById('rallyNombre').innerText = rally.nombre.toUpperCase();
+        if(rally.logo) document.getElementById('rallyLogo').src = rally.logo;
+
+        const container = document.getElementById('gridTramos');
+        container.innerHTML = ''; // Limpiar para recargar si hay cambios
+
+        rally.tramos.forEach((tramo, index) => {
+            const mapId = `map_tc_${index}`;
+            
+            // Crear Card del Tramo
+            const card = document.createElement('div');
+            card.className = 'tramo-card';
+            card.innerHTML = `
+                <div class="map-header">${tramo.nombre}</div>
+                <div id="${mapId}" class="map-wrap"></div>
+                <button class="btn-stop" onclick="alert('Salida de ${tramo.nombre} PARADA')">🛑 PARAR SALIDA</button>
+            `;
+            container.appendChild(card);
+
+            // Inicializar Mapa de Leaflet
+            setTimeout(() => {
+                const centro = (tramo.track && tramo.track.length > 0) ? tramo.track[0] : [38.4, -4.8];
+                const map = L.map(mapId).setView(centro, 12);
+                
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; SECeD Control'
+                }).addTo(map);
+
+                if (tramo.track && tramo.track.length > 0) {
+                    const poly = L.polyline(tramo.track, {
+                        color: '#2ecc71',
+                        weight: 5,
+                        opacity: 0.8,
+                        lineJoin: 'round'
+                    }).addTo(map);
+
+                    // Ajuste automático del zoom para que se vea todo el track
+                    map.fitBounds(poly.getBounds(), { padding: [30, 30] });
+                }
+                
+                // Forzar refresco de tamaño por si el grid movió el div
+                map.invalidateSize();
+            }, 100);
+        });
+    }
 </script>
 </body>
 </html>
