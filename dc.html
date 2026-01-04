@@ -7,75 +7,74 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    :root { --panel-bg: #0b120e; --header-h: 70px; }
-    body, html { margin: 0; padding: 0; height: 100%; background: var(--panel-bg); color: white; overflow: hidden; font-family: sans-serif; }
+    .grid-dc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+      gap: 20px;
+      padding: 20px;
+    }
+    .card-dc {
+      background: #0f1a14;
+      border: 1px solid #1d2d23;
+      border-radius: 12px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      height: 500px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .map-dc {
+      flex: 1;
+      border-radius: 8px;
+      background: #000;
+      border: 1px solid #1d2d23;
+    }
+    .btn-stop {
+      background: #7f1d1d;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 5px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .btn-stop.active { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
     
-    .dc-layout { display: flex; flex-direction: column; height: 100vh; }
+    /* Estilo para los globos de radio en el mapa */
+    .radio-badge {
+      background: #17a34a;
+      border: 2px solid #fff;
+      border-radius: 20px;
+      color: white;
+      font-weight: bold;
+      text-align: center;
+      min-width: 40px;
+      padding: 2px 5px;
+      font-size: 14px;
+      white-space: nowrap;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    }
+    .radio-badge.empty { background: #333; border-color: #666; }
     
-    header { 
-      height: var(--header-h); background: #0f1a14; display: flex; align-items: center; 
-      padding: 0 20px; border-bottom: 1px solid #1d2d23; justify-content: space-between;
-    }
-    .dc-brand { display: flex; align-items: center; gap: 15px; }
-    .dc-brand img { height: 40px; }
-    
-    .dc-main { flex: 1; display: flex; position: relative; }
-    #mapDC { flex: 1; background: #000; }
-
-    .side-panel { 
-      width: 300px; background: #0f1a14; border-left: 1px solid #1d2d23; 
-      display: flex; flex-direction: column; padding: 15px; overflow-y: auto;
-    }
-
-    .selector-box { margin-bottom: 20px; }
-    select { width: 100%; padding: 10px; background: #000; color: #17a34a; border: 1px solid #1d2d23; border-radius: 5px; font-weight: bold; }
-
-    .radio-status-list { list-style: none; padding: 0; }
-    .radio-item { 
-      background: #16251b; padding: 10px; border-radius: 6px; margin-bottom: 8px; 
-      display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #333;
-    }
-    .radio-item.active { border-left-color: #17a34a; }
-    .radio-num { font-weight: bold; color: #888; }
-    .radio-car { font-size: 1.2rem; font-weight: bold; color: #17a34a; }
-
-    /* Estilo para los Labels del Mapa */
-    .radio-label {
-      background: #17a34a; border: 2px solid white; border-radius: 50%;
-      color: white; font-weight: bold; text-align: center; line-height: 30px;
-      width: 30px !important; height: 30px !important; margin-left: -15px; margin-top: -15px;
-    }
-    .radio-label.empty { background: #333; border-color: #666; }
+    .tc-title { color: #17a34a; font-size: 1.4rem; margin: 0; }
   </style>
 </head>
 <body>
 
-<div class="dc-layout">
-  <header>
-    <div class="dc-brand">
-      <img id="dcLogo" src="logo.svg" onerror="this.src='logo.png'">
-      <h2 id="dcTitle" style="margin:0; font-size: 1.2rem;">Dirección de Carrera</h2>
+  <main class="app">
+    <div class="brand">
+      <img id="dcLogo" src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
     </div>
-    <div id="rallyClock" style="font-family: monospace; font-size: 1.5rem; color: #17a34a;">00:00:00</div>
-  </header>
+    <h1 id="dcRallyName">SECeD - Dirección de Carrera</h1>
 
-  <div class="dc-main">
-    <div id="mapDC"></div>
-
-    <aside class="side-panel">
-      <div class="selector-box">
-        <label style="font-size: 0.7rem; color: #888;">TRAMO ACTUAL</label>
-        <select id="selectTramo" onchange="cambiarTramo(this.value)">
-          <option value="">Seleccionar tramo...</option>
-        </select>
+    <div id="gridDC" class="grid-dc">
       </div>
-
-      <h3 style="font-size: 0.9rem; color: #17a34a; border-bottom: 1px solid #1d2d23; padding-bottom: 5px;">ESTADO RADIOS</h3>
-      <div id="radiosList" class="radio-status-list">
-        </div>
-    </aside>
-  </div>
-</div>
+  </main>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
@@ -86,117 +85,115 @@
   if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
   const db = firebase.firestore();
   
-  let map, trackLayer, radioMarkers = {};
-  let currentRallyId = new URLSearchParams(window.location.search).get('id');
-  let configRally = null;
+  const urlParams = new URLSearchParams(window.location.search);
+  let rallyId = urlParams.get('id');
+  let mapInstances = {};
+  let radioMarkers = {}; // Estructura: { "TC1": { 1: marker, 2: marker } }
 
-  // 1. Inicializar Mapa
-  function initMap() {
-    map = L.map('mapDC').setView([37.88, -4.77], 12);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-    trackLayer = L.featureGroup().addTo(map);
-  }
-
-  // 2. Cargar Configuración del Rally
-  async function cargarConfiguracion() {
-    if(!currentRallyId) {
-        currentRallyId = prompt("Introduce ID del Rally:");
-        if(!currentRallyId) return;
+  async function initDC() {
+    if (!rallyId) {
+        rallyId = prompt("Introduce el ID del Rally:");
+        if (!rallyId) return;
     }
 
-    const doc = await db.collection("config_rallies").doc(currentRallyId).get();
-    if(doc.exists) {
-      configRally = doc.data();
-      document.getElementById('dcLogo').src = configRally.logo;
-      document.getElementById('dcTitle').innerText = configRally.nombre;
+    // 1. Cargar Identidad y Tramos
+    const doc = await db.collection("config_rallies").doc(rallyId).get();
+    if (!doc.exists) return alert("Rally no encontrado");
+    
+    const config = doc.data();
+    document.getElementById('dcLogo').src = config.logo;
+    document.getElementById('dcRallyName').innerText = config.nombre;
+
+    const container = document.getElementById('gridDC');
+    
+    config.tramos.forEach((tramo, index) => {
+      const tramoId = tramo.nombre.replace(/\s+/g, '_');
+      const cardHtml = `
+        <div class="card-dc">
+          <div class="card-header">
+            <h2 class="tc-title">${tramo.nombre}</h2>
+            <button class="btn-stop" id="stop-${tramoId}" onclick="toggleSalida('${tramo.nombre}')">PARAR SALIDA</button>
+          </div>
+          <div id="map-${tramoId}" class="map-dc"></div>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', cardHtml);
       
-      const select = document.getElementById('selectTramo');
-      configRally.tramos.forEach((t, idx) => {
-        let opt = document.createElement('option');
-        opt.value = idx;
-        opt.innerText = t.nombre;
-        select.appendChild(opt);
-      });
-    }
+      // Inicializar mapa para este tramo
+      renderizarMapaTramo(tramoId, tramo);
+      // Escuchar cambios de este tramo
+      suscribirCambiosTramo(tramo.nombre, tramoId);
+    });
   }
 
-  // 3. Cambiar de Tramo y dibujar
-  function cambiarTramo(idx) {
-    if(idx === "") return;
-    const tramo = configRally.tramos[idx];
-    trackLayer.clearLayers();
-    radioMarkers = {};
-    document.getElementById('radiosList').innerHTML = "";
+  function renderizarMapaTramo(divId, tramo) {
+    const map = L.map(`map-${divId}`, { zoomControl: false }).setView([37.88, -4.77], 12);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+    
+    mapInstances[divId] = map;
+    radioMarkers[divId] = {};
 
-    // Dibujar línea
-    if(tramo.track.length) {
-      const poly = L.polyline(tramo.track, {color: '#17a34a', weight: 4, opacity: 0.6}).addTo(trackLayer);
+    // Dibujar Track
+    if (tramo.track && tramo.track.length > 0) {
+      const poly = L.polyline(tramo.track, {color: '#17a34a', weight: 4}).addTo(map);
       map.fitBounds(poly.getBounds());
     }
 
-    // Dibujar puntos de radio (inicialmente vacíos)
-    tramo.radios.forEach((r, i) => {
-      const rNum = i + 1;
-      const icon = L.divIcon({
-        className: 'radio-label empty',
-        html: rNum,
-        iconSize: [30, 30]
-      });
-      const marker = L.marker([r.lat, r.lng], {icon: icon}).addTo(trackLayer);
-      radioMarkers[rNum] = marker;
-
-      // Añadir a la lista lateral
-      const item = document.createElement('div');
-      item.className = 'radio-item';
-      item.id = `sidebar-radio-${rNum}`;
-      item.innerHTML = `<span class="radio-num">RADIO ${rNum}</span> <span class="radio-car" id="val-radio-${rNum}">--</span>`;
-      document.getElementById('radiosList').appendChild(item);
-    });
-
-    escucharPasoDeCoches(tramo.nombre);
-  }
-
-  // 4. ESCUCHA TIEMPO REAL: Cuando un radio pulsa un botón
-  function escucharPasoDeCoches(nombreTramo) {
-    // Escuchamos en la colección de logs o estados de radio
-    // Asumimos que los radios guardan en: rallies/{rallyId}/pasos/{tramo}/radioX -> {dorsal: "12"}
-    db.collection("rallies").doc(currentRallyId)
-      .collection("pasos").doc(nombreTramo).onSnapshot(doc => {
-        if(!doc.exists) return;
-        const data = doc.data();
-        
-        Object.keys(data).forEach(radioKey => {
-          const rNum = radioKey.replace('radio', '');
-          const dorsal = data[radioKey];
-          actualizarVisualRadio(rNum, dorsal);
+    // Dibujar Radios
+    if (tramo.radios) {
+      tramo.radios.forEach((r, idx) => {
+        const rNum = idx + 1;
+        const icon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div class="radio-badge empty" id="badge-${divId}-${rNum}">R${rNum}: --</div>`,
+          iconSize: [60, 20],
+          iconAnchor: [30, 10]
         });
-    });
-  }
-
-  function actualizarVisualRadio(num, dorsal) {
-    if(radioMarkers[num]) {
-      // Actualizar mapa: Quitar clase 'empty' y poner el dorsal
-      const icon = L.divIcon({
-        className: 'radio-label',
-        html: dorsal,
-        iconSize: [30, 30]
+        const marker = L.marker([r.lat, r.lng], {icon: icon}).addTo(map);
+        radioMarkers[divId][rNum] = marker;
       });
-      radioMarkers[num].setIcon(icon);
-      
-      // Actualizar lateral
-      const valEl = document.getElementById(`val-radio-${num}`);
-      if(valEl) valEl.innerText = "#" + dorsal;
-      document.getElementById(`sidebar-radio-${num}`).classList.add('active');
     }
   }
 
-  // Reloj
-  setInterval(() => {
-    document.getElementById('rallyClock').innerText = new Date().toLocaleTimeString('es-ES', {hour12:false});
-  }, 1000);
+  function suscribirCambiosTramo(nombreReal, divId) {
+    // Escuchar estado de PARAR SALIDA
+    db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal)
+      .onSnapshot(doc => {
+        const btn = document.getElementById(`stop-${divId}`);
+        if (doc.exists && doc.data().pararSalida) {
+          btn.classList.add('active');
+          btn.innerText = "SALIDA PARADA";
+        } else {
+          btn.classList.remove('active');
+          btn.innerText = "PARAR SALIDA";
+        }
+      });
 
-  initMap();
-  cargarConfiguracion();
+    // Escuchar paso de coches por los radios
+    db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal)
+      .onSnapshot(doc => {
+        if (!doc.exists) return;
+        const data = doc.data();
+        Object.keys(data).forEach(key => {
+          const rNum = key.replace('radio', '');
+          const dorsal = data[key];
+          const badge = document.getElementById(`badge-${divId}-${rNum}`);
+          if (badge) {
+            badge.classList.remove('empty');
+            badge.innerText = `R${rNum}: #${dorsal}`;
+          }
+        });
+      });
+  }
+
+  async function toggleSalida(nombreTramo) {
+    const docRef = db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreTramo);
+    const doc = await docRef.get();
+    const estadoActual = doc.exists ? doc.data().pararSalida : false;
+    await docRef.set({ pararSalida: !estadoActual }, { merge: true });
+  }
+
+  window.onload = initDC;
 </script>
 
 </body>
