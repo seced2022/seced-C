@@ -7,59 +7,26 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    .grid-dc {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      padding: 15px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .tc-selector-bar {
-      padding: 10px 20px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      background: #0f1a14;
-      border-bottom: 1px solid #1d2d23;
-    }
-    .btn-tc-toggle {
-      background: #1e293b; color: white; border: 1px solid #334155;
-      padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;
-    }
-    .btn-tc-toggle.active { background: #17a34a; border-color: #fff; }
+    .grid-dc { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; width: 100%; box-sizing: border-box; }
+    .tc-selector-bar { padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 10px; background: #0f1a14; border-bottom: 1px solid #1d2d23; }
+    .btn-tc-toggle { background: #1e293b; color: white; border: 1px solid #334155; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .btn-tc-toggle.active { background: #16a34a; border-color: #fff; }
 
-    .card-dc {
-      background: #0f1a14; border: 1px solid #1d2d23; border-radius: 12px;
-      padding: 15px; display: flex; flex-direction: column; height: 450px;
-    }
+    .card-dc { background: #0f1a14; border: 1px solid #1d2d23; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; height: 500px; }
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .map-dc { flex: 1; border-radius: 8px; background: #000; border: 1px solid #1d2d23; }
+    .map-dc { flex: 1; border-radius: 8px; background: #000; border: 1px solid #1d2d23; z-index: 1; }
 
-    /* Botones de Parada/Reanudar */
-    .btn-stop {
-      background: #7f1d1d; color: white; border: none; padding: 8px 15px;
-      border-radius: 5px; font-weight: bold; cursor: pointer;
-    }
-    .btn-stop.blink { 
-      background: #ff0000; 
-      animation: blinker 1s linear infinite; 
-      box-shadow: 0 0 15px #ff0000;
-    }
+    .btn-stop { background: #7f1d1d; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: 800; cursor: pointer; }
+    .btn-stop.blink { background: #ff0000; animation: blinker 1s linear infinite; box-shadow: 0 0 15px #ff0000; }
     @keyframes blinker { 50% { opacity: 0.4; } }
 
-    .btn-resume {
-      background: #1e293b; color: white; border: 1px solid #334155;
-      padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold;
-    }
+    /* Botón Reanudar en Verde */
+    .btn-resume { background: #15803d; color: white; border: 1px solid #16a34a; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: 800; }
+    .btn-resume:active { background: #166534; }
 
-    .radio-badge {
-      background: #17a34a; border: 2px solid #fff; border-radius: 20px; color: white;
-      font-weight: bold; text-align: center; min-width: 45px; padding: 2px 6px;
-      font-size: 13px; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-    }
+    .radio-badge { background: #16a34a; border: 2px solid #fff; border-radius: 20px; color: white; font-weight: bold; text-align: center; min-width: 50px; padding: 2px 6px; font-size: 13px; }
     .radio-badge.empty { background: #333; border-color: #666; }
-    .tc-title { color: #17a34a; font-size: 1.2rem; margin: 0; }
+    .tc-title { color: #22c55e; font-size: 1.3rem; margin: 0; font-weight: 900; }
 
     @media (max-width: 900px) { .grid-dc { grid-template-columns: 1fr; } }
   </style>
@@ -83,6 +50,7 @@
   let rallyId = new URLSearchParams(window.location.search).get('id');
   let configGlobal = null;
   let tramosVisibles = new Set();
+  let mapasActivos = {};
 
   async function initDC() {
     if (!rallyId) { rallyId = prompt("ID del Rally:"); if (!rallyId) return; }
@@ -108,50 +76,79 @@
   function renderizarGrid() {
     const container = document.getElementById('gridDC');
     container.innerHTML = "";
+    mapasActivos = {};
+
     configGlobal.tramos.forEach((tramo, index) => {
       if (!tramosVisibles.has(index)) return;
-      const tramoId = tramo.nombre.replace(/\s+/g, '_');
+      const tId = tramo.nombre.replace(/\s+/g, '_');
       const cardHtml = `
         <div class="card-dc">
           <div class="card-header">
             <h2 class="tc-title">${tramo.nombre}</h2>
             <div style="display:flex; gap:10px;">
-              <button class="btn-stop" id="stop-${tramoId}" onclick="pararSalida('${tramo.nombre}')">PARAR SALIDA</button>
+              <button class="btn-stop" id="stop-${tId}" onclick="pararSalida('${tramo.nombre}')">PARAR SALIDA</button>
               <button class="btn-resume" onclick="reanudarSalida('${tramo.nombre}')">REANUDAR</button>
             </div>
           </div>
-          <div id="map-${tramoId}" class="map-dc"></div>
+          <div id="map-${tId}" class="map-dc"></div>
         </div>
       `;
       container.insertAdjacentHTML('beforeend', cardHtml);
+
+      // Timeout para asegurar que el div existe y tiene dimensiones
       setTimeout(() => {
-        const map = L.map(`map-${tramoId}`).setView([37.88, -4.77], 12);
+        const map = L.map(`map-${tId}`).setView([37.88, -4.77], 12);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-        if (tramo.track) L.polyline(tramo.track, {color: '#17a34a', weight: 4}).addTo(map);
+        
+        // DIBUJAR TRACK (Corregido)
+        if (tramo.track && tramo.track.length > 0) {
+            const poly = L.polyline(tramo.track, {color: '#22c55e', weight: 5, opacity: 0.8}).addTo(map);
+            map.fitBounds(poly.getBounds());
+        }
+
+        // DIBUJAR RADIOS
         if (tramo.radios) {
-          tramo.radios.forEach((r, idx) => {
-            const icon = L.divIcon({ className: 'custom-div-icon', html: `<div class="radio-badge empty" id="badge-${tramoId}-${idx+1}">R${idx+1}: --</div>`, iconSize:[60,20] });
+          tramo.radios.forEach((r, rIdx) => {
+            const numRadio = rIdx + 1;
+            const icon = L.divIcon({ 
+                className: 'custom-div-icon', 
+                html: `<div class="radio-badge empty" id="badge-${tId}-${numRadio}">R${numRadio}: --</div>`, 
+                iconSize:[70,24],
+                iconAnchor: [35, 12]
+            });
             L.marker([r.lat, r.lng], {icon}).addTo(map);
           });
         }
-        suscribirCambiosTramo(tramo.nombre, tramoId);
-      }, 50);
+        suscribirCambiosTramo(tramo.nombre, tId);
+        map.invalidateSize(); // Fuerza el refresco del mapa
+      }, 100);
     });
   }
 
-  function suscribirCambiosTramo(nombreReal, divId) {
+  function suscribirCambiosTramo(nombreReal, tId) {
+    // Escuchar estado de parada
     db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal).onSnapshot(doc => {
-      const btn = document.getElementById(`stop-${divId}`);
+      const btn = document.getElementById(`stop-${tId}`);
       if (!btn) return;
       if (doc.exists && doc.data().pararSalida) { btn.classList.add('blink'); btn.innerText = "SALIDA PARADA"; }
       else { btn.classList.remove('blink'); btn.innerText = "PARAR SALIDA"; }
     });
+
+    // Escuchar pasos de coches
     db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal).onSnapshot(doc => {
       if (!doc.exists) return;
       const data = doc.data();
       Object.keys(data).forEach(key => {
-        const badge = document.getElementById(`badge-${divId}-${key.replace('radio','')}`);
-        if (badge) { badge.classList.remove('empty'); badge.innerText = `R${key.replace('radio','')}: #${data[key]}`; }
+        if(key.startsWith('radio')) {
+            const num = key.replace('radio','');
+            const badge = document.getElementById(`badge-${tId}-${num}`);
+            if (badge) { 
+                badge.classList.remove('empty'); 
+                badge.innerText = `R${num}: #${data[key]}`; 
+                badge.style.background = "#ffd60a";
+                badge.style.color = "#000";
+            }
+        }
       });
     });
   }
