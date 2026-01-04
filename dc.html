@@ -7,17 +7,14 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    /* Layout de 2 columnas ocupando el ancho total */
     .grid-dc {
       display: grid;
-      grid-template-columns: 1fr 1fr; /* Exactamente dos por línea */
+      grid-template-columns: 1fr 1fr;
       gap: 15px;
       padding: 15px;
       width: 100%;
       box-sizing: border-box;
     }
-
-    /* Selector de tramos (botones arriba) */
     .tc-selector-bar {
       padding: 10px 20px;
       display: flex;
@@ -26,93 +23,53 @@
       background: #0f1a14;
       border-bottom: 1px solid #1d2d23;
     }
-
     .btn-tc-toggle {
-      background: #1e293b;
-      color: white;
-      border: 1px solid #334155;
-      padding: 8px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-      transition: 0.2s;
+      background: #1e293b; color: white; border: 1px solid #334155;
+      padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;
     }
-
-    .btn-tc-toggle.active {
-      background: var(--accent);
-      border-color: #fff;
-    }
+    .btn-tc-toggle.active { background: #17a34a; border-color: #fff; }
 
     .card-dc {
-      background: #0f1a14;
-      border: 1px solid #1d2d23;
-      border-radius: 12px;
-      padding: 15px;
-      display: flex;
-      flex-direction: column;
-      height: 450px; /* Ajustado para que quepan bien dos */
+      background: #0f1a14; border: 1px solid #1d2d23; border-radius: 12px;
+      padding: 15px; display: flex; flex-direction: column; height: 450px;
     }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .map-dc { flex: 1; border-radius: 8px; background: #000; border: 1px solid #1d2d23; }
 
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
-    .map-dc {
-      flex: 1;
-      border-radius: 8px;
-      background: #000;
-      border: 1px solid #1d2d23;
-    }
-
+    /* Botones de Parada/Reanudar */
     .btn-stop {
-      background: #7f1d1d;
-      color: white;
-      border: none;
-      padding: 8px 15px;
-      border-radius: 5px;
-      font-weight: bold;
-      cursor: pointer;
+      background: #7f1d1d; color: white; border: none; padding: 8px 15px;
+      border-radius: 5px; font-weight: bold; cursor: pointer;
     }
+    .btn-stop.blink { 
+      background: #ff0000; 
+      animation: blinker 1s linear infinite; 
+      box-shadow: 0 0 15px #ff0000;
+    }
+    @keyframes blinker { 50% { opacity: 0.4; } }
 
-    .btn-stop.active { background: #ff0000; box-shadow: 0 0 10px #ff0000; }
+    .btn-resume {
+      background: #1e293b; color: white; border: 1px solid #334155;
+      padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold;
+    }
 
     .radio-badge {
-      background: #17a34a;
-      border: 2px solid #fff;
-      border-radius: 20px;
-      color: white;
-      font-weight: bold;
-      text-align: center;
-      min-width: 45px;
-      padding: 2px 6px;
-      font-size: 13px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+      background: #17a34a; border: 2px solid #fff; border-radius: 20px; color: white;
+      font-weight: bold; text-align: center; min-width: 45px; padding: 2px 6px;
+      font-size: 13px; box-shadow: 0 2px 5px rgba(0,0,0,0.5);
     }
     .radio-badge.empty { background: #333; border-color: #666; }
-
     .tc-title { color: #17a34a; font-size: 1.2rem; margin: 0; }
 
-    /* Responsivo para móviles: 1 columna si la pantalla es muy estrecha */
-    @media (max-width: 900px) {
-      .grid-dc { grid-template-columns: 1fr; }
-    }
+    @media (max-width: 900px) { .grid-dc { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-
   <main class="app">
-    <div class="brand">
-      <img id="dcLogo" src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
-    </div>
+    <div class="brand"><img id="dcLogo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
     <h1 id="dcRallyName">SECeD - Dirección de Carrera</h1>
-
     <div id="tcSelector" class="tc-selector-bar"></div>
-
-    <div id="gridDC" class="grid-dc">
-      </div>
+    <div id="gridDC" class="grid-dc"></div>
   </main>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
@@ -123,130 +80,84 @@
 <script>
   if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
   const db = firebase.firestore();
-  
-  const urlParams = new URLSearchParams(window.location.search);
-  let rallyId = urlParams.get('id');
+  let rallyId = new URLSearchParams(window.location.search).get('id');
   let configGlobal = null;
   let tramosVisibles = new Set();
 
   async function initDC() {
-    if (!rallyId) {
-        rallyId = prompt("Introduce el ID del Rally:");
-        if (!rallyId) return;
-    }
-
+    if (!rallyId) { rallyId = prompt("ID del Rally:"); if (!rallyId) return; }
     const doc = await db.collection("config_rallies").doc(rallyId).get();
-    if (!doc.exists) return alert("Rally no encontrado");
-    
+    if (!doc.exists) return;
     configGlobal = doc.data();
     document.getElementById('dcLogo').src = configGlobal.logo;
     document.getElementById('dcRallyName').innerText = configGlobal.nombre;
 
-    // Crear botones de selección
     const selector = document.getElementById('tcSelector');
     configGlobal.tramos.forEach((tramo, index) => {
       const btn = document.createElement('button');
-      btn.className = 'btn-tc-toggle';
-      btn.innerText = tramo.nombre;
-      btn.onclick = () => toggleTramoVisual(index, btn);
+      btn.className = 'btn-tc-toggle'; btn.innerText = tramo.nombre;
+      btn.onclick = () => {
+        if (tramosVisibles.has(index)) { tramosVisibles.delete(index); btn.classList.remove('active'); }
+        else { tramosVisibles.add(index); btn.classList.add('active'); }
+        renderizarGrid();
+      };
       selector.appendChild(btn);
     });
   }
 
-  function toggleTramoVisual(index, btn) {
-    if (tramosVisibles.has(index)) {
-      tramosVisibles.delete(index);
-      btn.classList.remove('active');
-    } else {
-      tramosVisibles.add(index);
-      btn.classList.add('active');
-    }
-    renderizarGrid();
-  }
-
   function renderizarGrid() {
     const container = document.getElementById('gridDC');
-    container.innerHTML = ""; // Limpiamos para redibujar según selección
-
+    container.innerHTML = "";
     configGlobal.tramos.forEach((tramo, index) => {
       if (!tramosVisibles.has(index)) return;
-
       const tramoId = tramo.nombre.replace(/\s+/g, '_');
       const cardHtml = `
-        <div class="card-dc" id="card-${tramoId}">
+        <div class="card-dc">
           <div class="card-header">
             <h2 class="tc-title">${tramo.nombre}</h2>
-            <button class="btn-stop" id="stop-${tramoId}" onclick="toggleSalida('${tramo.nombre}')">PARAR SALIDA</button>
+            <div style="display:flex; gap:10px;">
+              <button class="btn-stop" id="stop-${tramoId}" onclick="pararSalida('${tramo.nombre}')">PARAR SALIDA</button>
+              <button class="btn-resume" onclick="reanudarSalida('${tramo.nombre}')">REANUDAR</button>
+            </div>
           </div>
           <div id="map-${tramoId}" class="map-dc"></div>
         </div>
       `;
       container.insertAdjacentHTML('beforeend', cardHtml);
-      
-      // Esperar un milisegundo a que el DOM exista para Leaflet
       setTimeout(() => {
-        const map = L.map(`map-${tramoId}`, { zoomControl: true }).setView([37.88, -4.77], 12);
+        const map = L.map(`map-${tramoId}`).setView([37.88, -4.77], 12);
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-
-        if (tramo.track && tramo.track.length > 0) {
-          const poly = L.polyline(tramo.track, {color: '#17a34a', weight: 4}).addTo(map);
-          map.fitBounds(poly.getBounds());
-        }
-
-        // Dibujar Radios
+        if (tramo.track) L.polyline(tramo.track, {color: '#17a34a', weight: 4}).addTo(map);
         if (tramo.radios) {
           tramo.radios.forEach((r, idx) => {
-            const rNum = idx + 1;
-            const icon = L.divIcon({
-              className: 'custom-div-icon',
-              html: `<div class="radio-badge empty" id="badge-${tramoId}-${rNum}">R${rNum}: --</div>`,
-              iconSize: [60, 20],
-              iconAnchor: [30, 10]
-            });
-            L.marker([r.lat, r.lng], {icon: icon}).addTo(map);
+            const icon = L.divIcon({ className: 'custom-div-icon', html: `<div class="radio-badge empty" id="badge-${tramoId}-${idx+1}">R${idx+1}: --</div>`, iconSize:[60,20] });
+            L.marker([r.lat, r.lng], {icon}).addTo(map);
           });
         }
-
         suscribirCambiosTramo(tramo.nombre, tramoId);
       }, 50);
     });
   }
 
   function suscribirCambiosTramo(nombreReal, divId) {
-    // Parar Salida
-    db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal)
-      .onSnapshot(doc => {
-        const btn = document.getElementById(`stop-${divId}`);
-        if (!btn) return;
-        if (doc.exists && doc.data().pararSalida) {
-          btn.classList.add('active'); btn.innerText = "SALIDA PARADA";
-        } else {
-          btn.classList.remove('active'); btn.innerText = "PARAR SALIDA";
-        }
+    db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal).onSnapshot(doc => {
+      const btn = document.getElementById(`stop-${divId}`);
+      if (!btn) return;
+      if (doc.exists && doc.data().pararSalida) { btn.classList.add('blink'); btn.innerText = "SALIDA PARADA"; }
+      else { btn.classList.remove('blink'); btn.innerText = "PARAR SALIDA"; }
+    });
+    db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal).onSnapshot(doc => {
+      if (!doc.exists) return;
+      const data = doc.data();
+      Object.keys(data).forEach(key => {
+        const badge = document.getElementById(`badge-${divId}-${key.replace('radio','')}`);
+        if (badge) { badge.classList.remove('empty'); badge.innerText = `R${key.replace('radio','')}: #${data[key]}`; }
       });
-
-    // Picados de Radio
-    db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal)
-      .onSnapshot(doc => {
-        if (!doc.exists) return;
-        const data = doc.data();
-        Object.keys(data).forEach(key => {
-          const rNum = key.replace('radio', '');
-          const badge = document.getElementById(`badge-${divId}-${rNum}`);
-          if (badge) {
-            badge.classList.remove('empty');
-            badge.innerText = `R${rNum}: #${data[key]}`;
-          }
-        });
-      });
+    });
   }
 
-  async function toggleSalida(nombreTramo) {
-    const docRef = db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreTramo);
-    const doc = await docRef.get();
-    const estadoActual = doc.exists ? doc.data().pararSalida : false;
-    await docRef.set({ pararSalida: !estadoActual }, { merge: true });
-  }
+  async function pararSalida(n) { await db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(n).set({ pararSalida: true }, { merge: true }); }
+  async function reanudarSalida(n) { await db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(n).set({ pararSalida: false }, { merge: true }); }
 
   window.onload = initDC;
 </script>
