@@ -15,10 +15,16 @@
       background: rgba(127, 29, 29, 0.98); color: white; z-index: 10000;
       display: flex; flex-direction: column; justify-content: center;
       align-items: center; text-align: center; font-family: sans-serif;
+      animation: pulse-bg 2s infinite;
     }
-    .alerta-dc-control h1 { font-size: 4rem; margin: 0; font-weight: 900; }
+    @keyframes pulse-bg {
+      0% { background: rgba(127, 29, 29, 0.98); }
+      50% { background: rgba(185, 28, 28, 0.98); }
+      100% { background: rgba(127, 29, 29, 0.98); }
+    }
+    .alerta-dc-control h1 { font-size: 4rem; margin: 0; font-weight: 900; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
     .alerta-dc-control p { font-size: 1.5rem; margin-top: 10px; }
-    .alerta-dc-control .tramo-box { margin-top: 20px; border: 2px solid white; padding: 10px 20px; font-weight: bold; text-transform: uppercase; }
+    .alerta-dc-control .tramo-box { margin-top: 20px; border: 3px solid white; padding: 10px 30px; font-weight: bold; text-transform: uppercase; font-size: 1.8rem; }
   </style>
 </head>
 <body>
@@ -98,10 +104,6 @@
           <button id="btnAuditClose">Cerrar ✕</button>
         </div>
       </div>
-      <div class="audit-meta">
-        <div>Tramo: <span id="auditTramo">—</span></div>
-        <div>Operador (actual): <span id="auditOperador">—</span></div>
-      </div>
       <div id="auditList" class="audit-list"></div>
     </div>
   </main>
@@ -111,68 +113,67 @@
   <script src="firebase-config.js?v=2"></script>
 
   <script>
-    if (!firebase.apps.length) {
-        firebase.initializeApp(window.FIREBASE_CONFIG);
-    }
+    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
     const db = firebase.firestore();
     const urlParams = new URLSearchParams(window.location.search);
     let rallyId = urlParams.get('id');
-    const TRAMO_ID_NUM = urlParams.get('tramo') || '1'; // El número del tramo actual
+    const TRAMO_ID_NUM = urlParams.get('tramo') || '1';
+    
+    let audioCtx = null;
+    let alarmInterval = null;
 
-    if (!rallyId) {
-        rallyId = prompt("Introduce el ID del Rally para cargar la configuración:");
-        if (rallyId) {
-            const separator = window.location.href.includes('?') ? '&' : '?';
-            window.location.href = window.location.href + separator + "id=" + rallyId;
-        }
+    // Función para generar sonido de alerta (Sirena)
+    function playAlarmSound() {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.5);
     }
 
     if (rallyId) {
         db.collection("config_rallies").doc(rallyId).get().then(doc => {
             if (doc.exists) {
                 const data = doc.data();
-                const logoImg = document.getElementById('mainLogo');
-                if (logoImg && data.logo) logoImg.src = data.logo;
-                const header = document.querySelector('h1');
-                if (header && data.nombre) header.innerText = data.nombre;
-
-                // Identificar el nombre del tramo real para escuchar a DC
+                if (data.logo) document.getElementById('mainLogo').src = data.logo;
+                if (data.nombre) document.querySelector('h1').innerText = data.nombre;
+                
                 const idx = parseInt(TRAMO_ID_NUM) - 1;
                 if (data.tramos && data.tramos[idx]) {
-                    const nombreTramoReal = data.tramos[idx].nombre;
-                    activarEscuchaDC(nombreTramoReal);
+                    activarEscuchaDC(data.tramos[idx].nombre);
                 }
             }
-        }).catch(err => console.error("Error al cargar datos del rally:", err));
+        });
     }
 
-    // Lógica para bloquear pantalla desde DC
     function activarEscuchaDC(nombreTramo) {
-        db.collection("rallies").doc(rallyId)
-          .collection("estado_tramos").doc(nombreTramo)
-          .onSnapshot(doc => {
+        db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreTramo).onSnapshot(doc => {
             const esAdjunto = document.getElementById('btnModeJefe').classList.contains('active');
             const esSalida = document.getElementById('btnModeSalida').classList.contains('active');
-            
             let aviso = document.getElementById('aviso-parada-dc');
 
-            // Solo mostramos el aviso si es Adjunto o Salida
             if (doc.exists && doc.data().pararSalida && (esAdjunto || esSalida)) {
                 if (!aviso) {
                     aviso = document.createElement('div');
                     aviso.id = 'aviso-parada-dc';
                     aviso.className = 'alerta-dc-control';
-                    aviso.innerHTML = `
-                        <h1>⚠️ SALIDA PARADA</h1>
-                        <p>DIRECCIÓN DE CARRERA HA DETENIDO LA SALIDA</p>
-                        <div class="tramo-box">${nombreTramo}</div>
-                    `;
+                    aviso.innerHTML = `<h1>⚠️ SALIDA PARADA</h1><p>ORDEN DE DIRECCIÓN DE CARRERA</p><div class="tramo-box">${nombreTramo}</div>`;
                     document.body.appendChild(aviso);
+                    // Iniciar sonido intermitente
+                    if (!alarmInterval) alarmInterval = setInterval(playAlarmSound, 1000);
                 }
             } else {
                 if (aviso) aviso.remove();
+                if (alarmInterval) { clearInterval(alarmInterval); alarmInterval = null; }
             }
-          });
+        });
     }
   </script>
 
