@@ -26,9 +26,6 @@ const tramoMenu  = document.getElementById('tramoMenu');
 const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
-// Añade esto debajo de las otras constantes al principio
-const rallyId = new URLSearchParams(window.location.search).get('id');
-const radioId = new URLSearchParams(window.location.search).get('radio');
 
 async function clearRadioDocFor(value){
   try{
@@ -39,6 +36,25 @@ async function clearRadioDocFor(value){
   }catch(e){}
 }
 
+// --- NUEVO: ESCUCHAR ORDEN DE PARAR DESDE DC ---
+if (rallyId) {
+  db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(tramo)
+    .onSnapshot(doc => {
+      if (doc.exists && doc.data().pararSalida === true) {
+        btnAgregar.innerText = "SALIDA PARADA POR DC";
+        btnAgregar.style.backgroundColor = "#dc2626";
+        btnAgregar.style.color = "white";
+        if (input) { input.style.borderColor = "#ff0000"; input.disabled = true; }
+        btnAgregar.disabled = true;
+      } else {
+        btnAgregar.innerText = "Añadir Salida";
+        btnAgregar.style.backgroundColor = "";
+        btnAgregar.style.color = "";
+        if (input && window.MODE !== 'LLEGADA') { input.style.borderColor = ""; input.disabled = false; }
+        btnAgregar.disabled = (window.MODE === 'LLEGADA');
+      }
+    });
+}
 function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
 function setOperator(name){ try { localStorage.setItem('seced_operator', name || ''); } catch {} updateAuditMeta(); }
 window.OPERATOR = getOperator();
@@ -61,9 +77,9 @@ function applyModeUI(){
   const disableInput = (window.MODE === 'LLEGADA');
   if (input) input.disabled = disableInput;
   if (btnAgregar) btnAgregar.disabled = disableInput;
+
   if (btnResetRadios) btnResetRadios.style.display = (window.MODE === 'JEFE') ? '' : 'none';
 }
-
 (function initModeButtons(){
   const bJ = document.getElementById('btnModeJefe');
   const bS = document.getElementById('btnModeSalida');
@@ -89,7 +105,6 @@ if (window.VIEWER) document.body.classList.add('viewer');
 function pad(n){ return String(n).padStart(2,'0'); }
 function fmtTime(ms){ const d=new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
 function renderClock(nowMs){ const d=new Date(nowNetMs()); if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
-
 async function syncTime(){
   try{
     if (clockSync) { clockSync.textContent='sincronizando…'; clockSync.className='sync'; }
@@ -211,17 +226,6 @@ if (btnOperador) btnOperador.addEventListener('click', ()=>{
   const name = prompt('Nombre o identificador del operador:', window.OPERATOR||'');
   if (name !== null) { window.OPERATOR = (name||'').trim(); setOperator(window.OPERATOR); }
 });
-
-/* === Sincronización con Mapa Dirección de Carrera === */
-async function avisarAMapaDC(dorsal) {
-  if (!rallyId || !radioId) return;
-  const tramoActual = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-  try {
-    const db = firebase.firestore();
-    await db.collection("rallies").doc(rallyId).collection("pasos").doc(tramoActual)
-            .set({ [`radio${radioId}`]: dorsal }, { merge: true });
-  } catch (error) { console.error("Error DC Sync:", error); }
-}
 
 /* === Radio marks (bolitas) === */
 window._radioMarks = new Map();
@@ -433,30 +437,13 @@ async function addNumber() {
 
   const tS = nowNetMs();
   items.push({ value: num, selected: false, status: 'normal', rNumber: null, tSalida: tS, tLlegada: null, tAbandono: null });
-  avisarAMapaDC(val);
-  
+
   render();
   if (typeof syncSave === 'function') syncSave();
   await clearRadioDocFor(num);
   input.value = ''; input.focus();
   logAudit('alta', { value:num, tSalida:tS });
 }
-if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
-input.addEventListener('keydown', e => { if (e.key === 'Enter') addNumber(); });
-
-if (btnLimpiar) btnLimpiar.addEventListener('click', async () => {
-  if (items.length === 0) return;
-  if (confirm('¿Vaciar tramo y limpiar mapa de DC?')) {
-    items = []; render();
-    if (typeof syncSave === 'function') syncSave();
-    try {
-      const db = firebase.firestore();
-      const tramoIdActual = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-      if (rallyId) await db.collection("rallies").doc(rallyId).collection("pasos").doc(tramoIdActual).delete();
-    } catch (e) {}
-    logAudit('limpiar_total', { tramo: window.TRAMO_ID });
-  }
-});
 
 async function editNumber(prevVal) {
   const idx = items.findIndex(x => x.value === prevVal);
@@ -505,53 +492,15 @@ async function editSalida(val){
   await clearRadioDocFor(val);
   logAudit('editar_salida', { value: val, tSalida_prev: prev, tSalida_new: newT, salidasHist: items[idx].salidasHist||[] });
 }
-// Esta función envía el dorsal al mapa de Dirección de Carrera
-async function avisarAMapaDC(dorsal) {
-  if (!rallyId || !radioId) return; // Si no hay ID de rally o radio, no hace nada
-  
-  const tramoActual = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-  
-  try {
-    const db = firebase.firestore();
-    await db.collection("rallies").doc(rallyId)
-            .collection("pasos").doc(tramoActual)
-            .set({
-              [`radio${radioId}`]: dorsal // Ejemplo: radio1: 5
-            }, { merge: true });
-  } catch (error) {
-    console.error("Error enviando al mapa:", error);
-  }
-}
+
 /* === Botones base === */
 if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
 if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') addNumber(); });
-
-if (btnLimpiar) btnLimpiar.addEventListener('click', async () => {
+if (btnLimpiar) btnLimpiar.addEventListener('click', () => {
   if (items.length === 0) return;
-  
-  if (confirm('¿Vaciar la lista de tarjetas y limpiar el mapa de Dirección de Carrera?')) {
-    // 1. Limpiamos la lista local y guardamos
-    items = []; 
-    render(); 
-    if (typeof syncSave === 'function') syncSave();
-
-    // 2. Intentamos borrar la memoria de los radios en el mapa de DC
-    try {
-      const db = firebase.firestore();
-      // Usamos el ID del tramo actual
-      const tramoIdActual = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-      
-      // Si tenemos el ID del rally, borramos el documento de "pasos"
-      if (typeof rallyId !== 'undefined' && rallyId) {
-        await db.collection("rallies").doc(rallyId).collection("pasos").doc(tramoIdActual).delete();
-        console.log("Memoria de radios en DC borrada.");
-      }
-    } catch (e) {
-      console.error("Error al limpiar memoria de DC:", e);
-    }
-
-    logAudit('limpiar_total', { tramo: window.TRAMO_ID });
-    input.focus();
+  if (confirm('¿Vaciar la lista de tarjetas?')) {
+    items = []; render(); if (typeof syncSave === 'function') syncSave();
+    logAudit('limpiar', {}); input.focus();
   }
 });
 
