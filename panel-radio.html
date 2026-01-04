@@ -6,9 +6,11 @@
   <title>SECeD - Panel Radio</title>
   <link rel="stylesheet" href="styles.css?v=41" />
   <style>
+    /* Estilos de estado originales */
     .viewer .card.radio-eligible { background: #ffffff !important; color: #111 !important; cursor: pointer !important; border: 2px solid #22c55e !important; }
     .card.radio-locked { opacity:.45; pointer-events:none; filter: grayscale(1); }
     .card.radio-clicked-by-me { background:#fef08a !important; border-color:#eab308 !important; pointer-events:none; color: #000 !important; font-weight: 800; }
+    
     #btnRadio { background:#0c2415; color:#eafff7; border: 1px solid #13301e; border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer; }
     .radio-badge { position:absolute; top:14px; right:14px; background:#ffd60a; color: #000; padding:6px 12px; font-weight:900; border-radius:9999px; border: 1px solid #e9b400; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
     #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #0b1f12; color: #fff; padding: 10px 15px; border-radius: 10px; display: none; z-index: 9999; border: 1px solid #13301e; font-weight: bold; }
@@ -42,6 +44,7 @@
     const db = firebase.firestore();
     const rallyId = new URLSearchParams(window.location.search).get('id');
     const TRAMO_DOC_ID = (new URLSearchParams(location.search).get('tramo') || '1').toString();
+    const radiosCol = db.collection('tramos').doc(TRAMO_DOC_ID).collection('radios');
     let configGlobal = null;
 
     (function init() {
@@ -69,45 +72,76 @@
       document.getElementById('btnRadio').innerText = 'RADIO: ' + (r || '—');
       document.getElementById('radioBadge').innerText = 'RADIO: ' + (r || '—');
       document.getElementById('radioBadge').hidden = !r;
-      if (configGlobal && configGlobal.nombreTramoActual) escucharParadaSalida(configGlobal.nombreTramoActual);
     }
 
     document.getElementById('btnRadio').onclick = () => {
       const v = prompt('Introduce número de RADIO:', getRadio());
-      if (v !== null) { localStorage.setItem('seced_radio_id', v.trim()); updateRadioUI(); }
+      if (v !== null) { localStorage.setItem('seced_radio_id', v.trim()); updateRadioUI(); window.location.reload(); }
     };
     updateRadioUI();
 
     function escucharParadaSalida(nombreReal) {
-      if (getRadioIndex() !== 1) {
-        const ov = document.getElementById('overlay-parada'); if(ov) ov.remove(); return;
-      }
+      if (getRadioIndex() !== 1) return;
       db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal).onSnapshot(doc => {
         let overlay = document.getElementById('overlay-parada');
         if (doc.exists && doc.data().pararSalida) {
           if (!overlay) {
             overlay = document.createElement('div'); overlay.id = 'overlay-parada';
             Object.assign(overlay.style, { position:'fixed', top:0, left:0, width:'100%', height:'100%', backgroundColor:'rgba(220,38,38,0.98)', color:'#fff', zIndex:10000, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', fontWeight:'900', textAlign:'center' });
-            overlay.innerHTML = `<div style="font-size:6rem;">⚠️</div><div style="font-size:3rem;">SALIDA PARADA</div><div style="font-size:1.2rem; margin-top:15px;">ORDEN DE DC</div>`;
+            overlay.innerHTML = `<div style="font-size:6rem;">⚠️</div><div style="font-size:3rem;">SALIDA PARADA</div>`;
             document.body.appendChild(overlay);
           }
         } else if (overlay) overlay.remove();
       });
     }
 
+    /* ===== CLIC CON LÓGICA DE AVANCE POR TURNOS RECUPERADA ===== */
     document.getElementById('grid').addEventListener('click', async (ev) => {
       const card = ev.target.closest('.card');
       if (!card || !card.classList.contains('radio-eligible')) return;
+      
       const dorsal = card.dataset.value;
       const rIdx = getRadioIndex();
+      
+      card.style.pointerEvents = 'none'; // Evitar doble clic
+
       try {
-        await db.collection('tramos').doc(TRAMO_DOC_ID).collection('radios').doc(dorsal).set({ last: rIdx }, { merge: true });
+        // 1. TRANSACCIÓN PARA EL CONTROL (Asegura el orden correlativo)
+        await db.runTransaction(async (transaction) => {
+          const docRef = radiosCol.doc(String(dorsal));
+          const snap = await transaction.get(docRef);
+          
+          const last = snap.exists ? (snap.data().last || 0) : 0;
+          
+          // Solo se puede marcar si es el turno exacto (n-1)
+          if (last !== (rIdx - 1)) {
+            throw new Error("No es tu turno para este dorsal");
+          }
+
+          transaction.set(docRef, { 
+            last: rIdx,
+            marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
+          }, { merge: true });
+        });
+
+        // 2. ENVÍO AL MAPA DC (Si la transacción anterior fue exitosa)
         if (rallyId && configGlobal && configGlobal.nombreTramoActual) {
-          await db.collection("rallies").doc(rallyId).collection("pasos").doc(configGlobal.nombreTramoActual).set({ [`radio${rIdx}`]: dorsal }, { merge: true });
+          await db.collection("rallies").doc(rallyId).collection("pasos").doc(configGlobal.nombreTramoActual).set({ 
+            [`radio${rIdx}`]: dorsal,
+            ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
         }
-        const t = document.getElementById('toast'); t.innerText = "ENVIADO #" + dorsal; t.style.display = 'block';
+
+        const t = document.getElementById('toast'); 
+        t.innerText = "PICADO #" + dorsal + " ENVIADO"; 
+        t.style.display = 'block';
         setTimeout(() => t.style.display = 'none', 1000);
-      } catch (e) { alert("Error de permisos"); }
+
+      } catch (e) { 
+        console.error(e);
+        alert(e.message || "Error de sincronización");
+        card.style.pointerEvents = 'auto';
+      }
     });
   </script>
 </body>
