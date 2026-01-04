@@ -6,22 +6,22 @@
   <title>SECeD - Panel Radio</title>
   <link rel="stylesheet" href="styles.css?v=41" />
   <style>
-    /* Estilos originales mantenidos */
-    .viewer .card.radio-eligible { background: #ffffff !important; color: #111 !important; cursor: pointer !important; }
-    .card.radio-locked { opacity:.45; pointer-events:none; }
-    .card.radio-clicked-by-me { background:#fef08a !important; pointer-events:none; }
+    .viewer .card.radio-eligible { background: #ffffff !important; color: #111 !important; cursor: pointer !important; border: 2px solid #22c55e !important; }
+    .card.radio-locked { opacity:.45; pointer-events:none; filter: grayscale(1); }
+    .card.radio-clicked-by-me { background:#fef08a !important; border-color:#eab308 !important; pointer-events:none; color: #000 !important; }
     .radio-inline { display:flex; gap:8px; align-items:center; }
-    #btnRadio { background:#0c2415; color:#eafff7; border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer; }
-    .radio-badge { position:absolute; top:14px; right:14px; background:#ffd60a; padding:6px 12px; font-weight:900; border-radius:9999px; }
-    #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #0b1f12; color: #fff; padding: 8px 12px; border-radius: 10px; display: none; z-index: 9999; }
-    #toast.ok { background: #065f46; }
+    #btnRadio { background:#0c2415; color:#eafff7; border: 1px solid #13301e; border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer; }
+    .radio-badge { position:absolute; top:14px; right:14px; background:#ffd60a; color: #000; padding:6px 12px; font-weight:900; border-radius:9999px; border: 1px solid #e9b400; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #0b1f12; color: #fff; padding: 8px 12px; border-radius: 10px; display: none; z-index: 9999; border: 1px solid #13301e; font-weight: bold; }
+    #toast.ok { background: #166534; }
   </style>
 </head>
 <body class="radio-skin">
-  <main class="app">
+  <main class="app" style="position:relative;">
     <span id="radioBadge" class="radio-badge" hidden>RADIO: —</span>
     <div class="brand"><img id="mainLogo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
     <h1 id="mainTitle">SECeD - Panel Radio</h1>
+    
     <div class="clock-bar">
       <div class="clock"><span id="clockTime">--:--:--</span> <span class="sync" id="clockSync">...</span></div>
       <div class="controls-right">
@@ -31,13 +31,16 @@
         </div>
       </div>
     </div>
+    
     <section id="grid" class="grid"></section>
   </main>
+  
   <div id="toast"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
+  
   <script src="sync.js?v=16"></script>
   <script src="app.js?v=16"></script>
 
@@ -54,8 +57,9 @@
             configGlobal = doc.data();
             document.getElementById('mainLogo').src = configGlobal.logo;
             document.getElementById('mainTitle').innerText = configGlobal.nombre;
+            
             const idx = parseInt(TRAMO_DOC_ID) - 1;
-            if (configGlobal.tramos[idx]) {
+            if (configGlobal.tramos && configGlobal.tramos[idx]) {
               configGlobal.nombreTramoActual = configGlobal.tramos[idx].nombre;
               escucharParadaSalida(configGlobal.nombreTramoActual);
             }
@@ -70,44 +74,81 @@
     function updateRadioUI() {
       const r = getRadio();
       document.getElementById('btnRadio').innerText = 'RADIO: ' + (r || '—');
-      document.getElementById('radioBadge').innerText = 'RADIO: ' + (r || '—');
-      document.getElementById('radioBadge').hidden = !r;
+      const rb = document.getElementById('radioBadge');
+      rb.innerText = 'RADIO: ' + (r || '—');
+      rb.hidden = !r;
       if (configGlobal && configGlobal.nombreTramoActual) escucharParadaSalida(configGlobal.nombreTramoActual);
     }
+
     document.getElementById('btnRadio').onclick = () => {
-      const v = prompt('Número Radio:', getRadio());
-      if (v) { localStorage.setItem('seced_radio_id', v); updateRadioUI(); }
+      const v = prompt('Introduce número de RADIO:', getRadio());
+      if (v !== null) { 
+        localStorage.setItem('seced_radio_id', v.trim()); 
+        updateRadioUI(); 
+      }
     };
+    updateRadioUI();
 
     function escucharParadaSalida(nombreReal) {
-      if (getRadioIndex() !== 1) return;
+      if (getRadioIndex() !== 1) {
+        const overlay = document.getElementById('overlay-parada');
+        if (overlay) overlay.remove();
+        return;
+      }
+
       db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal).onSnapshot(doc => {
         let overlay = document.getElementById('overlay-parada');
         if (doc.exists && doc.data().pararSalida) {
           if (!overlay) {
-            overlay = document.createElement('div'); overlay.id = 'overlay-parada';
-            Object.assign(overlay.style, { position:'fixed', top:0, left:0, width:'100%', height:'100%', backgroundColor:'rgba(220,38,38,0.95)', color:'#fff', zIndex:10000, display:'flex', flexDirection:'column', justifyContent:'center', alignItems:'center', fontWeight:'900' });
-            overlay.innerHTML = `<div style="font-size:4rem">⚠️</div><div style="font-size:2rem">SALIDA PARADA</div>`;
+            overlay = document.createElement('div');
+            overlay.id = 'overlay-parada';
+            Object.assign(overlay.style, { 
+              position:'fixed', top:0, left:0, width:'100%', height:'100%', 
+              backgroundColor:'rgba(220,38,38,0.98)', color:'#fff', zIndex:10000, 
+              display:'flex', flexDirection:'column', justifyContent:'center', 
+              alignItems:'center', fontWeight:'900', textAlign:'center' 
+            });
+            overlay.innerHTML = `<div style="font-size:6rem; margin-bottom: 20px;">⚠️</div>
+                                 <div style="font-size:3rem; line-height: 1;">SALIDA PARADA</div>
+                                 <div style="font-size:1.2rem; margin-top:15px; opacity: 0.8;">DIRECCIÓN DE CARRERA</div>`;
             document.body.appendChild(overlay);
           }
         } else if (overlay) overlay.remove();
       });
     }
 
-    document.getElementById('grid').onclick = async (ev) => {
+    document.getElementById('grid').addEventListener('click', async (ev) => {
       const card = ev.target.closest('.card');
       if (!card || !card.classList.contains('radio-eligible')) return;
+      
       const dorsal = card.dataset.value;
       const rIdx = getRadioIndex();
+      
       try {
-        await db.collection('tramos').doc(TRAMO_DOC_ID).collection('radios').doc(dorsal).set({ last: rIdx }, { merge: true });
-        if (rallyId && configGlobal.nombreTramoActual) {
-          await db.collection("rallies").doc(rallyId).collection("pasos").doc(configGlobal.nombreTramoActual).set({ [`radio${rIdx}`]: dorsal }, { merge: true });
+        // 1. Actualización para Control
+        await db.collection('tramos').doc(TRAMO_DOC_ID).collection('radios').doc(dorsal).set({ 
+          last: rIdx,
+          ts: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        // 2. Actualización para Mapa DC
+        if (rallyId && configGlobal && configGlobal.nombreTramoActual) {
+          await db.collection("rallies").doc(rallyId).collection("pasos").doc(configGlobal.nombreTramoActual).set({ 
+            [`radio${rIdx}`]: dorsal,
+            ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
         }
-        const t = document.getElementById('toast'); t.innerText = "Enviado #" + dorsal; t.style.display = 'block';
-        setTimeout(() => t.style.display = 'none', 1000);
-      } catch (e) { alert("Error permisos"); }
-    };
+
+        const t = document.getElementById('toast');
+        t.innerText = "PICADO #" + dorsal + " ENVIADO";
+        t.className = "ok";
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 1500);
+      } catch (e) { 
+        console.error(e);
+        alert("Error de envío. Verifica conexión y permisos."); 
+      }
+    });
   </script>
 </body>
 </html>
