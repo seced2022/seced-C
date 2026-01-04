@@ -477,11 +477,32 @@ async function editSalida(val){
 /* === Botones base === */
 if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
 if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') addNumber(); });
-if (btnLimpiar) btnLimpiar.addEventListener('click', () => {
+if (btnLimpiar) btnLimpiar.addEventListener('click', async () => {
   if (items.length === 0) return;
-  if (confirm('¿Vaciar la lista de tarjetas?')) {
-    items = []; render(); if (typeof syncSave === 'function') syncSave();
-    logAudit('limpiar', {}); input.focus();
+  
+  if (confirm('¿Vaciar la lista de tarjetas y limpiar el mapa de Dirección de Carrera?')) {
+    // 1. Limpiamos la lista local y guardamos
+    items = []; 
+    render(); 
+    if (typeof syncSave === 'function') syncSave();
+
+    // 2. Intentamos borrar la memoria de los radios en el mapa de DC
+    try {
+      const db = firebase.firestore();
+      // Usamos el ID del tramo actual
+      const tramoIdActual = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
+      
+      // Si tenemos el ID del rally, borramos el documento de "pasos"
+      if (typeof rallyId !== 'undefined' && rallyId) {
+        await db.collection("rallies").doc(rallyId).collection("pasos").doc(tramoIdActual).delete();
+        console.log("Memoria de radios en DC borrada.");
+      }
+    } catch (e) {
+      console.error("Error al limpiar memoria de DC:", e);
+    }
+
+    logAudit('limpiar_total', { tramo: window.TRAMO_ID });
+    input.focus();
   }
 });
 
