@@ -4,24 +4,38 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=41" />
+  <link rel="stylesheet" href="styles.css?v=43" />
+  <style>
+    /* Estilos específicos para Radio */
+    .radio-badge { position: absolute; top: 10px; right: 10px; background: #ffd60a; color: #000; padding: 5px 15px; font-weight: 900; border-radius: 20px; border: 2px solid #000; z-index: 10; }
+    .btn-bandera { background: #dc2626; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-left: 10px; }
+    .setup-overlay { position: fixed; inset: 0; background: #1a1a1a; z-index: 99999; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; gap: 15px; }
+    .setup-overlay input { padding: 12px; border-radius: 6px; border: none; width: 250px; text-align: center; font-size: 1.1rem; }
+    .setup-overlay button { padding: 12px 30px; background: #22c55e; color: white; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+  </style>
 </head>
 <body class="radio-skin">
+  <div id="setupOverlay" class="setup-overlay">
+    <img src="logo.png" style="width: 150px; margin-bottom: 10px;">
+    <h2>Configuración de Punto</h2>
+    <input type="text" id="setupRally" placeholder="ID del Rally" />
+    <input type="number" id="setupTramo" placeholder="Nº de Tramo (TC)" />
+    <input type="number" id="setupRadio" placeholder="Nº de Radio" />
+    <button id="btnEntrar">ENTRAR AL PANEL</button>
+  </div>
+
   <main class="app">
+    <div id="radioBadge" class="radio-badge" style="display:none;">RADIO: —</div>
+    
     <div class="brand"><img src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
     <h1 id="mainTitle">SECeD - Panel Radio</h1>
     
     <div class="clock-bar">
       <div class="clock"><span id="clockTime">--:--:--</span></div>
-      <div class="controls-right">
-        <button id="btnTramo" class="secondary">TRAMO ▾</button>
-        <button id="btnRadio" style="background:#0c2415; color:white; padding:8px; border-radius:5px;">RADIO: —</button>
+      <div class="controls-right" style="display:flex; align-items:center;">
+        <div id="infoPunto" style="margin-right: 15px; font-weight: bold; color: #ffd60a;"></div>
+        <button id="btnFlag" class="btn-bandera">🚩 AVISO BANDERA</button>
       </div>
-    </div>
-
-    <div id="tramoMenu" class="tramo-menu hidden" style="position:absolute; background:white; border:1px solid #ccc; padding:10px; z-index:100;">
-      <input type="number" id="tramoInput" placeholder="Nº Tramo" />
-      <button id="tramoGo">IR</button>
     </div>
 
     <section id="grid" class="grid"></section>
@@ -31,25 +45,50 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
   <script>
-    // Configuración de IDs desde la URL o LocalStorage
-    const urlParams = new URLSearchParams(window.location.search);
-    window.TRAMO_ID = urlParams.get('tramo') || localStorage.getItem('seced_tramo') || '1';
+    const db = firebase.firestore();
     
-    document.getElementById('btnRadio').onclick = () => {
-      const r = prompt("Introduce tu número de RADIO:", localStorage.getItem('seced_radio_id') || "1");
-      if (r) {
-        localStorage.setItem('seced_radio_id', r);
-        location.reload();
-      }
+    // Lógica de inicio
+    if(localStorage.getItem('seced_rally_id') && localStorage.getItem('seced_tramo') && localStorage.getItem('seced_radio_id')) {
+      document.getElementById('setupOverlay').style.display = 'none';
+      window.TRAMO_ID = localStorage.getItem('seced_tramo');
+      iniciarPanel();
+    }
+
+    document.getElementById('btnEntrar').onclick = () => {
+      const rally = document.getElementById('setupRally').value;
+      const tramo = document.getElementById('setupTramo').value;
+      const radio = document.getElementById('setupRadio').value;
+      if(!rally || !tramo || !radio) return alert("Completa todos los campos");
+      
+      localStorage.setItem('seced_rally_id', rally);
+      localStorage.setItem('seced_tramo', tramo);
+      localStorage.setItem('seced_radio_id', radio);
+      location.reload();
     };
 
-    document.getElementById('tramoGo').onclick = () => {
-      const t = document.getElementById('tramoInput').value;
-      if (t) {
-        localStorage.setItem('seced_tramo', t);
-        window.location.search = '?tramo=' + t;
-      }
-    };
+    function iniciarPanel() {
+      const rallyId = localStorage.getItem('seced_rally_id');
+      const tramoId = localStorage.getItem('seced_tramo');
+      const radioId = localStorage.getItem('seced_radio_id');
+      
+      // Mostrar letrero amarillo
+      const badge = document.getElementById('radioBadge');
+      badge.innerText = `RADIO: ${radioId}`;
+      badge.style.display = 'block';
+      
+      document.getElementById('infoPunto').innerText = `RALLY: ${rallyId} | TC: ${tramoId}`;
+
+      // Botón de Bandera (Alerta)
+      document.getElementById('btnFlag').onclick = async () => {
+        if(!confirm("¿Enviar aviso de BANDERA ROJA / EMERGENCIA?")) return;
+        await db.collection('tramos').doc(tramoId).collection('alerts').add({
+          radio: radioId,
+          ts: firebase.firestore.FieldValue.serverTimestamp(),
+          type: 'emergency'
+        });
+        alert("Aviso enviado a Dirección de Carrera");
+      };
+    }
   </script>
   <script src="sync.js"></script>
   <script src="app.js"></script>
