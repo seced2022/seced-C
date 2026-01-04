@@ -26,6 +26,9 @@ const tramoMenu  = document.getElementById('tramoMenu');
 const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
+// Añade esto debajo de las otras constantes al principio
+const rallyId = new URLSearchParams(window.location.search).get('id');
+const radioId = new URLSearchParams(window.location.search).get('radio');
 
 async function clearRadioDocFor(value){
   try{
