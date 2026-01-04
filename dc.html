@@ -126,13 +126,53 @@
   }
 
   function suscribirCambiosTramo(nombreReal, tId) {
-    // Escuchar estado de parada
+    // 1. Escuchar si Dirección de Carrera ha ordenado PARAR
     db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal).onSnapshot(doc => {
       const btn = document.getElementById(`stop-${tId}`);
       if (!btn) return;
-      if (doc.exists && doc.data().pararSalida) { btn.classList.add('blink'); btn.innerText = "SALIDA PARADA"; }
-      else { btn.classList.remove('blink'); btn.innerText = "PARAR SALIDA"; }
+      
+      // Si el documento dice que pararSalida es true, activamos el parpadeo rojo
+      if (doc.exists && doc.data().pararSalida === true) { 
+        btn.classList.add('blink'); 
+        btn.innerText = "SALIDA PARADA"; 
+      } else { 
+        btn.classList.remove('blink'); 
+        btn.innerText = "PARAR SALIDA"; 
+      }
     });
+
+    // 2. Escuchar el paso de los coches por los radios
+    db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal).onSnapshot(doc => {
+      // --- ESTO ES LO NUEVO: Si no hay datos (limpieza), reseteamos visualmente ---
+      if (!doc.exists) {
+        // Buscamos todas las bolitas de este tramo por su ID que empieza por "badge-nombre_tramo"
+        const badges = document.querySelectorAll(`[id^="badge-${tId}-"]`);
+        badges.forEach(badge => {
+          const num = badge.id.split('-').pop(); // Sacamos el número de radio del ID
+          badge.classList.add('empty');
+          badge.innerText = `R${num}: --`;
+          badge.style.background = ""; // Quitamos el amarillo
+          badge.style.color = "";
+        });
+        return;
+      }
+
+      // Si hay datos, actualizamos cada radio con el dorsal del coche
+      const data = doc.data();
+      Object.keys(data).forEach(key => {
+        if(key.startsWith('radio')) {
+            const num = key.replace('radio','');
+            const badge = document.getElementById(`badge-${tId}-${num}`);
+            if (badge) { 
+                badge.classList.remove('empty'); 
+                badge.innerText = `R${num}: #${data[key]}`; 
+                badge.style.background = "#ffd60a"; // Ponemos el amarillo de "coche pasando"
+                badge.style.color = "#000";
+            }
+        }
+      });
+    });
+  }
 
     // Escuchar pasos de coches
     db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal).onSnapshot(doc => {
