@@ -5,12 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Control</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="icon" href="favicon.png" type="image/png">
   <meta name="theme-color" content="#0b1f12">
-  <style>
-    /* Aseguramos que el botón activo se vea encendido */
-    .mode-btn.active { background-color: #22c55e !important; color: white !important; font-weight: bold; }
-  </style>
 </head>
 <body>
   <main class="app">
@@ -22,7 +17,6 @@
     <div class="clock-bar">
       <div class="clock">
         <span id="clockTime">--:--:--</span>
-        <span class="tz" id="clockTz">Europe/Madrid</span>
         <span class="sync" id="clockSync">sincronizando…</span>
       </div>
 
@@ -30,16 +24,10 @@
         <div class="tramo-picker">
           <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
           <div id="tramoMenu" class="tramo-menu hidden">
-            <div class="menu-header">Cambiar Tramo (TC)</div>
-            <div class="menu-body">
-              <input type="number" id="tramoInput" placeholder="Nº de tramo..." />
-              <button id="tramoGo" type="button">Cargar</button>
-            </div>
-            <div class="menu-divider">Recientes</div>
-            <ul id="tramoRecent" class="recent-list"></ul>
+            <input type="number" id="tramoInput" placeholder="Nº TC..." />
+            <button id="tramoGo" type="button">Cargar</button>
           </div>
         </div>
-        <button id="btnFullscreen" type="button" class="icon-btn">⛶</button>
       </div>
     </div>
 
@@ -55,18 +43,9 @@
     </div>
 
     <div class="counters">
-      <div class="counter-item">
-        <span class="label">Salidas</span>
-        <span class="value" id="countSalida">0</span>
-      </div>
-      <div class="counter-item highlight">
-        <span class="label">Meta (LL)</span>
-        <span class="value" id="countLlegada">0</span>
-      </div>
-      <div class="counter-item warn">
-        <span class="label">Retirados</span>
-        <span class="value" id="countAbandonos">0</span>
-      </div>
+      <div class="counter-item"><span class="label">Salidas</span><span class="value" id="countSalida">0</span></div>
+      <div class="counter-item highlight"><span class="label">Meta</span><span class="value" id="countLlegada">0</span></div>
+      <div class="counter-item warn"><span class="label">Retirados</span><span class="value" id="countAbandonos">0</span></div>
     </div>
 
     <section id="grid" class="grid"></section>
@@ -76,15 +55,20 @@
       <button id="btnExportar">Imprimir / PDF</button>
       <button id="btnAudit" class="secondary">Auditoría</button>
       <button id="btnOperador" class="secondary">Operador</button>
-      <button id="btnResetRadios" class="danger" style="display:none;">Reset Clics Radios</button>
+      <button id="btnResetRadios" class="danger" style="display:none;">Reset Radios</button>
     </div>
 
     <div id="auditPanel" class="audit-panel hidden">
       <div class="audit-header">
-        <h3>Registro de Auditoría</h3>
+        <h3>Auditoría</h3>
         <button id="btnAuditClose">×</button>
       </div>
       <div id="auditList" class="audit-content"></div>
+      <div class="audit-actions" style="padding:10px;">
+        <button id="btnAuditRefresh">Actualizar</button>
+        <button id="btnAuditCSV">CSV Log</button>
+        <button id="btnStatesCSV">CSV Estados</button>
+      </div>
     </div>
   </main>
 
@@ -93,54 +77,32 @@
   <script src="firebase-config.js"></script>
 
   <script>
-    // 1. Forzar que no sea Viewer para que app.js permita clics
-    window.VIEWER = false;
-
-    // 2. Identificación de Rally y TC
-    const db = firebase.firestore();
+    /* LÓGICA DE ENTRADA: PIDE ID DEL RALLY SI NO EXISTE */
     const params = new URLSearchParams(window.location.search);
     let rallyId = params.get('id') || localStorage.getItem('seced_rally_id');
-    let tramoId = params.get('tramo') || localStorage.getItem('seced_tramo') || "1";
 
     if (!rallyId) {
-        rallyId = prompt("Introduce el ID del Rally:");
-        if (rallyId) localStorage.setItem('seced_rally_id', rallyId);
+      rallyId = prompt("Introduce el ID del RALLY para entrar:");
+      if (rallyId) {
+        localStorage.setItem('seced_rally_id', rallyId);
+        window.location.search = "?id=" + rallyId;
+      }
     }
-    
-    window.TRAMO_ID = tramoId;
 
-    // 3. Aplicar Configuración de Rally
+    // Configuración para app.js
+    window.TRAMO_ID = params.get('tramo') || localStorage.getItem('seced_tramo') || "1";
+
+    // Cargar datos estéticos del rally
     if (rallyId) {
-        db.collection("config_rallies").doc(rallyId).get().then(doc => {
-            if (doc.exists) {
-                const data = doc.data();
-                if (data.logo) document.getElementById('mainLogo').src = data.logo;
-                if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
-            }
-        });
+      const db = firebase.firestore();
+      db.collection("config_rallies").doc(rallyId).get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          if (data.logo) document.getElementById('mainLogo').src = data.logo;
+          if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+        }
+      });
     }
-
-    // 4. Lógica de Interfaz de Modos
-    const modeBtns = {
-        'JEFE': document.getElementById('btnModeJefe'),
-        'SALIDA': document.getElementById('btnModeSalida'),
-        'LLEGADA': document.getElementById('btnModeLlegada')
-    };
-
-    function setActiveMode(mode) {
-        Object.values(modeBtns).forEach(b => b.classList.remove('active'));
-        if (modeBtns[mode]) modeBtns[mode].classList.add('active');
-        window.MODE = mode;
-        // Si app.js tiene la función applyModeUI la llamamos, si no, la lógica de app.js se encargará
-        if (typeof applyModeUI === 'function') applyModeUI();
-    }
-
-    modeBtns.JEFE.onclick = () => setActiveMode('JEFE');
-    modeBtns.SALIDA.onclick = () => setActiveMode('SALIDA');
-    modeBtns.LLEGADA.onclick = () => setActiveMode('LLEGADA');
-
-    // Empezar en LLEGADA por defecto
-    setActiveMode('LLEGADA');
   </script>
 
   <script src="sync.js"></script>
