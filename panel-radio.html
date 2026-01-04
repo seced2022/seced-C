@@ -8,11 +8,10 @@
   <meta name="theme-color" content="#0b1f12" />
 
   <style>
-    /* Solo lectura base (sin menús ni franjas) */
+    /* Estilos originales mantenidos */
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
     .viewer .time-stack { display: none !important; }
 
-    /* Elegible → clic habilitado y “blanco brillo” */
     .viewer .card.radio-eligible,
     .viewer .card.radio-eligible * { pointer-events: auto !important; cursor: pointer !important; }
     .card.radio-eligible {
@@ -20,10 +19,8 @@
       box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset;
     }
 
-    /* No elegibles → visibles pero atenuadas */
     .card.radio-locked { display:block !important; opacity:.45; filter:grayscale(.2); pointer-events:none; cursor:default !important; }
 
-    /* Ya clicadas por este radio → amarillas persistentes */
     .card.radio-clicked-by-me {
       display:block !important; background:#fef08a !important; border-color:#eab308 !important;
       box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; pointer-events:none; cursor:default !important;
@@ -45,10 +42,6 @@
       user-select:none; pointer-events:none;
     }
 
-    .tramo-picker { position: relative; }
-    .tramo-menu { z-index: 1000; }
-
-    /* Toast simple */
     #toast {
       position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
       background: #0b1f12; color: #eafff7; padding: 8px 12px; border-radius: 10px;
@@ -57,7 +50,6 @@
     #toast.ok { background: #065f46; border-color: #0c7a5c; }
     #toast.err { background: #7f1d1d; border-color: #991b1b; }
 
-    /* En Panel Radio ignoramos el estado 'selected' del editor/visor */
     .viewer .card.selected,
     body.viewer.radio-skin .grid .card.selected {
       background:#ffffff !important; color:#111 !important; border-color:#e5e7eb !important;
@@ -116,15 +108,15 @@
   <script src="firebase-config.js?v=16"></script>
 
   <script>
-    (function(){
-      if (!firebase.apps.length) {
-          firebase.initializeApp(window.FIREBASE_CONFIG);
-      }
-      const db = firebase.firestore();
-      const urlParams = new URLSearchParams(window.location.search);
-      let rallyId = urlParams.get('id');
+    // Variables globales para la integración con Mapa DC
+    let configGlobal = null;
+    let rallyId = new URLSearchParams(window.location.search).get('id');
+    const TRAMO_DOC_ID = (new URLSearchParams(location.search).get('tramo') || '1').toString();
 
-      // Si no hay ID, lo pide
+    (function(){
+      if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+      const db = firebase.firestore();
+
       if (!rallyId) {
           rallyId = prompt("Introduce el ID del Rally:");
           if (rallyId) {
@@ -133,13 +125,18 @@
           }
       }
 
-      // Cargar Nombre y Logo
       if (rallyId) {
           db.collection("config_rallies").doc(rallyId).get().then(doc => {
               if (doc.exists) {
-                  const data = doc.data();
-                  if (data.logo) document.getElementById('mainLogo').src = data.logo;
-                  if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+                  configGlobal = doc.data();
+                  if (configGlobal.logo) document.getElementById('mainLogo').src = configGlobal.logo;
+                  if (configGlobal.nombre) document.getElementById('mainTitle').innerText = configGlobal.nombre;
+                  
+                  // Obtener el nombre real del tramo (ej: "TC1 Villaviciosa") para el mapa DC
+                  const idx = parseInt(TRAMO_DOC_ID) - 1;
+                  if (configGlobal.tramos && configGlobal.tramos[idx]) {
+                      configGlobal.nombreTramoActual = configGlobal.tramos[idx].nombre;
+                  }
               }
           });
       }
@@ -149,18 +146,6 @@
   <script>
     window.VIEWER = true;
     document.body.classList.add('viewer');
-    // Fallback por si firebase-config.js fallara
-    if (!window.FIREBASE_CONFIG) {
-      window.FIREBASE_CONFIG = {
-        apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
-        authDomain: "secedcp.firebaseapp.com",
-        projectId: "secedcp",
-        storageBucket: "secedcp.firebasestorage.app",
-        messagingSenderId: "722200684437",
-        appId: "1:722200684437:web:f8486e13dd6ec0bdaaf89c",
-        measurementId: "G-XB0C93FM9W"
-      };
-    }
   </script>
 
   <script>
@@ -168,30 +153,22 @@
       document.addEventListener('DOMContentLoaded', function(){
         try{
           if (!window.firebase || !firebase.firestore) return;
-          const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
           const db = firebase.firestore();
-          const tramoRef = db.collection('tramos').doc(TRAMO);
-          const LS_KEY = `seced_radios_reset_seen_${TRAMO}`;
+          const tramoRef = db.collection('tramos').doc(TRAMO_DOC_ID);
+          const LS_KEY = `seced_radios_reset_seen_${TRAMO_DOC_ID}`;
 
           tramoRef.onSnapshot(snap=>{
             if (!snap.exists) return;
             const data = snap.data() || {};
             const ts = data.radiosResetAt && data.radiosResetAt.toMillis ? data.radiosResetAt.toMillis() : 0;
             const seen = Number(localStorage.getItem(LS_KEY) || '0');
-
             if (ts && ts > seen) {
-              try {
-                localStorage.setItem(LS_KEY, String(ts));
-                localStorage.removeItem('seced_radio_idx');
-                try {
-                  indexedDB.deleteDatabase('firebase-firestore-database');
-                  indexedDB.deleteDatabase('firebaseLocalStorageDb');
-                  indexedDB.deleteDatabase('firebase-heartbeat-database');
-                } catch {}
-              } finally { location.reload(); }
+              localStorage.setItem(LS_KEY, String(ts));
+              localStorage.removeItem('seced_radio_idx');
+              location.reload();
             }
-          }, err => console.warn('reset listener error', err));
-        } catch(e){ console.warn('reset listener setup error', e); }
+          });
+        } catch(e){ console.warn('Reset error', e); }
       });
     })();
   </script>
@@ -201,301 +178,146 @@
 
   <script>
     (function(){
-      /* ===== Reloj online ===== */
+      const db = firebase.firestore();
+      
+      /* ===== Reloj ===== */
       const TIMEZONE = 'Europe/Madrid';
       const clockTime = document.getElementById('clockTime');
-      const clockTz = document.getElementById('clockTz');
-      const clockSync = document.getElementById('clockSync');
-      if (clockTz) clockTz.textContent = TIMEZONE;
-      let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
       const pad = n => String(n).padStart(2,'0');
-      const renderClock = () => {
-        const d = new Date(Date.now() + timeOffsetMs);
-        if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-      };
+      let timeOffsetMs = 0;
+      
       const syncTime = async () => {
         try {
-          if (clockSync) { clockSync.textContent = 'sincronizando…'; clockSync.className = 'sync'; }
           const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache: 'no-store' });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
           const data = await res.json();
-          const apiMs = Date.parse(data.datetime);
-          timeOffsetMs = apiMs - Date.now();
-          if (clockSync) { clockSync.textContent = 'ok'; clockSync.className = 'sync ok'; }
-        } catch {
-          if (clockSync) { clockSync.textContent = 'sin conexión'; clockSync.className = 'sync err'; }
-        }
+          timeOffsetMs = Date.parse(data.datetime) - Date.now();
+          document.getElementById('clockSync').className = 'sync ok';
+          document.getElementById('clockSync').textContent = 'ok';
+        } catch { document.getElementById('clockSync').className = 'sync err'; }
       };
-      const startClock = () => {
-        clearInterval(tickTimer); tickTimer = setInterval(renderClock, 1000); renderClock();
-        clearInterval(resyncTimer); resyncTimer = setInterval(syncTime, 5*60*1000);
-      };
-      syncTime().then(startClock);
+      setInterval(() => {
+        const d = new Date(Date.now() + timeOffsetMs);
+        if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      }, 1000);
+      syncTime();
 
       /* ===== Helper UI ===== */
       const toast = (msg, kind='ok')=>{
         const t = document.getElementById('toast');
-        if(!t) return; t.textContent = msg; t.className=''; t.classList.add(kind); t.style.display='block';
+        if(!t) return; t.textContent = msg; t.className=kind; t.style.display='block';
         setTimeout(()=>{ t.style.display='none'; }, 1200);
       };
 
-      /* ===== Selección de RADIO (compat v1/v2) ===== */
-      const btnRadio = document.getElementById('btnRadio');
-      const radioBadge = document.getElementById('radioBadge');
-
-      function getRadio(){
-        try {
-          const v2 = (localStorage.getItem('seced_radio_id') || '').trim();
-          if (v2) return v2;
-          const v1 = (localStorage.getItem('seced_radio') || '').trim();
-          return v1;
-        } catch { return ''; }
-      }
-      function setRadio(v){
-        const clean = String(v||'').trim();
-        try {
-          localStorage.setItem('seced_radio', clean);
-          localStorage.setItem('seced_radio_id', clean); // sincronizado
-        } catch {}
-      }
-      function getRadioIndex(){
-        const r = parseInt(getRadio(),10);
-        return Number.isFinite(r) && r>0 ? r : 1;
-      }
-
-      function clickedKey(){
-        const tramo=(window.TRAMO_ID||new URLSearchParams(location.search).get('tramo')||'1').toString();
-        return `seced_radio_clicked:${tramo}:${getRadioIndex()}`;
-      }
-      function loadClickedSet(){ try { return new Set(JSON.parse(localStorage.getItem(clickedKey())||'[]')); } catch { return new Set(); } }
-      function saveClickedSet(set){ try { localStorage.setItem(clickedKey(), JSON.stringify(Array.from(set))); } catch {} }
-      let clickedSet = loadClickedSet();
+      /* ===== Gestión de Radio ===== */
+      const getRadio = () => (localStorage.getItem('seced_radio_id') || '').trim();
+      const getRadioIndex = () => { const r = parseInt(getRadio(), 10); return (Number.isFinite(r) && r > 0) ? r : 1; };
 
       function updateRadioUI(){
         const r = getRadio();
-        if (btnRadio) btnRadio.textContent = 'RADIO: ' + (r ? r : '—');
-        if (radioBadge) { radioBadge.textContent = 'RADIO: ' + (r ? r : '—'); radioBadge.hidden = !r; }
-        clickedSet = loadClickedSet();
-        setTimeout(applyEligibility, 0);
+        document.getElementById('btnRadio').textContent = 'RADIO: ' + (r ? r : '—');
+        const rb = document.getElementById('radioBadge');
+        rb.textContent = 'RADIO: ' + (r ? r : '—'); rb.hidden = !r;
+        applyEligibility();
       }
-      if (btnRadio) {
-        btnRadio.addEventListener('click', () => {
-          const curr = getRadio();
-          const val = prompt('Introduce tu número de RADIO (1,2,3…):', curr || '1');
-          if (val === null) return;
-          setRadio(val);
-          updateRadioUI();
-        });
-      }
+
+      document.getElementById('btnRadio').addEventListener('click', () => {
+        const val = prompt('Introduce número de RADIO:', getRadio() || '1');
+        if (val !== null) { localStorage.setItem('seced_radio_id', val.trim()); updateRadioUI(); }
+      });
       updateRadioUI();
 
-      /* ===== Firestore: estado por radio ===== */
-      const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
-      const db = firebase.firestore();
-      let radiosCol = null;
-      try { radiosCol = db.collection('tramos').doc(TRAMO).collection('radios'); } catch(e) { console.warn('Firestore no disponible aún:', e); }
-
+      /* ===== Firestore & Elegibilidad ===== */
+      const radiosCol = db.collection('tramos').doc(TRAMO_DOC_ID).collection('radios');
       const radioState = new Map();
-      if (radiosCol) {
-        radiosCol.onSnapshot(snap=>{
-          snap.docChanges().forEach(ch=>{
-            const id = ch.doc.id;
-            const d = ch.doc.data()||{};
-            if (ch.type === 'removed') radioState.delete(id);
-            else radioState.set(id, { last: typeof d.last==='number' ? d.last : 0 });
-          });
-          applyEligibility();
-        }, err => { console.error('onSnapshot error:', err); toast('Error de sincronización', 'err'); });
-      }
-
-      function getLastFor(value){
-        const key = String(value);
-        return (radioState.get(key)?.last) || 0;
-      }
-
-      /* ===== ACCESO A ITEMS (para ver tSalida) ===== */
-      const getItems = (typeof window._getItems === 'function') ? window._getItems : () => [];
-      function getItemByValue(val){
-        const n = Number(val);
-        const arr = getItems() || [];
-        return arr.find(x => Number(x.value) === n) || null;
-      }
-
-      /* ===== Elegibilidad ===== */
-      const GRACE_MS = 5 * 60 * 1000; // 5 min
-      function canThisRadioClick(value){
-        const rIdx = getRadioIndex();
-        const last = getLastFor(value);
-        if (last === (rIdx - 1)) return true;
-
-        if (rIdx === 1 && last > 0) {
-          const it = getItemByValue(value);
-          if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) {
-            return true;
-          }
-        }
-        return false;
-      }
+      
+      radiosCol.onSnapshot(snap => {
+        snap.docChanges().forEach(ch => {
+          if (ch.type === 'removed') radioState.delete(ch.doc.id);
+          else radioState.set(ch.doc.id, { last: ch.doc.data().last || 0 });
+        });
+        applyEligibility();
+      });
 
       function applyEligibility(){
         const cards = document.querySelectorAll('#grid .card');
         const rIdx = getRadioIndex();
-        cards.forEach(card=>{
+        cards.forEach(card => {
           const val = card.dataset.value;
-          if (!val) return;
-
-          const eligible = canThisRadioClick(val);
-          const last = getLastFor(val);
-          const clickedLocal = clickedSet.has(String(val));
-          const clickedByMe = clickedLocal && (last >= rIdx);
-
-          if (clickedLocal && !clickedByMe) { clickedSet.delete(String(val)); saveClickedSet(clickedSet); }
-
+          const last = (radioState.get(String(val))?.last) || 0;
           card.classList.remove('radio-eligible','radio-locked','radio-clicked-by-me','radio-clicking','selected');
-
-          if (clickedByMe) {
-            card.classList.add('radio-clicked-by-me'); card.title = `Clicada por RADIO ${rIdx}`;
-          } else if (eligible) {
-            card.classList.add('radio-eligible'); card.title = `Elegible para RADIO ${rIdx} (clic para avanzar)`;
-          } else {
-            card.classList.add('radio-locked'); card.title = `Esperando turno (RADIO ${last+1})`;
-          }
+          
+          if (last >= rIdx) card.classList.add('radio-clicked-by-me');
+          else if (last === (rIdx - 1)) card.classList.add('radio-eligible');
+          else card.classList.add('radio-locked');
         });
       }
 
-      // Reaplicar elegibilidad tras cada render del app.js
-      const origOnRemote = window._onRemoteUpdate;
-      if (typeof origOnRemote === 'function') {
-        window._onRemoteUpdate = (arr)=>{ origOnRemote(arr); applyEligibility(); };
-      } else {
-        const obs = new MutationObserver(()=>applyEligibility());
-        obs.observe(document.getElementById('grid'), {childList:true, subtree:true});
-      }
-      setTimeout(applyEligibility, 0);
-
-      /* Watchdog */
-      (function(){
-        let _eligTimer = null;
-        function startEligibilityWatchdog(){
-          if (_eligTimer) clearInterval(_eligTimer);
-          _eligTimer = setInterval(() => { try { applyEligibility(); } catch {} }, 800);
-        }
-        startEligibilityWatchdog();
-      })();
-
-      // ===== Click en tarjeta para avanzar dorsal al siguiente RADIO =====
-      document.getElementById('grid').addEventListener('click', async (ev)=>{
+      /* ===== EL CLIC: AVANCE Y MAPA DC ===== */
+      document.getElementById('grid').addEventListener('click', async (ev) => {
         const card = ev.target.closest('.card');
-        if (!card) return;
-        const val = card.dataset.value;
-        if (!val) return;
-        if (!card.classList.contains('radio-eligible')) return;
-
+        if (!card || !card.classList.contains('radio-eligible')) return;
+        
+        const dorsal = card.dataset.value;
+        const rIdx = getRadioIndex();
         card.classList.add('radio-clicking');
 
-        const rIdx = getRadioIndex();
-        if (!radiosCol) return;
-        const docRef = radiosCol.doc(String(val));
-
         try {
-          await db.runTransaction(async (tx)=>{
+          // 1. Transacción original (orden de radios)
+          await db.runTransaction(async (tx) => {
+            const docRef = radiosCol.doc(String(dorsal));
             const snap = await tx.get(docRef);
-            const data = snap.exists ? (snap.data()||{}) : {};
-            let last = (typeof data.last==='number') ? data.last : 0;
-
-            if (!(last === (rIdx - 1))) {
-              if (rIdx === 1) {
-                const it = getItemByValue(val);
-                if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) { last = 0; }
-              }
-            }
-            if (last !== (rIdx - 1)) { throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`); }
-
-            tx.set(docRef, {
-              last: rIdx,
-              marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
-            }, { merge:true });
+            const last = snap.exists ? (snap.data().last || 0) : 0;
+            if (last !== (rIdx - 1)) throw new Error("Turno incorrecto");
+            
+            tx.set(docRef, { 
+              last: rIdx, 
+              marks: firebase.firestore.FieldValue.arrayUnion(rIdx) 
+            }, { merge: true });
           });
 
-          clickedSet.add(String(val));
-          saveClickedSet(clickedSet);
+          // 2. INTEGRACIÓN MAPA DC (Lo nuevo)
+          if (rallyId && configGlobal && configGlobal.nombreTramoActual) {
+            await db.collection("rallies").doc(rallyId)
+              .collection("pasos").doc(configGlobal.nombreTramoActual)
+              .set({
+                [`radio${rIdx}`]: dorsal,
+                ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
+              }, { merge: true });
+          }
 
-          try {
-            const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
-            await aud.add({
-              actor: (getRadio() || ('RADIO '+rIdx)),
-              action: 'radio_click',
-              detail: { value: Number(val), radio: rIdx },
-              ts: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-          } catch(e){}
-
-          toast(`Clic RADIO ${rIdx} → dorsal ${val}`, 'ok');
-
+          toast(`Enviado: #${dorsal}`, 'ok');
         } catch (err) {
-          toast('No se pudo avanzar: ' + err.message, 'err');
+          toast('Error: ' + err.message, 'err');
           card.classList.remove('radio-clicking');
-          return;
         }
-
-        setTimeout(()=>{ applyEligibility(); }, 150);
       });
 
-      /* ===== Botón BANDERA (envía aviso a alerts) ===== */
-      function getRadioIdForAlert(){
-        const vDom = (window.RADIO_ID ? String(window.RADIO_ID).trim() : '');
-        if (vDom) return vDom;
-        const qp = new URLSearchParams(location.search).get('radio');
-        if (qp) return String(qp).trim();
-        const v2 = (localStorage.getItem('seced_radio_id') || '').trim();
-        if (v2) return v2;
-        const v1 = (localStorage.getItem('seced_radio') || '').trim();
-        if (v1) return v1;
-        return '';
-      }
-
-      async function publishRadioAlert() {
+      /* ===== Botón Bandera ===== */
+      window.publishRadioAlert = async () => {
+        const radio = getRadio();
+        if (!radio) return alert('Selecciona RADIO primero');
         try {
-          const radio = getRadioIdForAlert();
-          if (!radio) { alert('No se ha detectado un número de RADIO.\nPulsa el botón RADIO y escribe 1, 2, 3…'); return; }
-          const tramo = TRAMO;
-          const payload = {
-            tramo,
-            radio,
-            actor: (localStorage.getItem('seced_operator') || window.OPERATOR || '—'),
+          await db.collection('tramos').doc(TRAMO_DOC_ID).collection('alerts').add({
+            tramo: TRAMO_DOC_ID,
+            radio: radio,
             type: 'radio_alert',
-            clientTs: Date.now(),
             ts: firebase.firestore.FieldValue.serverTimestamp()
-          };
-          await db.collection('tramos').doc(tramo).collection('alerts').add(payload);
-          alert(`¡BANDERA enviada!\nRADIO: ${radio}  |  TRAMO: ${tramo}`);
-        } catch (e) {
-          console.error('publishRadioAlert error', e);
-          alert('Error enviando AVISO.');
-        }
+          });
+          alert('¡AVISO ENVIADO A DC!');
+        } catch (e) { alert('Error al enviar aviso'); }
+      };
+
+      // Crear botón bandera si no existe
+      if (!document.getElementById('btnBandera')) {
+        const b = document.createElement('button');
+        b.id = 'btnBandera'; b.textContent = 'BANDERA';
+        Object.assign(b.style, { position:'fixed', right:'16px', bottom:'16px', background:'#dc2626', color:'#fff', padding:'15px', borderRadius:'10px', fontWeight:'800', cursor:'pointer', zIndex:1000 });
+        b.onclick = publishRadioAlert;
+        document.body.appendChild(b);
       }
 
-      (function ensureBanderaButton(){
-        if (!document.body.classList.contains('radio-skin')) return;
-        let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
-        function wireClick(b){
-          b.onclick = (ev)=>{ ev.preventDefault(); publishRadioAlert(); };
-        }
-        if (!btn) {
-          btn = document.createElement('button');
-          btn.id = 'btnBandera'; btn.type = 'button'; btn.textContent = 'BANDERA';
-          Object.assign(btn.style, {
-            position: 'fixed', right: '16px', bottom: '16px', zIndex: 1000,
-            background: '#dc2626', color: '#fff', border: '1px solid #b91c1c',
-            borderRadius: '10px', padding: '12px 16px', fontWeight: '800',
-            letterSpacing: '0.5px', boxShadow: '0 8px 18px rgba(0,0,0,.35)', cursor: 'pointer'
-          });
-          wireClick(btn);
-          document.body.appendChild(btn);
-        } else {
-          btn.id = 'btnBandera'; btn.textContent = 'BANDERA'; wireClick(btn);
-        }
-      })();
+      // Watchdog de refresco visual
+      setInterval(applyEligibility, 1000);
     })();
   </script>
 </body>
