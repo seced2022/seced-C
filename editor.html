@@ -20,7 +20,7 @@
         .btn-add { background: #1e293b; color: white; margin-bottom: 15px; }
         .btn-save { background: var(--accent); color: white; font-size: 1.2rem; margin-top: 20px; }
         .btn-remove { background: #7f1d1d; color: white; width: auto; position: absolute; top: 15px; right: 15px; padding: 6px 12px; font-size: 0.8rem; }
-        #imgPreview { max-height: 80px; display: none; margin-bottom: 15px; border: 1px dashed var(--border); padding: 5px; }
+        #imgPreview { max-height: 80px; display: none; margin-bottom: 15px; border: 1px dashed var(--border); padding: 5px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -35,9 +35,11 @@
         <label>NOMBRE PÚBLICO DEL RALLY</label>
         <input type="text" id="rallyNombre" placeholder="Ej: 32º Rallye Sierra Morena">
 
-        <label>LOGO DEL RALLY (Imagen JPG o PNG)</label>
-        <input type="file" id="logoFile" accept="image/*" onchange="procesarImagen(this)">
-        <img id="imgPreview" src="">
+        <label>LOGO / PLACA DEL RALLY (JPG/PNG)</label>
+        <input type="file" id="logoFile" accept="image/*" onchange="procesarYComprimirImagen(this)">
+        <div id="previewContainer">
+            <img id="imgPreview" src="">
+        </div>
         <input type="hidden" id="rallyLogoBase64">
     </div>
 
@@ -60,19 +62,46 @@
     const db = firebase.firestore();
     let tramoCount = 0;
 
-    // Convertir imagen a texto (Base64)
-    function procesarImagen(input) {
+    // URL de la imagen genérica (puedes cambiar esta URL por la tuya definitiva)
+    const LOGO_GENERICO = "logo.png"; 
+
+    // FUNCIÓN PARA COMPRIMIR IMAGEN Y EVITAR ERROR DE TAMAÑO EN FIRESTORE
+    function procesarYComprimirImagen(input) {
         const file = input.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('rallyLogoBase64').value = e.target.result;
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                // Configuración de redimensionamiento
+                const MAX_WIDTH = 400; 
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+
+                // Crear canvas para comprimir
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convertir a JPEG con calidad 0.7 (70%) para que pese muy poco
+                const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                
+                document.getElementById('rallyLogoBase64').value = compressedBase64;
                 const preview = document.getElementById('imgPreview');
-                preview.src = e.target.result;
+                preview.src = compressedBase64;
                 preview.style.display = 'block';
             };
-            reader.readAsDataURL(file);
-        }
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
     }
 
     function agregarTramo() {
@@ -107,7 +136,6 @@
         map.on(L.Draw.Event.CREATED, function (e) {
             drawnItems.clearLayers();
             drawnItems.addLayer(e.layer);
-            // Formato objeto para evitar error de arrays anidados en Firestore
             const coords = e.layer.getLatLngs().map(latlng => ({ lat: latlng.lat, lng: latlng.lng }));
             document.querySelector(`#card_${id} .tc-track-data`).value = JSON.stringify(coords);
         });
@@ -116,15 +144,20 @@
     async function guardarRallyCompleto() {
         const id = document.getElementById('rallyId').value.trim();
         const nombre = document.getElementById('rallyNombre').value.trim();
-        const logo = document.getElementById('rallyLogoBase64').value;
+        let logo = document.getElementById('rallyLogoBase64').value;
 
-        if (!id || !nombre) return alert("Por favor, rellena el ID y el Nombre.");
+        if (!id || !nombre) return alert("Por favor, rellena el ID y el Nombre del Rally.");
+
+        // Si el usuario no subió nada, usamos la genérica
+        if (!logo || logo === "") {
+            logo = LOGO_GENERICO;
+        }
 
         const tramos = [];
         document.querySelectorAll('.tc-card').forEach(card => {
             const trackStr = card.querySelector('.tc-track-data').value;
             tramos.push({
-                nombre: card.querySelector('.tc-name').value || "Tramo",
+                nombre: card.querySelector('.tc-name').value || "Tramo sin nombre",
                 track: trackStr ? JSON.parse(trackStr) : []
             });
         });
@@ -136,9 +169,10 @@
                 tramos: tramos,
                 ultimaEdicion: new Date().toISOString()
             });
-            alert("¡Rally '" + id + "' guardado con éxito!");
+            alert("✅ ¡Rally '" + id + "' guardado correctamente!\nAhora puedes usar este ID en los otros paneles.");
         } catch (e) {
-            alert("Error: " + e.message);
+            console.error(e);
+            alert("❌ Error al guardar: " + e.message);
         }
     }
 </script>
