@@ -171,7 +171,7 @@
             // SI NO HAY DOCUMENTO (se borró), LIMPIAMOS LOS RADIOS
             document.querySelectorAll(`[id^="badge-${tId}-"]`).forEach(b => {
               b.classList.remove('active');
-              b.innerText = b.id.split('-').pop() + ": --";
+              b.innerText = "R" + b.id.split('-').pop() + ": --";
             });
             return;
           }
