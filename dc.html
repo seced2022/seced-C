@@ -1,36 +1,31 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SECeD - Dirección de Carrera</title>
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    .grid-dc { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; width: 100%; box-sizing: border-box; }
-    .tc-selector-bar { padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 10px; background: #0f1a14; border-bottom: 1px solid #1d2d23; }
-    .btn-tc-toggle { background: #1e293b; color: white; border: 1px solid #334155; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
-    .btn-tc-toggle.active { background: #16a34a; border-color: #fff; }
-    .card-dc { background: #0f1a14; border: 1px solid #1d2d23; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; height: 500px; }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .map-dc { flex: 1; border-radius: 8px; background: #000; border: 1px solid #1d2d23; z-index: 1; }
-    .btn-stop { background: #7f1d1d; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: 800; cursor: pointer; }
-    .btn-stop.blink { background: #ff0000; animation: blinker 1s linear infinite; box-shadow: 0 0 15px #ff0000; }
-    @keyframes blinker { 50% { opacity: 0.4; } }
-    .btn-resume { background: #15803d; color: white; border: 1px solid #16a34a; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: 800; }
-    .radio-badge { background: #16a34a; border: 2px solid #fff; border-radius: 20px; color: white; font-weight: bold; text-align: center; min-width: 50px; padding: 2px 6px; font-size: 13px; }
-    .radio-badge.empty { background: #333; border-color: #666; }
-    .tc-title { color: #22c55e; font-size: 1.3rem; margin: 0; font-weight: 900; }
-    @media (max-width: 900px) { .grid-dc { grid-template-columns: 1fr; } }
-  </style>
+    <meta charset="utf-8" />
+    <title>SECeD - Panel DC</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root { --bg:#0b120e; --card:#0f1a14; --border:#1d2d23; --text:#e6f2ea; --accent:#17a34a; }
+        body { margin:0; background:var(--bg); color:var(--text); font-family: sans-serif; }
+        .topbar { padding:10px 20px; background:#0c1913; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+        .content { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; }
+        .tramo-card { background:var(--card); border:1px solid var(--border); border-radius:12px; overflow: hidden; display: flex; flex-direction: column; min-height: 450px; }
+        .map-header { padding:12px; font-weight:bold; text-align:center; background: #111e17; }
+        .map-wrap { flex-grow: 1; width:100%; background: #000; }
+        .btn-stop { width:100%; padding:15px; background:#b91c1c; color:white; border:none; font-weight:bold; cursor:pointer; }
+    </style>
 </head>
 <body>
-  <main class="app">
-    <div class="brand"><img id="dcLogo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
-    <h1 id="dcRallyName">SECeD - Dirección de Carrera</h1>
-    <div id="tcSelector" class="tc-selector-bar"></div>
-    <div id="gridDC" class="grid-dc"></div>
-  </main>
+
+<header class="topbar">
+    <div style="display:flex; align-items:center;">
+        <img id="rallyLogo" src="" style="height:40px; margin-right:15px;" onerror="this.style.display='none'">
+        <div style="font-size:1.2rem; font-weight:bold;">SECeD · <span id="rallyNombre" style="color:var(--accent)">Cargando...</span></div>
+    </div>
+    <div id="reloj" style="font-family:monospace; font-size:1.4rem;">00:00:00</div>
+</header>
+
+<main id="gridTramos" class="content"></main>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
@@ -38,125 +33,52 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-  if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
-  const db = firebase.firestore();
-  let rallyId = new URLSearchParams(window.location.search).get('id');
-  let configGlobal = null;
-  let tramosVisibles = new Set();
-  let mapasActivos = {};
+    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+    const db = firebase.firestore();
+    const urlParams = new URLSearchParams(window.location.search);
+    let rallyId = urlParams.get('id');
 
-  // --- FUNCIONES DE COMUNICACIÓN ---
-  async function toggleSalida(nombreReal, estaParado) {
-    const tramoIdStr = nombreReal.toString();
-    await db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(tramoIdStr).set({
-      pararSalida: !estaParado,
-      ts: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  }
+    if (!rallyId) {
+        rallyId = prompt("Introduce el ID del Rally:");
+        if (rallyId) window.location.search = `?id=${rallyId}`;
+    }
 
-  function escucharEstadoYPasos(nombreReal, tramoIndexUI) {
-    // 1. Escuchar si el tramo está parado
-    db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal.toString())
-      .onSnapshot(doc => {
-        const btn = document.getElementById(`stop-${tramoIndexUI}`);
-        if (!btn) return;
-        const parado = doc.exists && doc.data().pararSalida === true;
-        if (parado) {
-          btn.className = "btn-stop blink"; btn.innerText = "REANUDAR SALIDA";
-          btn.onclick = () => toggleSalida(nombreReal, true);
-        } else {
-          btn.className = "btn-stop"; btn.innerText = "PARAR SALIDA";
-          btn.onclick = () => toggleSalida(nombreReal, false);
-        }
-      });
+    setInterval(() => { document.getElementById('reloj').innerText = new Date().toLocaleTimeString(); }, 1000);
 
-    // 2. Escuchar pasos de coches y limpieza
-    db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal.toString())
-      .onSnapshot(doc => {
-        if (!doc.exists) {
-          // Si el control limpia el tramo, reseteamos las bolitas en el mapa
-          document.querySelectorAll(`.badge-${tramoIndexUI}`).forEach(b => {
-            b.classList.add('empty'); b.innerText = "R: --"; b.style.background = "";
-          });
-          return;
-        }
-        const data = doc.data();
-        Object.keys(data).forEach(key => {
-          if(key.startsWith('radio')) {
-            const num = key.replace('radio','');
-            const b = document.getElementById(`badge-${tramoIndexUI}-${num}`);
-            if (b) {
-              b.classList.remove('empty'); b.innerText = `R${num}: #${data[key]}`;
-              b.style.background = "#ffd60a"; b.style.color = "#000";
+    if (rallyId) {
+        db.collection("config_rallies").doc(rallyId).onSnapshot(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                document.getElementById('rallyNombre').innerText = data.nombre || rallyId;
+                document.getElementById('rallyLogo').src = data.logo || "";
+                renderizarMapas(data.tramos);
             }
-          }
         });
-      });
-  }
+    }
 
-  async function initDC() {
-    if (!rallyId) { rallyId = prompt("ID del Rally:"); if (!rallyId) return; }
-    const doc = await db.collection("config_rallies").doc(rallyId).get();
-    if (!doc.exists) return;
-    configGlobal = doc.data();
-    document.getElementById('dcLogo').src = configGlobal.logo;
-    document.getElementById('dcRallyName').innerText = configGlobal.nombre;
+    function renderizarMapas(tramos) {
+        const container = document.getElementById('gridTramos');
+        container.innerHTML = '';
+        tramos.forEach((t, i) => {
+            const mid = `map_${i}`;
+            const card = document.createElement('div');
+            card.className = 'tramo-card';
+            card.innerHTML = `<div class="map-header">${t.nombre}</div><div id="${mid}" class="map-wrap"></div><button class="btn-stop">🛑 PARAR SALIDA</button>`;
+            container.appendChild(card);
 
-    const selector = document.getElementById('tcSelector');
-    configGlobal.tramos.forEach((tramo, index) => {
-      const btn = document.createElement('button');
-      btn.className = 'btn-tc-toggle'; btn.innerText = tramo.nombre;
-      btn.onclick = () => {
-        if (tramosVisibles.has(index)) { tramosVisibles.delete(index); btn.classList.remove('active'); }
-        else { tramosVisibles.add(index); btn.classList.add('active'); }
-        renderizarGrid();
-      };
-      selector.appendChild(btn);
-    });
-  }
-
-  function renderizarGrid() {
-    const grid = document.getElementById('gridDC');
-    grid.innerHTML = '';
-    mapasActivos = {};
-
-    tramosVisibles.forEach(idx => {
-      const t = configGlobal.tramos[idx];
-      const card = document.createElement('div');
-      card.className = 'card-dc';
-      card.innerHTML = `
-        <div class="card-header">
-          <h2 class="tc-title">${t.nombre}</h2>
-          <button id="stop-${idx}" class="btn-stop">PARAR SALIDA</button>
-        </div>
-        <div id="map-${idx}" class="map-dc"></div>
-        <div id="badges-${idx}" style="display:flex; flex-wrap:wrap; gap:5px; margin-top:10px;"></div>
-      `;
-      grid.appendChild(card);
-
-      // Crear bolitas (badges)
-      const bCont = document.getElementById(`badges-${idx}`);
-      t.radios.forEach(r => {
-        const span = document.createElement('span');
-        span.id = `badge-${idx}-${r.numero}`;
-        span.className = `radio-badge empty badge-${idx}`;
-        span.innerText = `R${r.numero}: --`;
-        bCont.appendChild(span);
-      });
-
-      // Inicializar Mapa
-      const map = L.map(`map-${idx}`).setView([t.radios[0].lat, t.radios[0].lng], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-      t.radios.forEach(r => {
-        L.marker([r.lat, r.lng]).addTo(map).bindPopup(`Radio ${r.numero}: ${r.nombre}`);
-      });
-      
-      // Activar escucha de Firebase para esta tarjeta
-      escucharEstadoYPasos(t.nombre_real || (idx+1), idx);
-    });
-  }
-
-  initDC();
+            setTimeout(() => {
+                // Leaflet acepta tanto [lat, lng] como {lat, lng}
+                const firstPoint = t.track.length ? [t.track[0].lat, t.track[0].lng] : [37.88, -4.77];
+                const map = L.map(mid).setView(firstPoint, 13);
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+                
+                if (t.track.length) {
+                    const p = L.polyline(t.track, {color: '#2ecc71', weight: 5}).addTo(map);
+                    map.fitBounds(p.getBounds(), {padding: [30,30]});
+                }
+            }, 100);
+        });
+    }
 </script>
 </body>
 </html>
