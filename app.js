@@ -421,7 +421,8 @@ async function addNumber() {
 
   const tS = nowNetMs();
   items.push({ value: num, selected: false, status: 'normal', rNumber: null, tSalida: tS, tLlegada: null, tAbandono: null });
-
+  avisarAMapaDC(val);
+  
   render();
   if (typeof syncSave === 'function') syncSave();
   await clearRadioDocFor(num);
@@ -476,10 +477,27 @@ async function editSalida(val){
   await clearRadioDocFor(val);
   logAudit('editar_salida', { value: val, tSalida_prev: prev, tSalida_new: newT, salidasHist: items[idx].salidasHist||[] });
 }
-
+// Esta función envía el dorsal al mapa de Dirección de Carrera
+async function avisarAMapaDC(dorsal) {
+  if (!rallyId || !radioId) return; // Si no hay ID de rally o radio, no hace nada
+  
+  const tramoActual = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
+  
+  try {
+    const db = firebase.firestore();
+    await db.collection("rallies").doc(rallyId)
+            .collection("pasos").doc(tramoActual)
+            .set({
+              [`radio${radioId}`]: dorsal // Ejemplo: radio1: 5
+            }, { merge: true });
+  } catch (error) {
+    console.error("Error enviando al mapa:", error);
+  }
+}
 /* === Botones base === */
 if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
 if (input) input.addEventListener('keydown', e => { if (e.key === 'Enter') addNumber(); });
+
 if (btnLimpiar) btnLimpiar.addEventListener('click', async () => {
   if (items.length === 0) return;
   
