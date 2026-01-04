@@ -8,6 +8,18 @@
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="favicon.png">
   <meta name="theme-color" content="#0b1f12">
+  <style>
+    /* Estilos para el bloqueo de Salida Parada */
+    .alerta-dc-control {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(127, 29, 29, 0.98); color: white; z-index: 10000;
+      display: flex; flex-direction: column; justify-content: center;
+      align-items: center; text-align: center; font-family: sans-serif;
+    }
+    .alerta-dc-control h1 { font-size: 4rem; margin: 0; font-weight: 900; }
+    .alerta-dc-control p { font-size: 1.5rem; margin-top: 10px; }
+    .alerta-dc-control .tramo-box { margin-top: 20px; border: 2px solid white; padding: 10px 20px; font-weight: bold; text-transform: uppercase; }
+  </style>
 </head>
 <body>
   <main class="app" aria-label="Aplicación de tarjetas numéricas">
@@ -58,9 +70,7 @@
     </div>
 
     <p class="help"></p>
-
     <div class="toolbar"></div>
-
     <section id="grid" class="grid" aria-live="polite"></section>
 
     <div class="export-bar">
@@ -105,11 +115,10 @@
         firebase.initializeApp(window.FIREBASE_CONFIG);
     }
     const db = firebase.firestore();
-
     const urlParams = new URLSearchParams(window.location.search);
     let rallyId = urlParams.get('id');
+    const TRAMO_ID_NUM = urlParams.get('tramo') || '1'; // El número del tramo actual
 
-    // Si no hay ID en la URL, se solicita
     if (!rallyId) {
         rallyId = prompt("Introduce el ID del Rally para cargar la configuración:");
         if (rallyId) {
@@ -118,31 +127,52 @@
         }
     }
 
-    // Cargar Nombre y Logo dinámicamente
     if (rallyId) {
         db.collection("config_rallies").doc(rallyId).get().then(doc => {
             if (doc.exists) {
                 const data = doc.data();
-                
-                // Actualizar Logo
                 const logoImg = document.getElementById('mainLogo');
-                if (logoImg && data.logo) {
-                    logoImg.src = data.logo;
-                }
-
-                // Actualizar Título
-                const titleH1 = id="mainTitle"; 
-                // Usamos querySelector por seguridad si el ID fallara
+                if (logoImg && data.logo) logoImg.src = data.logo;
                 const header = document.querySelector('h1');
-                if (header && data.nombre) {
-                    header.innerText = data.nombre;
+                if (header && data.nombre) header.innerText = data.nombre;
+
+                // Identificar el nombre del tramo real para escuchar a DC
+                const idx = parseInt(TRAMO_ID_NUM) - 1;
+                if (data.tramos && data.tramos[idx]) {
+                    const nombreTramoReal = data.tramos[idx].nombre;
+                    activarEscuchaDC(nombreTramoReal);
                 }
-                
-                console.log("Configuración de Rally '" + rallyId + "' aplicada.");
-            } else {
-                console.error("El ID de rally no existe en la base de datos.");
             }
         }).catch(err => console.error("Error al cargar datos del rally:", err));
+    }
+
+    // Lógica para bloquear pantalla desde DC
+    function activarEscuchaDC(nombreTramo) {
+        db.collection("rallies").doc(rallyId)
+          .collection("estado_tramos").doc(nombreTramo)
+          .onSnapshot(doc => {
+            const esAdjunto = document.getElementById('btnModeJefe').classList.contains('active');
+            const esSalida = document.getElementById('btnModeSalida').classList.contains('active');
+            
+            let aviso = document.getElementById('aviso-parada-dc');
+
+            // Solo mostramos el aviso si es Adjunto o Salida
+            if (doc.exists && doc.data().pararSalida && (esAdjunto || esSalida)) {
+                if (!aviso) {
+                    aviso = document.createElement('div');
+                    aviso.id = 'aviso-parada-dc';
+                    aviso.className = 'alerta-dc-control';
+                    aviso.innerHTML = `
+                        <h1>⚠️ SALIDA PARADA</h1>
+                        <p>DIRECCIÓN DE CARRERA HA DETENIDO LA SALIDA</p>
+                        <div class="tramo-box">${nombreTramo}</div>
+                    `;
+                    document.body.appendChild(aviso);
+                }
+            } else {
+                if (aviso) aviso.remove();
+            }
+          });
     }
   </script>
 
