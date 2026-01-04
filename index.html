@@ -9,7 +9,7 @@
   <meta name="theme-color" content="#0b1f12">
 </head>
 <body>
-  <main class="app" aria-label="Aplicación de tarjetas numéricas">
+  <main class="app">
     <div class="brand">
       <img src="logo.svg" alt="SECeD" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
     </div>
@@ -28,21 +28,21 @@
           <div id="tramoMenu" class="tramo-menu hidden">
             <div class="menu-header">Cambiar Tramo (TC)</div>
             <div class="menu-body">
-              <input type="number" id="tramoInput" placeholder="Nº de tramo..." min="1" />
+              <input type="number" id="tramoInput" placeholder="Nº de tramo..." />
               <button id="tramoGo" type="button">Cargar</button>
             </div>
             <div class="menu-divider">Recientes</div>
             <ul id="tramoRecent" class="recent-list"></ul>
           </div>
         </div>
-        <button id="btnFullscreen" type="button" class="icon-btn" title="Pantalla completa">⛶</button>
+        <button id="btnFullscreen" type="button" class="icon-btn">⛶</button>
       </div>
     </div>
 
     <div class="mode-selector">
-      <button id="btnModeJefe" class="mode-btn">JEFE DE TRAMO</button>
+      <button id="btnModeJefe" class="mode-btn">ADJUNTO DE TRAMO</button>
       <button id="btnModeSalida" class="mode-btn">SALIDA</button>
-      <button id="btnModeLlegada" class="mode-btn active">LLEGADA</button>
+      <button id="btnModeLlegada" class="mode-btn">LLEGADA</button>
     </div>
 
     <div class="input-container">
@@ -65,7 +65,7 @@
       </div>
     </div>
 
-    <section id="grid" class="grid" aria-live="polite"></section>
+    <section id="grid" class="grid"></section>
 
     <div class="actions">
       <button id="btnLimpiar" class="danger">Vaciar Tramo</button>
@@ -86,22 +86,19 @@
       </div>
       <div class="audit-actions">
         <button id="btnAuditRefresh">Actualizar</button>
-        <button id="btnAuditCSV">Exportar Log CSV</button>
-        <button id="btnStatesCSV">Exportar Estados CSV</button>
+        <button id="btnAuditCSV">Log CSV</button>
+        <button id="btnStatesCSV">Estados CSV</button>
       </div>
       <div id="auditList" class="audit-content"></div>
     </div>
   </main>
-
-  <h2 id="printTitle" class="print-only"></h2>
-  <div id="printCounters" class="print-only"></div>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
 
   <script>
-    // 1. Identificación de Rally (TC e ID)
+    // 1. Identificación de Rally
     const db = firebase.firestore();
     const params = new URLSearchParams(window.location.search);
     let rallyId = params.get('id') || localStorage.getItem('seced_rally_id');
@@ -114,7 +111,7 @@
         }
     }
 
-    // 2. Configuración dinámica de Título y Logo
+    // 2. Cargar Configuración de Rally
     if (rallyId) {
         db.collection("config_rallies").doc(rallyId).get().then(doc => {
             if (doc.exists) {
@@ -124,6 +121,15 @@
             }
         });
     }
+
+    // 3. Lógica para que los botones de modo se "enciendan" al pulsarlos
+    const modeButtons = document.querySelectorAll('.mode-btn');
+    modeButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        modeButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
   </script>
 
   <script src="sync.js"></script>
