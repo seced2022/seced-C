@@ -61,9 +61,9 @@ function applyModeUI(){
   const disableInput = (window.MODE === 'LLEGADA');
   if (input) input.disabled = disableInput;
   if (btnAgregar) btnAgregar.disabled = disableInput;
-
   if (btnResetRadios) btnResetRadios.style.display = (window.MODE === 'JEFE') ? '' : 'none';
 }
+
 (function initModeButtons(){
   const bJ = document.getElementById('btnModeJefe');
   const bS = document.getElementById('btnModeSalida');
@@ -89,6 +89,7 @@ if (window.VIEWER) document.body.classList.add('viewer');
 function pad(n){ return String(n).padStart(2,'0'); }
 function fmtTime(ms){ const d=new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
 function renderClock(nowMs){ const d=new Date(nowNetMs()); if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+
 async function syncTime(){
   try{
     if (clockSync) { clockSync.textContent='sincronizando…'; clockSync.className='sync'; }
@@ -210,6 +211,17 @@ if (btnOperador) btnOperador.addEventListener('click', ()=>{
   const name = prompt('Nombre o identificador del operador:', window.OPERATOR||'');
   if (name !== null) { window.OPERATOR = (name||'').trim(); setOperator(window.OPERATOR); }
 });
+
+/* === Sincronización con Mapa Dirección de Carrera === */
+async function avisarAMapaDC(dorsal) {
+  if (!rallyId || !radioId) return;
+  const tramoActual = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
+  try {
+    const db = firebase.firestore();
+    await db.collection("rallies").doc(rallyId).collection("pasos").doc(tramoActual)
+            .set({ [`radio${radioId}`]: dorsal }, { merge: true });
+  } catch (error) { console.error("Error DC Sync:", error); }
+}
 
 /* === Radio marks (bolitas) === */
 window._radioMarks = new Map();
@@ -429,6 +441,22 @@ async function addNumber() {
   input.value = ''; input.focus();
   logAudit('alta', { value:num, tSalida:tS });
 }
+if (btnAgregar) btnAgregar.addEventListener('click', addNumber);
+input.addEventListener('keydown', e => { if (e.key === 'Enter') addNumber(); });
+
+if (btnLimpiar) btnLimpiar.addEventListener('click', async () => {
+  if (items.length === 0) return;
+  if (confirm('¿Vaciar tramo y limpiar mapa de DC?')) {
+    items = []; render();
+    if (typeof syncSave === 'function') syncSave();
+    try {
+      const db = firebase.firestore();
+      const tramoIdActual = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
+      if (rallyId) await db.collection("rallies").doc(rallyId).collection("pasos").doc(tramoIdActual).delete();
+    } catch (e) {}
+    logAudit('limpiar_total', { tramo: window.TRAMO_ID });
+  }
+});
 
 async function editNumber(prevVal) {
   const idx = items.findIndex(x => x.value === prevVal);
