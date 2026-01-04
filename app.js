@@ -1,4 +1,5 @@
-/* -------------- app.js (VERSIÓN COMPLETA CON SINCRONIZACIÓN DC) -------------- */
+/* -------------- app.js (v=16+beep) -------------- */
+/* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
 const btnLimpiar = document.getElementById('btnLimpiar');
@@ -26,63 +27,23 @@ const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
 
-// Variables de Firebase y IDs
-const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-const rallyId = localStorage.getItem('seced_rally_id');
-const db = firebase.firestore();
-
-/* --- 1. ESCUCHAR SI DIRECCIÓN DE CARRERA PIDE PARAR --- */
-if (rallyId) {
-  db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(tramo)
-    .onSnapshot(doc => {
-      if (doc.exists && doc.data().pararSalida === true) {
-        // Bloqueo visual por orden de DC
-        btnAgregar.innerText = "SALIDA PARADA POR DC";
-        btnAgregar.style.backgroundColor = "#dc2626";
-        btnAgregar.style.color = "white";
-        if (input) {
-            input.style.borderColor = "#ff0000";
-            input.disabled = true;
-        }
-        btnAgregar.disabled = true;
-      } else {
-        // Estado normal (marcha)
-        btnAgregar.innerText = "Añadir Salida";
-        btnAgregar.style.backgroundColor = "";
-        btnAgregar.style.color = "";
-        if (input && window.MODE !== 'LLEGADA') {
-            input.style.borderColor = "";
-            input.disabled = false;
-        }
-        btnAgregar.disabled = (window.MODE === 'LLEGADA');
-      }
-    });
+async function clearRadioDocFor(value){
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || '1').toString();
+    const db = firebase.firestore();
+    await db.collection('tramos').doc(tramo).collection('radios').doc(String(value)).delete();
+  }catch(e){}
 }
 
-/* --- 2. FUNCIÓN LIMPIAR (Sincronizada con el Mapa de DC) --- */
-if (btnLimpiar) {
-  btnLimpiar.addEventListener('click', async () => {
-    if (confirm('¿Vaciar TODO el tramo? Esto también limpiará el mapa de Dirección de Carrera.')) {
-      try {
-        const batch = db.batch();
-        const snap = await db.collection('tramos').doc(tramo).collection('radios').get();
-        snap.forEach(d => batch.delete(d.ref));
-        await batch.commit();
+function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
+function setOperator(name){ try { localStorage.setItem('seced_operator', name || ''); } catch {} updateAuditMeta(); }
+window.OPERATOR = getOperator();
 
-        // Borrar los datos que el mapa de DC está leyendo
-        if (rallyId) {
-          await db.collection("rallies").doc(rallyId).collection("pasos").doc(tramo).delete();
-        }
-        
-        alert('Tramo vaciado correctamente.');
-        location.reload(); // Recargamos para limpiar la pantalla local
-      } catch (e) {
-        console.error(e);
-        alert('Error al vaciar.');
-      }
-    }
-  });
-}
+let items = [];
+window._getItems = () => items;
+window._onRemoteUpdate = (remoteItems) => { items = Array.isArray(remoteItems) ? remoteItems : []; render(); };
+
 /* === Modo === */
 window.MODE = 'LLEGADA';
 function applyModeUI(){
