@@ -13,7 +13,7 @@
     <div class="brand">
       <img src="logo.svg" alt="Logo" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
     </div>
-    <h1 id="mainTitle">SECeD - Control</h1>
+    <h1 id="mainTitle">Cargando Rally...</h1>
 
     <div class="clock-bar">
       <div class="clock">
@@ -25,7 +25,7 @@
         <div class="tramo-picker">
           <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
           <div id="tramoMenu" class="tramo-menu hidden">
-            <div class="menu-header">Seleccionar TC</div>
+            <div class="menu-header">Cambiar TC</div>
             <div class="menu-body">
               <input type="number" id="tramoInput" placeholder="Nº de tramo" />
               <button id="tramoGo" type="button">Cargar</button>
@@ -68,15 +68,15 @@
         <h3>Auditoría</h3>
         <button id="btnAuditClose">×</button>
       </div>
-      <div class="audit-meta" style="padding: 10px; background: #eee; font-size: 0.85rem; border-bottom: 1px solid #ddd;">
+      <div class="audit-meta" style="padding:10px; background:rgba(255,255,255,0.05); font-size:13px; border-bottom:1px solid #1e5b39;">
         <span>TC: <b id="auditTramo">—</b></span> | 
         <span>USUARIO: <b id="auditOperador">—</b></span>
       </div>
       <div id="auditList" class="audit-content"></div>
       <div class="audit-actions">
         <button id="btnAuditRefresh">Actualizar</button>
-        <button id="btnAuditCSV">Log CSV</button>
-        <button id="btnStatesCSV">Estados CSV</button>
+        <button id="btnAuditCSV">CSV Log</button>
+        <button id="btnStatesCSV">CSV Estados</button>
       </div>
     </div>
   </main>
@@ -86,42 +86,48 @@
   <script src="firebase-config.js"></script>
 
   <script>
-    /* 1. LÓGICA DE PERSISTENCIA (Rally, Tramo y Usuario) */
+    /* --- 1. CONFIGURACIÓN DE IDENTIDAD --- */
     const params = new URLSearchParams(window.location.search);
     
-    // Rally ID
-    let rId = params.get('id') || localStorage.getItem('seced_rally_id');
-    if (!rId) {
-      rId = prompt("Introduce el ID del RALLY:");
-      if (rId) localStorage.setItem('seced_rally_id', rId);
+    // Rally
+    let rallyId = params.get('id') || localStorage.getItem('seced_rally_id');
+    if (!rallyId) {
+      rallyId = prompt("ID del RALLY (ej: rally24):");
+      if (rallyId) {
+        localStorage.setItem('seced_rally_id', rallyId);
+        window.location.search = "?id=" + rallyId;
+      }
     }
-    
-    // Usuario / Operador
-    let user = localStorage.getItem('seced_operador') || "Anonimo";
-    document.getElementById('auditOperador').innerText = user;
 
-    // Tramo ID (TC)
+    // Usuario (Operador)
+    let user = localStorage.getItem('seced_operador') || "Sin Nombre";
+    const auditOpElem = document.getElementById('auditOperador');
+    if(auditOpElem) auditOpElem.innerText = user;
+
+    // Tramo (TC)
     window.TRAMO_ID = params.get('tramo') || localStorage.getItem('seced_tramo') || "1";
-    document.getElementById('auditTramo').innerText = window.TRAMO_ID;
+    const auditTrElem = document.getElementById('auditTramo');
+    if(auditTrElem) auditTrElem.innerText = window.TRAMO_ID;
 
-    /* 2. CARGAR PLACA Y NOMBRE DESDE FIREBASE */
-    if (rId) {
+    /* --- 2. CARGA DE PLACA Y TÍTULO --- */
+    if (rallyId) {
       const db = firebase.firestore();
-      db.collection("config_rallies").doc(rId).onSnapshot(doc => {
+      db.collection("config_rallies").doc(rallyId).onSnapshot(doc => {
         if (doc.exists) {
           const data = doc.data();
           if (data.logo) document.getElementById('mainLogo').src = data.logo;
           if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+        } else {
+          document.getElementById('mainTitle').innerText = "Rally: " + rallyId;
         }
       });
     }
 
-    /* 3. BOTÓN OPERADOR (Para cambiar usuario) */
+    /* --- 3. FUNCIÓN DEL BOTÓN OPERADOR --- */
     document.getElementById('btnOperador').onclick = () => {
-      const nuevoUser = prompt("Nombre del Operador:", localStorage.getItem('seced_operador') || "");
-      if (nuevoUser !== null) {
-        localStorage.setItem('seced_operador', nuevoUser);
-        document.getElementById('auditOperador').innerText = nuevoUser;
+      const n = prompt("Nombre del Operador:", localStorage.getItem('seced_operador') || "");
+      if (n !== null) {
+        localStorage.setItem('seced_operador', n);
         location.reload();
       }
     };
