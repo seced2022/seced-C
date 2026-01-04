@@ -7,6 +7,10 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="favicon.png" type="image/png">
   <meta name="theme-color" content="#0b1f12">
+  <style>
+    /* Aseguramos que el botón activo se vea encendido */
+    .mode-btn.active { background-color: #22c55e !important; color: white !important; font-weight: bold; }
+  </style>
 </head>
 <body>
   <main class="app">
@@ -42,7 +46,7 @@
     <div class="mode-selector">
       <button id="btnModeJefe" class="mode-btn">ADJUNTO DE TRAMO</button>
       <button id="btnModeSalida" class="mode-btn">SALIDA</button>
-      <button id="btnModeLlegada" class="mode-btn">LLEGADA</button>
+      <button id="btnModeLlegada" class="mode-btn active">LLEGADA</button>
     </div>
 
     <div class="input-container">
@@ -80,15 +84,6 @@
         <h3>Registro de Auditoría</h3>
         <button id="btnAuditClose">×</button>
       </div>
-      <div class="audit-meta">
-        <span>TC: <b id="auditTramo">—</b></span> | 
-        <span>OP: <b id="auditOperador">—</b></span>
-      </div>
-      <div class="audit-actions">
-        <button id="btnAuditRefresh">Actualizar</button>
-        <button id="btnAuditCSV">Log CSV</button>
-        <button id="btnStatesCSV">Estados CSV</button>
-      </div>
       <div id="auditList" class="audit-content"></div>
     </div>
   </main>
@@ -98,20 +93,23 @@
   <script src="firebase-config.js"></script>
 
   <script>
-    // 1. Identificación de Rally
+    // 1. Forzar que no sea Viewer para que app.js permita clics
+    window.VIEWER = false;
+
+    // 2. Identificación de Rally y TC
     const db = firebase.firestore();
     const params = new URLSearchParams(window.location.search);
     let rallyId = params.get('id') || localStorage.getItem('seced_rally_id');
+    let tramoId = params.get('tramo') || localStorage.getItem('seced_tramo') || "1";
 
     if (!rallyId) {
         rallyId = prompt("Introduce el ID del Rally:");
-        if (rallyId) {
-            localStorage.setItem('seced_rally_id', rallyId);
-            window.location.href = window.location.pathname + "?id=" + rallyId;
-        }
+        if (rallyId) localStorage.setItem('seced_rally_id', rallyId);
     }
+    
+    window.TRAMO_ID = tramoId;
 
-    // 2. Cargar Configuración de Rally
+    // 3. Aplicar Configuración de Rally
     if (rallyId) {
         db.collection("config_rallies").doc(rallyId).get().then(doc => {
             if (doc.exists) {
@@ -122,14 +120,27 @@
         });
     }
 
-    // 3. Lógica para que los botones de modo se "enciendan" al pulsarlos
-    const modeButtons = document.querySelectorAll('.mode-btn');
-    modeButtons.forEach(btn => {
-      btn.addEventListener('click', () => {
-        modeButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-      });
-    });
+    // 4. Lógica de Interfaz de Modos
+    const modeBtns = {
+        'JEFE': document.getElementById('btnModeJefe'),
+        'SALIDA': document.getElementById('btnModeSalida'),
+        'LLEGADA': document.getElementById('btnModeLlegada')
+    };
+
+    function setActiveMode(mode) {
+        Object.values(modeBtns).forEach(b => b.classList.remove('active'));
+        if (modeBtns[mode]) modeBtns[mode].classList.add('active');
+        window.MODE = mode;
+        // Si app.js tiene la función applyModeUI la llamamos, si no, la lógica de app.js se encargará
+        if (typeof applyModeUI === 'function') applyModeUI();
+    }
+
+    modeBtns.JEFE.onclick = () => setActiveMode('JEFE');
+    modeBtns.SALIDA.onclick = () => setActiveMode('SALIDA');
+    modeBtns.LLEGADA.onclick = () => setActiveMode('LLEGADA');
+
+    // Empezar en LLEGADA por defecto
+    setActiveMode('LLEGADA');
   </script>
 
   <script src="sync.js"></script>
