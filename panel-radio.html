@@ -6,7 +6,15 @@
   <title>SECeD - Panel Radio</title>
   <link rel="stylesheet" href="styles.css?v=41" />
   <style>
-    /* Estilo para el bloqueo de DC */
+    /* Estilos de estado originales para Radio */
+    .viewer .card.radio-eligible { background: #ffffff !important; color: #111 !important; cursor: pointer !important; border: 2px solid #22c55e !important; }
+    .card.radio-locked { opacity:.45; pointer-events:none; filter: grayscale(1); }
+    .card.radio-clicked-by-me { background:#fef08a !important; border-color:#eab308 !important; pointer-events:none; color: #000 !important; font-weight: 800; }
+    
+    #btnRadio { background:#0c2415; color:#eafff7; border: 1px solid #13301e; border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer; }
+    .radio-badge { position:absolute; top:14px; right:14px; background:#ffd60a; color: #000; padding:6px 12px; font-weight:900; border-radius:9999px; border: 1px solid #e9b400; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    
+    /* Overlay de Dirección de Carrera */
     .alerta-parada-radio {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(220, 38, 38, 0.98); color: white; z-index: 10000;
@@ -17,6 +25,7 @@
 </head>
 <body class="radio-skin">
   <main class="app">
+    <span id="radioBadge" class="radio-badge" hidden>RADIO: —</span>
     <div class="brand"><img id="mainLogo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
     <h1 id="mainTitle">SECeD - Panel Radio</h1>
     <div class="clock-bar">
@@ -36,34 +45,37 @@
   <script src="firebase-config.js"></script>
   
   <script>
-    // Variables globales que necesita app.js y nuestra integración
+    // 1. VARIABLES E INICIALIZACIÓN
     const db = firebase.firestore();
-    const rallyId = new URLSearchParams(window.location.search).get('id');
-    const TRAMO_DOC_ID = (new URLSearchParams(location.search).get('tramo') || '1').toString();
-    let nombreTramoActual = "";
+    const urlParams = new URLSearchParams(window.location.search);
+    const rallyId = urlParams.get('id');
+    const TRAMO_ID = (urlParams.get('tramo') || '1').toString();
+    window.TRAMO_ID = TRAMO_ID; // Para que app.js lo vea
 
-    // 1. CARGAR CONFIGURACIÓN RALLY
+    let nombreTramoReal = "";
+
+    // Cargar config del rally y activar escucha de DC
     if (rallyId) {
       db.collection("config_rallies").doc(rallyId).get().then(doc => {
         if (doc.exists) {
           const data = doc.data();
-          document.getElementById('mainLogo').src = data.logo;
-          document.getElementById('mainTitle').innerText = data.nombre;
-          const idx = parseInt(TRAMO_DOC_ID) - 1;
+          document.getElementById('mainLogo').src = data.logo || 'logo.png';
+          document.getElementById('mainTitle').innerText = data.nombre || 'SECeD';
+          const idx = parseInt(TRAMO_ID) - 1;
           if (data.tramos && data.tramos[idx]) {
-            nombreTramoActual = data.tramos[idx].nombre;
-            escucharParadaDC();
+            nombreTramoReal = data.tramos[idx].nombre;
+            activarEscuchaParadaDC();
           }
         }
       });
     }
 
-    // 2. FUNCIÓN PARA BLOQUEO DE DC (Solo Radio 1)
-    function escucharParadaDC() {
-      const rIdx = parseInt(localStorage.getItem('seced_radio_id') || '1');
-      if (rIdx !== 1) return;
+    // Función para bloquear si DC pulsa "PARAR" (Solo afecta a Radio 1)
+    function activarEscuchaParadaDC() {
+      const myRadio = parseInt(localStorage.getItem('seced_radio_id') || '1');
+      if (myRadio !== 1) return;
 
-      db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreTramoActual)
+      db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreTramoReal)
         .onSnapshot(doc => {
           let overlay = document.getElementById('overlay-dc');
           if (doc.exists && doc.data().pararSalida) {
@@ -71,23 +83,66 @@
               overlay = document.createElement('div');
               overlay.id = 'overlay-dc';
               overlay.className = 'alerta-parada-radio';
-              overlay.innerHTML = `<h1>⚠️ SALIDA PARADA</h1><p>DIRECCIÓN DE CARRERA</p>`;
+              overlay.innerHTML = `<h1 style="font-size:4rem">⚠️ SALIDA PARADA</h1><p>DIRECCIÓN DE CARRERA</p>`;
               document.body.appendChild(overlay);
             }
           } else if (overlay) overlay.remove();
         });
     }
 
-    // 3. ESTA FUNCIÓN LA LLAMARÁ EL APP.JS ORIGINAL AL PICAR
-    window.enviarADireccionCarrera = async function(dorsal, radioNum) {
-      if (!rallyId || !nombreTramoActual) return;
-      try {
-        await db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreTramoActual).set({
-          [`radio${radioNum}`]: dorsal,
-          ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-      } catch (e) { console.error("Error enviando a DC:", e); }
+    // Gestión del número de Radio
+    function updateRadioUI() {
+      const r = localStorage.getItem('seced_radio_id') || '—';
+      document.getElementById('btnRadio').innerText = 'RADIO: ' + r;
+      const badge = document.getElementById('radioBadge');
+      badge.innerText = 'RADIO: ' + r;
+      badge.hidden = (r === '—');
+    }
+    document.getElementById('btnRadio').onclick = () => {
+      const v = prompt('Número de RADIO:', localStorage.getItem('seced_radio_id') || '1');
+      if (v) { localStorage.setItem('seced_radio_id', v); location.reload(); }
     };
+    updateRadioUI();
+
+    // 2. LÓGICA DE CLIC (RESTAURADA + DC)
+    document.getElementById('grid').addEventListener('click', async (ev) => {
+      const card = ev.target.closest('.card');
+      if (!card || !card.classList.contains('radio-eligible')) return;
+      
+      const dorsal = card.dataset.value;
+      const rIdx = parseInt(localStorage.getItem('seced_radio_id') || '1');
+      const radiosCol = db.collection('tramos').doc(TRAMO_ID).collection('radios');
+
+      card.style.pointerEvents = 'none'; // Evitar doble clic
+
+      try {
+        // A. TRANSACCIÓN ORIGINAL (Bolitas y orden)
+        await db.runTransaction(async (transaction) => {
+          const docRef = radiosCol.doc(String(dorsal));
+          const snap = await transaction.get(docRef);
+          const last = snap.exists ? (snap.data().last || 0) : 0;
+          
+          if (last !== (rIdx - 1)) throw new Error("No es tu turno para el dorsal " + dorsal);
+
+          transaction.set(docRef, { 
+            last: rIdx,
+            marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
+          }, { merge: true });
+        });
+
+        // B. NOTIFICACIÓN A DIRECCIÓN DE CARRERA
+        if (rallyId && nombreTramoReal) {
+          db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreTramoReal).set({
+            [`radio${rIdx}`]: dorsal,
+            ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+
+      } catch (e) {
+        alert(e.message);
+        card.style.pointerEvents = 'auto';
+      }
+    });
   </script>
 
   <script src="sync.js?v=16"></script>
