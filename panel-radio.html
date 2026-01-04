@@ -3,39 +3,28 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SECeD - Panel Radio</title>
-  <link rel="stylesheet" href="styles.css?v=41" />
+  <title>SECeD - Panel Radio v2</title>
+  <link rel="stylesheet" href="styles.css?v=42" />
   <style>
-    /* Estilos de estado originales para Radio */
-    .viewer .card.radio-eligible { background: #ffffff !important; color: #111 !important; cursor: pointer !important; border: 2px solid #22c55e !important; }
-    .card.radio-locked { opacity:.45; pointer-events:none; filter: grayscale(1); }
-    .card.radio-clicked-by-me { background:#fef08a !important; border-color:#eab308 !important; pointer-events:none; color: #000 !important; font-weight: 800; }
-    
-    #btnRadio { background:#0c2415; color:#eafff7; border: 1px solid #13301e; border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer; }
-    .radio-badge { position:absolute; top:14px; right:14px; background:#ffd60a; color: #000; padding:6px 12px; font-weight:900; border-radius:9999px; border: 1px solid #e9b400; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-    
-    /* Overlay de Dirección de Carrera */
-    .alerta-parada-radio {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(220, 38, 38, 0.98); color: white; z-index: 10000;
-      display: flex; flex-direction: column; justify-content: center;
-      align-items: center; font-weight: 900; text-align: center;
-    }
+    /* Estilos para que las tarjetas de radio sean grandes y usables */
+    .card.radio-eligible { background: #ffffff !important; color: #111 !important; border: 3px solid #22c55e !important; cursor: pointer; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 900; }
+    .card.radio-clicked-by-me { background: #fef08a !important; border-color: #eab308 !important; pointer-events: none; opacity: 0.7; }
+    .setup-overlay { position: fixed; inset: 0; background: #111; z-index: 20000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; gap: 20px; }
+    .setup-overlay input { padding: 15px; font-size: 1.5rem; width: 200px; text-align: center; border-radius: 8px; border: none; }
   </style>
 </head>
 <body class="radio-skin">
+  <div id="setupOverlay" class="setup-overlay">
+    <h2>Configuración de Radio</h2>
+    <input type="number" id="setupTramo" placeholder="Nº Tramo (TC)" />
+    <input type="number" id="setupRadio" placeholder="Nº Radio" />
+    <button id="btnStart" style="padding: 15px 40px; font-size: 1.2rem; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: bold;">ENTRAR AL PANEL</button>
+  </div>
+
   <main class="app">
-    <span id="radioBadge" class="radio-badge" hidden>RADIO: —</span>
-    <div class="brand"><img id="mainLogo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
-    <h1 id="mainTitle">SECeD - Panel Radio</h1>
     <div class="clock-bar">
-      <div class="clock"><span id="clockTime">--:--:--</span> <span class="sync" id="clockSync">...</span></div>
-      <div class="controls-right">
-        <div style="display:flex; gap:8px;">
-          <button id="btnTramo" class="secondary">TRAMO ▾</button>
-          <button id="btnRadio">RADIO: —</button>
-        </div>
-      </div>
+      <div class="clock"><span id="clockTime">--:--:--</span></div>
+      <div id="infoPunto" style="font-weight: bold; color: #ffd60a;"></div>
     </div>
     <section id="grid" class="grid"></section>
   </main>
@@ -45,107 +34,75 @@
   <script src="firebase-config.js"></script>
   
   <script>
-    // 1. VARIABLES E INICIALIZACIÓN
     const db = firebase.firestore();
-    const urlParams = new URLSearchParams(window.location.search);
-    const rallyId = urlParams.get('id');
-    const TRAMO_ID = (urlParams.get('tramo') || '1').toString();
-    window.TRAMO_ID = TRAMO_ID; // Para que app.js lo vea
+    
+    // Bloqueo de inicio para pedir ID y TC
+    const setupOverlay = document.getElementById('setupOverlay');
+    const btnStart = document.getElementById('btnStart');
 
-    let nombreTramoReal = "";
-
-    // Cargar config del rally y activar escucha de DC
-    if (rallyId) {
-      db.collection("config_rallies").doc(rallyId).get().then(doc => {
-        if (doc.exists) {
-          const data = doc.data();
-          document.getElementById('mainLogo').src = data.logo || 'logo.png';
-          document.getElementById('mainTitle').innerText = data.nombre || 'SECeD';
-          const idx = parseInt(TRAMO_ID) - 1;
-          if (data.tramos && data.tramos[idx]) {
-            nombreTramoReal = data.tramos[idx].nombre;
-            activarEscuchaParadaDC();
-          }
-        }
-      });
+    // Cargar si ya existen en memoria
+    if(localStorage.getItem('seced_tramo') && localStorage.getItem('seced_radio_id')) {
+      setupOverlay.style.display = 'none';
+      iniciarPanel();
     }
 
-    // Función para bloquear si DC pulsa "PARAR" (Solo afecta a Radio 1)
-    function activarEscuchaParadaDC() {
-      const myRadio = parseInt(localStorage.getItem('seced_radio_id') || '1');
-      if (myRadio !== 1) return;
-
-      db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreTramoReal)
-        .onSnapshot(doc => {
-          let overlay = document.getElementById('overlay-dc');
-          if (doc.exists && doc.data().pararSalida) {
-            if (!overlay) {
-              overlay = document.createElement('div');
-              overlay.id = 'overlay-dc';
-              overlay.className = 'alerta-parada-radio';
-              overlay.innerHTML = `<h1 style="font-size:4rem">⚠️ SALIDA PARADA</h1><p>DIRECCIÓN DE CARRERA</p>`;
-              document.body.appendChild(overlay);
-            }
-          } else if (overlay) overlay.remove();
-        });
-    }
-
-    // Gestión del número de Radio
-    function updateRadioUI() {
-      const r = localStorage.getItem('seced_radio_id') || '—';
-      document.getElementById('btnRadio').innerText = 'RADIO: ' + r;
-      const badge = document.getElementById('radioBadge');
-      badge.innerText = 'RADIO: ' + r;
-      badge.hidden = (r === '—');
-    }
-    document.getElementById('btnRadio').onclick = () => {
-      const v = prompt('Número de RADIO:', localStorage.getItem('seced_radio_id') || '1');
-      if (v) { localStorage.setItem('seced_radio_id', v); location.reload(); }
+    btnStart.onclick = () => {
+      const t = document.getElementById('setupTramo').value;
+      const r = document.getElementById('setupRadio').value;
+      if(!t || !r) return alert("Indica Tramo y Radio");
+      localStorage.setItem('seced_tramo', t);
+      localStorage.setItem('seced_radio_id', r);
+      setupOverlay.style.display = 'none';
+      location.reload();
     };
-    updateRadioUI();
 
-    // 2. LÓGICA DE CLIC (RESTAURADA + DC)
-    document.getElementById('grid').addEventListener('click', async (ev) => {
-      const card = ev.target.closest('.card');
-      if (!card || !card.classList.contains('radio-eligible')) return;
-      
-      const dorsal = card.dataset.value;
-      const rIdx = parseInt(localStorage.getItem('seced_radio_id') || '1');
-      const radiosCol = db.collection('tramos').doc(TRAMO_ID).collection('radios');
+    function iniciarPanel() {
+      const TRAMO = localStorage.getItem('seced_tramo');
+      const RADIO = localStorage.getItem('seced_radio_id');
+      document.getElementById('infoPunto').innerText = `TC: ${TRAMO} | RADIO: ${RADIO}`;
 
-      card.style.pointerEvents = 'none'; // Evitar doble clic
-
-      try {
-        // A. TRANSACCIÓN ORIGINAL (Bolitas y orden)
-        await db.runTransaction(async (transaction) => {
-          const docRef = radiosCol.doc(String(dorsal));
-          const snap = await transaction.get(docRef);
-          const last = snap.exists ? (snap.data().last || 0) : 0;
+      // Escuchar dorsales activos en el tramo
+      db.collection('tramos').doc(TRAMO).collection('items')
+        .onSnapshot(snap => {
+          const grid = document.getElementById('grid');
+          grid.innerHTML = '';
           
-          if (last !== (rIdx - 1)) throw new Error("No es tu turno para el dorsal " + dorsal);
+          snap.forEach(doc => {
+            const data = doc.data();
+            if(data.status === 'abandon') return;
 
-          transaction.set(docRef, { 
-            last: rIdx,
-            marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
+            const card = document.createElement('div');
+            card.className = 'card radio-eligible';
+            card.innerText = data.value;
+            card.onclick = () => marcarPaso(data.value, TRAMO, RADIO, card);
+            
+            grid.appendChild(card);
+          });
+        });
+    }
+
+    async function marcarPaso(dorsal, tramo, radioId, element) {
+      if(!confirm(`¿Confirmar paso dorsal ${dorsal} por Radio ${radioId}?`)) return;
+      
+      element.classList.add('radio-clicked-by-me');
+      
+      try {
+        const docRef = db.collection('tramos').doc(tramo).collection('radios').doc(String(dorsal));
+        
+        await db.runTransaction(async (transaction) => {
+          const snap = await transaction.get(docRef);
+          const currentMarks = snap.exists ? (snap.data().marks || []) : [];
+          
+          transaction.set(docRef, {
+            marks: [...new Set([...currentMarks, parseInt(radioId)])].sort((a,b) => a-b),
+            lastUpdate: Date.now()
           }, { merge: true });
         });
-
-        // B. NOTIFICACIÓN A DIRECCIÓN DE CARRERA
-        if (rallyId && nombreTramoReal) {
-          db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreTramoReal).set({
-            [`radio${rIdx}`]: dorsal,
-            ultimaActualizacion: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-        }
-
       } catch (e) {
-        alert(e.message);
-        card.style.pointerEvents = 'auto';
+        alert("Error al marcar: " + e.message);
+        element.classList.remove('radio-clicked-by-me');
       }
-    });
+    }
   </script>
-
-  <script src="sync.js?v=16"></script>
-  <script src="app.js?v=16"></script>
 </body>
 </html>
