@@ -3,137 +3,151 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SECeD - Control de Tiempos</title>
+  <title>SECeD - Control</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="favicon.png">
   <meta name="theme-color" content="#0b1f12">
 </head>
 <body>
-  <main class="app">
+  <main class="app" aria-label="Aplicación de tarjetas numéricas">
     <div class="brand">
-      <img src="logo.svg" alt="Logo" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
+      <img src="logo.svg" alt="SECeD" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
     </div>
-    <h1 id="mainTitle">Cargando Rally...</h1>
+    <h1 id="mainTitle">SECeD - Control</h1>
 
     <div class="clock-bar">
       <div class="clock">
         <span id="clockTime">--:--:--</span>
-        <span class="sync" id="clockSync">sincronizando…</span>
+        <span class="tz" id="clockTz">Europe/Madrid</span>
+        <span class="sync" id="clockSync" title="Estado de sincronización">sincronizando…</span>
       </div>
 
       <div class="controls-right">
         <div class="tramo-picker">
           <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
-          <div id="tramoMenu" class="tramo-menu hidden">
-            <div class="menu-header">Cambiar TC</div>
-            <div class="menu-body">
-              <input type="number" id="tramoInput" placeholder="Nº de tramo" />
-              <button id="tramoGo" type="button">Cargar</button>
+          <div id="tramoMenu" class="tramo-menu hidden" role="menu" aria-label="Seleccionar tramo">
+            <div class="tm-section">
+              <label for="tramoInput">Escribir tramo</label>
+              <input id="tramoInput" type="text" placeholder="ej. tramo-1" />
+              <button id="tramoGo" type="button" class="primary">Ir</button>
             </div>
-            <ul id="tramoRecent" class="recent-list"></ul>
+            <div class="tm-section">
+              <div class="tm-label">Recientes</div>
+              <ul id="tramoRecent"></ul>
+            </div>
           </div>
+        </div>
+
+        <div class="mode-panel">
+          <button id="btnModeJefe"   type="button" class="mode-btn mode-jefe"   title="JEFE DE TRAMO: permite todo">ADJUNTO DE TRAMO</button>
+          <button id="btnModeSalida" type="button" class="mode-btn mode-salida" title="SALIDA: solo altas">SALIDA</button>
+          <button id="btnModeLlegada"type="button" class="mode-btn mode-llegada" title="LLEGADA: solo LL/Abandono">LLEGADA</button>
+        </div>
+
+        <div class="micro-panel">
+          <button id="btnOperador" class="micro-btn" title="Identificarse como operador">👤</button>
+          <button id="btnAudit" class="micro-btn" title="Abrir auditoría (clave requerida)">🛡️</button>
         </div>
       </div>
     </div>
 
-    <div class="mode-selector">
-      <button id="btnModeJefe" class="mode-btn">ADJUNTO DE TRAMO</button>
-      <button id="btnModeSalida" class="mode-btn">SALIDA</button>
-      <button id="btnModeLlegada" class="mode-btn active">LLEGADA</button>
+    <div class="row">
+      <input id="inputNumero" type="number" inputmode="numeric" placeholder="Escribe un número" />
+      <button id="btnAgregar" type="button">Agregar</button>
     </div>
 
-    <div class="input-container">
-      <input type="number" id="inputNumero" placeholder="Dorsal..." inputmode="numeric" />
-      <button id="btnAgregar" type="button" class="primary">Añadir Salida</button>
-    </div>
+    <p class="help"></p>
 
-    <div class="counters">
-      <div class="counter-item"><span class="label">Salidas</span><span class="value" id="countSalida">0</span></div>
-      <div class="counter-item highlight"><span class="label">Meta</span><span class="value" id="countLlegada">0</span></div>
-      <div class="counter-item warn"><span class="label">Retirados</span><span class="value" id="countAbandonos">0</span></div>
-    </div>
+    <div class="toolbar"></div>
 
-    <section id="grid" class="grid"></section>
+    <section id="grid" class="grid" aria-live="polite"></section>
 
-    <div class="actions">
-      <button id="btnLimpiar" class="danger">Vaciar Tramo</button>
-      <button id="btnExportar">Imprimir / PDF</button>
-      <button id="btnAudit" class="secondary">Auditoría</button>
-      <button id="btnOperador" class="secondary">Operador</button>
-      <button id="btnResetRadios" class="danger" style="display:none;">Reset Radios</button>
-    </div>
-
-    <div id="auditPanel" class="audit-panel hidden">
-      <div class="audit-header">
-        <h3>Auditoría</h3>
-        <button id="btnAuditClose">×</button>
+    <div class="export-bar">
+      <button id="btnResetRadios" type="button" class="btn btn-warn" style="display:none">Reset dorsales</button>
+      <button id="btnLimpiar" class="secondary">Limpiar</button>
+      <button id="btnExportar" type="button" class="primary">Exportar a PDF</button>
+      <button id="btnFullscreen" type="button" class="secondary btn-fullscreen" title="Pantalla completa">Pantalla completa</button>
+      <div class="counters">
+        <div class="counter" title="Total de recuadros"><span class="label">Salida</span><span id="countSalida">0</span></div>
+        <div class="counter" title="Marcados en verde"><span class="label">LLegada</span><span id="countLlegada">0</span></div>
+        <div class="counter" title="En abandono (rojo)"><span class="label">Abandonos</span><span id="countAbandonos">0</span></div>
       </div>
-      <div class="audit-meta" style="padding:10px; background:rgba(255,255,255,0.05); font-size:13px; border-bottom:1px solid #1e5b39;">
-        <span>TC: <b id="auditTramo">—</b></span> | 
-        <span>USUARIO: <b id="auditOperador">—</b></span>
+    </div>
+
+    <div id="printTitle" class="print-title" aria-hidden="true"></div>
+    <div id="printCounters" class="print-counters" aria-hidden="true"></div>
+
+    <div id="auditPanel" class="audit hidden" role="dialog" aria-modal="true" aria-label="Panel de auditoría">
+      <div class="audit-head">
+        <strong>Auditoría</strong>
+        <div class="audit-tools">
+          <button id="btnAuditRefresh" class="secondary">Actualizar</button>
+          <button id="btnAuditCSV" class="secondary">Exportar auditoría (CSV)</button>
+          <button id="btnStatesCSV" class="secondary">Exportar estados (CSV)</button>
+          <button id="btnAuditClose">Cerrar ✕</button>
+        </div>
       </div>
-      <div id="auditList" class="audit-content"></div>
-      <div class="audit-actions">
-        <button id="btnAuditRefresh">Actualizar</button>
-        <button id="btnAuditCSV">CSV Log</button>
-        <button id="btnStatesCSV">CSV Estados</button>
+      <div class="audit-meta">
+        <div>Tramo: <span id="auditTramo">—</span></div>
+        <div>Operador (actual): <span id="auditOperador">—</span></div>
       </div>
+      <div id="auditList" class="audit-list"></div>
     </div>
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js"></script>
+  <script src="firebase-config.js?v=2"></script>
 
   <script>
-    /* --- 1. CONFIGURACIÓN DE IDENTIDAD --- */
-    const params = new URLSearchParams(window.location.search);
-    
-    // Rally
-    let rallyId = params.get('id') || localStorage.getItem('seced_rally_id');
+    if (!firebase.apps.length) {
+        firebase.initializeApp(window.FIREBASE_CONFIG);
+    }
+    const db = firebase.firestore();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let rallyId = urlParams.get('id');
+
+    // Si no hay ID en la URL, se solicita
     if (!rallyId) {
-      rallyId = prompt("ID del RALLY (ej: rally24):");
-      if (rallyId) {
-        localStorage.setItem('seced_rally_id', rallyId);
-        window.location.search = "?id=" + rallyId;
-      }
-    }
-
-    // Usuario (Operador)
-    let user = localStorage.getItem('seced_operador') || "Sin Nombre";
-    const auditOpElem = document.getElementById('auditOperador');
-    if(auditOpElem) auditOpElem.innerText = user;
-
-    // Tramo (TC)
-    window.TRAMO_ID = params.get('tramo') || localStorage.getItem('seced_tramo') || "1";
-    const auditTrElem = document.getElementById('auditTramo');
-    if(auditTrElem) auditTrElem.innerText = window.TRAMO_ID;
-
-    /* --- 2. CARGA DE PLACA Y TÍTULO --- */
-    if (rallyId) {
-      const db = firebase.firestore();
-      db.collection("config_rallies").doc(rallyId).onSnapshot(doc => {
-        if (doc.exists) {
-          const data = doc.data();
-          if (data.logo) document.getElementById('mainLogo').src = data.logo;
-          if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
-        } else {
-          document.getElementById('mainTitle').innerText = "Rally: " + rallyId;
+        rallyId = prompt("Introduce el ID del Rally para cargar la configuración:");
+        if (rallyId) {
+            const separator = window.location.href.includes('?') ? '&' : '?';
+            window.location.href = window.location.href + separator + "id=" + rallyId;
         }
-      });
     }
 
-    /* --- 3. FUNCIÓN DEL BOTÓN OPERADOR --- */
-    document.getElementById('btnOperador').onclick = () => {
-      const n = prompt("Nombre del Operador:", localStorage.getItem('seced_operador') || "");
-      if (n !== null) {
-        localStorage.setItem('seced_operador', n);
-        location.reload();
-      }
-    };
+    // Cargar Nombre y Logo dinámicamente
+    if (rallyId) {
+        db.collection("config_rallies").doc(rallyId).get().then(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                
+                // Actualizar Logo
+                const logoImg = document.getElementById('mainLogo');
+                if (logoImg && data.logo) {
+                    logoImg.src = data.logo;
+                }
+
+                // Actualizar Título
+                const titleH1 = id="mainTitle"; 
+                // Usamos querySelector por seguridad si el ID fallara
+                const header = document.querySelector('h1');
+                if (header && data.nombre) {
+                    header.innerText = data.nombre;
+                }
+                
+                console.log("Configuración de Rally '" + rallyId + "' aplicada.");
+            } else {
+                console.error("El ID de rally no existe en la base de datos.");
+            }
+        }).catch(err => console.error("Error al cargar datos del rally:", err));
+    }
   </script>
 
-  <script src="sync.js"></script>
-  <script src="app.js"></script>
+  <script src="alerts-listener.js"></script>  
+  <script src="sync.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
