@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SECeD - Editor con Puntos de Radio</title>
+    <title>SECeD - Editor de Rallies PRO</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <style>
@@ -22,22 +22,22 @@
         .btn-remove { background: #7f1d1d; color: white; width: auto; position: absolute; top: 15px; right: 15px; padding: 6px 12px; font-size: 0.8rem; }
         #imgPreview { max-height: 80px; display: none; margin-bottom: 15px; border: 1px dashed var(--border); padding: 5px; border-radius: 4px; }
         .loading-tag { color: #fbbf24; font-size: 0.8rem; display: none; margin-left: 10px; }
-        .instructions { font-size: 0.8rem; color: #aaa; margin-bottom: 10px; background: #16251b; padding: 10px; border-radius: 6px; border-left: 4px solid var(--accent); }
+        .instructions { font-size: 0.8rem; color: #aaa; margin-bottom: 10px; background: #16251b; padding: 10px; border-radius: 6px; border-left: 4px solid var(--accent); line-height: 1.4; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="header-box">
-        <h1>Configurador de Rally <span id="loadingStatus" class="loading-tag">Cargando datos existentes...</span></h1>
+        <h1>Configurador de Rally <span id="loadingStatus" class="loading-tag">Cargando datos...</span></h1>
         
-        <label>ID ÚNICO DEL RALLY</label>
+        <label>ID ÚNICO DEL RALLY (Escríbelo para cargar)</label>
         <input type="text" id="rallyId" placeholder="ej: rally-cordoba-25" onblur="verificarRallyExistente(this.value)">
 
         <label>NOMBRE PÚBLICO DEL RALLY</label>
         <input type="text" id="rallyNombre" placeholder="Ej: 32º Rallye Sierra Morena">
 
-        <label>LOGO / PLACA DEL RALLY</label>
+        <label>LOGO / PLACA DEL RALLY (Se comprimirá automáticamente)</label>
         <input type="file" id="logoFile" accept="image/*" onchange="procesarYComprimirImagen(this)">
         <img id="imgPreview" src="">
         <input type="hidden" id="rallyLogoBase64">
@@ -61,6 +61,7 @@
     let tramoCount = 0;
     const LOGO_GENERICO = "logo.png"; 
 
+    // CARGAR SI EXISTE EL ID
     async function verificarRallyExistente(id) {
         if (!id) return;
         const status = document.getElementById('loadingStatus');
@@ -91,9 +92,9 @@
                 <label>NOMBRE DEL TRAMO</label>
                 <input type="text" class="tc-name" value="${nombre}" placeholder="Ej: TC1 Villaviciosa">
                 <div class="instructions">
-                    💡 <b>Instrucciones:</b><br>
-                    1. Usa la <b>línea</b> para dibujar el recorrido del tramo.<br>
-                    2. Usa el <b>marcador (punto)</b> para situar los RADIOS en orden (el 1º que pongas será Radio 1, etc.)
+                    💡 <b>Instrucciones Mapa:</b><br>
+                    - Usa la <b>Línea</b> para el recorrido.<br>
+                    - Usa el <b>Marcador</b> para poner los puntos de RADIO (se numeran solos).
                 </div>
                 <div id="${idMap}" class="map-editor"></div>
                 <input type="hidden" class="tc-track-data" value='${JSON.stringify(track)}'>
@@ -113,64 +114,60 @@
         const drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
 
-        // Cargar track si existe
+        // Track existente
         if (existingTrack?.length) {
             const poly = L.polyline(existingTrack, { color: '#17a34a', weight: 5 }).addTo(drawnItems);
             map.fitBounds(poly.getBounds());
         }
 
-        // Cargar radios si existen
-        existingRadios.forEach((r, idx) => {
-            const marker = L.marker([r.lat, r.lng]).addTo(drawnItems);
-            marker.bindTooltip("Radio " + (idx + 1), { permanent: true, direction: 'top' });
-        });
+        // Radios existentes
+        if (existingRadios) {
+            existingRadios.forEach((r, idx) => {
+                const marker = L.marker([r.lat, r.lng]).addTo(drawnItems);
+                marker.bindTooltip("Radio " + (idx + 1), { permanent: true, direction: 'top' });
+            });
+        }
 
         const drawControl = new L.Control.Draw({
             draw: {
                 polyline: { shapeOptions: { color: '#17a34a', weight: 5 } },
-                marker: true, // HABILITAMOS MARCADORES
+                marker: true,
                 polygon: false, circle: false, rectangle: false, circlemarker: false
             },
             edit: { featureGroup: drawnItems }
         });
         map.addControl(drawControl);
 
-        const updateData = () => {
+        const updateInputs = () => {
             const track = [];
             const radios = [];
+            let rCount = 1;
+            
             drawnItems.eachLayer(layer => {
                 if (layer instanceof L.Polyline) {
                     layer.getLatLngs().forEach(latlng => track.push({ lat: latlng.lat, lng: latlng.lng }));
                 } else if (layer instanceof L.Marker) {
                     radios.push({ lat: layer.getLatLng().lat, lng: layer.getLatLng().lng });
+                    layer.bindTooltip("Radio " + rCount++, { permanent: true, direction: 'top' });
                 }
             });
             document.querySelector(`#card_${id} .tc-track-data`).value = JSON.stringify(track);
             document.querySelector(`#card_${id} .tc-radios-data`).value = JSON.stringify(radios);
-            
-            // Refrescar tooltips de radios para que se numeren correctamente
-            let rCount = 1;
-            drawnItems.eachLayer(layer => {
-                if (layer instanceof L.Marker) {
-                    layer.bindTooltip("Radio " + rCount++, { permanent: true, direction: 'top' });
-                }
-            });
         };
 
         map.on(L.Draw.Event.CREATED, (e) => {
             if (e.layerType === 'polyline') {
-                // Solo permitimos una línea por tramo, borramos anteriores
                 drawnItems.eachLayer(l => { if (l instanceof L.Polyline) drawnItems.removeLayer(l); });
             }
             drawnItems.addLayer(e.layer);
-            updateData();
+            updateInputs();
         });
 
-        map.on(L.Draw.Event.EDITED, updateData);
-        map.on(L.Draw.Event.DELETED, updateData);
+        map.on(L.Draw.Event.EDITED, updateInputs);
+        map.on(L.Draw.Event.DELETED, updateInputs);
     }
 
-    // Funciones de utilidad (Imagen y Guardar)
+    // COMPRESIÓN DE IMAGEN (No se toca)
     function procesarYComprimirImagen(input) {
         const file = input.files[0]; if (!file) return;
         const reader = new FileReader();
@@ -193,11 +190,12 @@
         reader.readAsDataURL(file);
     }
 
+    // GUARDAR TODO
     async function guardarRallyCompleto() {
         const id = document.getElementById('rallyId').value.trim();
         const nombre = document.getElementById('rallyNombre').value.trim();
         let logo = document.getElementById('rallyLogoBase64').value || LOGO_GENERICO;
-        if (!id || !nombre) return alert("Faltan datos");
+        if (!id || !nombre) return alert("Falta ID o Nombre");
 
         const tramos = [];
         document.querySelectorAll('.tc-card').forEach(card => {
@@ -210,8 +208,8 @@
 
         try {
             await db.collection("config_rallies").doc(id).set({ nombre, logo, tramos, ultimaEdicion: new Date().toISOString() });
-            alert("✅ Guardado con éxito.");
-        } catch (e) { alert("Error: " + e.message); }
+            alert("✅ Rally guardado/actualizado con éxito.");
+        } catch (e) { alert("Error al guardar: " + e.message); }
     }
 </script>
 </body>
