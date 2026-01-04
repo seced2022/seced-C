@@ -32,6 +32,27 @@ async function clearRadioDocFor(value){
     if (!window.firebase || !firebase.firestore) return;
     const tramo = (window.TRAMO_ID || '1').toString();
     const db = firebase.firestore();
+
+// === BLOQUE NUEVO PARA CONEXIÓN CON DC (Pega esto aquí) ===
+if (rallyId) {
+  db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(tramo)
+    .onSnapshot(doc => {
+      if (doc.exists && doc.data().pararSalida === true) {
+        btnAgregar.innerText = "SALIDA PARADA POR DC";
+        btnAgregar.style.backgroundColor = "#dc2626";
+        btnAgregar.style.color = "white";
+        if (input) { input.style.borderColor = "#ff0000"; input.disabled = true; }
+        btnAgregar.disabled = true;
+      } else {
+        btnAgregar.innerText = "Añadir Salida";
+        btnAgregar.style.backgroundColor = "";
+        btnAgregar.style.color = "";
+        if (input && window.MODE !== 'LLEGADA') { input.style.borderColor = ""; input.disabled = false; }
+        btnAgregar.disabled = (window.MODE === 'LLEGADA');
+      }
+    });
+}
+// ==========================================================
     await db.collection('tramos').doc(tramo).collection('radios').doc(String(value)).delete();
   }catch(e){}
 }
