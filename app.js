@@ -1,5 +1,5 @@
 /* -------------- app.js (v=16+beep) -------------- */
-/* === Referencias y estado base (igual que tu versión) === */
+/* === Referencias y estado base === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
 const btnLimpiar = document.getElementById('btnLimpiar');
@@ -231,7 +231,7 @@ window._radioMarks = new Map();
   }catch(e){ console.warn('radio marks subscribe error', e); }
 })();
 
-/* === Render tarjetas (igual que tu versión) === */
+/* === Render tarjetas === */
 function render() {
   if (countSalida) countSalida.textContent = String(items.length);
   if (countLlegada) countLlegada.textContent = String(items.filter(x => x.status !== 'abandon' && x.selected).length);
@@ -606,21 +606,30 @@ function toggleTramoMenu(){
   if(!tramoMenu) return;
   const hidden = tramoMenu.classList.contains('hidden');
   document.querySelectorAll('.tramo-menu').forEach(m=>m.classList.add('hidden'));
-  if(hidden){ fillRecent(); tramoMenu.classList.remove('hidden'); tramoInput && tramoInput.focus(); }
+  if(hidden){ fillRecent(); tramoMenu.classList.remove('hidden'); if(tramoInput) tramoInput.focus(); }
   else { tramoMenu.classList.add('hidden'); }
 }
+
 if (btnTramo) btnTramo.addEventListener('click', (e)=>{ e.stopPropagation(); toggleTramoMenu(); });
 if (tramoGo) tramoGo.addEventListener('click', ()=> goToTramo(tramoInput && tramoInput.value));
 if (tramoInput) tramoInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goToTramo(tramoInput.value); });
+
 function setTramoBadge(name){
   const t = (name || window.TRAMO_ID || '').toString();
   if (typeof btnTramo !== 'undefined' && btnTramo) btnTramo.textContent = `TRAMO: ${t || '—'} ▾`;
 }
 setTramoBadge(window.TRAMO_ID);
 
+/* Listener para cerrar el menú de tramo al hacer clic fuera */
+document.addEventListener('click', (ev) => {
+  if (tramoMenu && !tramoMenu.contains(ev.target) && ev.target !== btnTramo) {
+    tramoMenu.classList.add('hidden');
+  }
+});
+
 /* === AVISO de Panel Radio -> Editor (banner rojo) === */
 
-/* Sonido de alerta (WebAudio, sin archivos) */
+/* Sonido de alerta (WebAudio) */
 let _alertAudioCtx = null;
 function playAlertSound() {
   try {
@@ -655,41 +664,25 @@ function playAlertSound() {
   }
 }
 
-/* 1) Resolver radio de UI si existiese */
+/* Identificar Radio en UI */
 function resolveSelectedRadioFromUI() {
   const checked = document.querySelector('[name="radio"]:checked');
   if (checked && checked.value) return String(checked.value).trim();
-
   const activeBtn = document.querySelector('.radio-option.active,[data-radio-selected="true"]');
   if (activeBtn) {
     const v = activeBtn.getAttribute('data-radio-id') || activeBtn.getAttribute('data-radio') || activeBtn.textContent;
     if (v) return String(v).trim();
   }
-
   const byIdText = document.getElementById('radioActual');
   if (byIdText && byIdText.textContent) return String(byIdText.textContent).trim();
-
   const bodyAttr = document.body.getAttribute('data-radio');
   if (bodyAttr) return String(bodyAttr).trim();
   return null;
 }
 
-/* 2) Fuente de verdad del radio (incluye compat seced_radio) */
-function getRadioId() {
-  try {
-    const inDom = resolveSelectedRadioFromUI(); if (inDom) return inDom;
-    if (window.RADIO_ID) return String(window.RADIO_ID).trim();
-    const qp = new URLSearchParams(location.search).get('radio'); if (qp) return String(qp).trim();
-    const v2 = (localStorage.getItem('seced_radio_id') || '').trim(); if (v2) return v2;
-    const v1 = (localStorage.getItem('seced_radio') || '').trim(); if (v1) return v1;
-  } catch {}
-  return '';
-}
-
-/* 3) Banner en editor/visor */
+/* Banner de alerta */
 function showRadioAlertBanner(radio) {
-  if (document.body.classList.contains('radio-skin')) return; // nunca en panel radio
-  // Antes: solo JEFE. Ahora: JEFE o VISOR (VIEWER), para que el visor también lo vea/escuche.
+  if (document.body.classList.contains('radio-skin')) return;
   if (window.MODE !== 'JEFE' && !window.VIEWER) return;
 
   let banner = document.getElementById('radioAlertBanner');
@@ -712,20 +705,17 @@ function showRadioAlertBanner(radio) {
   banner.style.display = 'flex';
   clearTimeout(banner._hideTimer);
   banner._hideTimer = setTimeout(() => { if (banner && banner.parentNode) banner.remove(); }, 15000);
-
-  // Sonido de alerta
   playAlertSound();
 }
 
-/* 4) Suscripción a /alerts del tramo (con ?tramo=) */
+/* Suscripción a alertas */
 (function subscribeRadioAlerts(){
-  if (document.body.classList.contains('radio-skin')) return; // no escuchar en panel radio
+  if (document.body.classList.contains('radio-skin')) return;
   try{
     if (!window.firebase || !firebase.firestore) return;
     const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
     const db = firebase.firestore();
     const lastKey = `seced_last_alert_${tramo}`;
-
     let lastSeen = 0; try { lastSeen = Number(localStorage.getItem(lastKey) || '0'); } catch {}
 
     db.collection('tramos').doc(tramo).collection('alerts')
