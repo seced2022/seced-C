@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SECeD - Control</title>
+  <title>SECeD - Control de Tiempos</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="icon" href="favicon.png" type="image/png">
   <meta name="theme-color" content="#0b1f12">
@@ -11,7 +11,7 @@
 <body>
   <main class="app">
     <div class="brand">
-      <img src="logo.svg" alt="SECeD" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
+      <img src="logo.svg" alt="Logo" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
     </div>
     <h1 id="mainTitle">SECeD - Control</h1>
 
@@ -25,9 +25,9 @@
         <div class="tramo-picker">
           <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
           <div id="tramoMenu" class="tramo-menu hidden">
-            <div class="menu-header">Cambiar Tramo (TC)</div>
+            <div class="menu-header">Seleccionar TC</div>
             <div class="menu-body">
-              <input type="number" id="tramoInput" placeholder="Nº de tramo..." />
+              <input type="number" id="tramoInput" placeholder="Nº de tramo" />
               <button id="tramoGo" type="button">Cargar</button>
             </div>
             <ul id="tramoRecent" class="recent-list"></ul>
@@ -69,24 +69,23 @@
       <button id="btnExportar">Imprimir / PDF</button>
       <button id="btnAudit" class="secondary">Auditoría</button>
       <button id="btnOperador" class="secondary">Operador</button>
-      <button id="btnResetRadios" class="danger" style="display:none;">Reset Clics Radios</button>
+      <button id="btnResetRadios" class="danger" style="display:none;">Reset Radios</button>
     </div>
 
     <div id="auditPanel" class="audit-panel hidden">
       <div class="audit-header">
-        <h3>Registro de Auditoría</h3>
+        <h3>Auditoría</h3>
         <button id="btnAuditClose">×</button>
       </div>
       <div class="audit-meta">
-        <span>TC: <b id="auditTramo">—</b></span> | 
-        <span>OP: <b id="auditOperador">—</b></span>
+        <span>TC: <b id="auditTramo">—</b></span> | <span>OP: <b id="auditOperador">—</b></span>
       </div>
+      <div id="auditList" class="audit-content"></div>
       <div class="audit-actions">
         <button id="btnAuditRefresh">Actualizar</button>
         <button id="btnAuditCSV">Log CSV</button>
         <button id="btnStatesCSV">Estados CSV</button>
       </div>
-      <div id="auditList" class="audit-content"></div>
     </div>
   </main>
 
@@ -95,39 +94,32 @@
   <script src="firebase-config.js"></script>
 
   <script>
-    /* 1. LÓGICA DE IDENTIFICACIÓN DE RALLY */
+    // 1. GESTIÓN DE ID RALLY Y TRAMO
     const params = new URLSearchParams(window.location.search);
-    let rallyId = params.get('id') || localStorage.getItem('seced_rally_id');
+    let rId = params.get('id') || localStorage.getItem('seced_rally_id');
 
-    if (!rallyId) {
-        rallyId = prompt("Introduce el ID del RALLY para configurar el panel:");
-        if (rallyId) {
-            localStorage.setItem('seced_rally_id', rallyId);
-            window.location.href = window.location.pathname + "?id=" + rallyId;
+    if (!rId) {
+        rId = prompt("Introduce el ID del RALLY (ej: rally-demo):");
+        if (rId) {
+            localStorage.setItem('seced_rally_id', rId);
+            window.location.href = window.location.pathname + "?id=" + rId;
         }
     }
 
-    // Configurar tramo para app.js
+    // Configuración para que app.js la lea
     window.TRAMO_ID = params.get('tramo') || localStorage.getItem('seced_tramo') || "1";
 
-    /* 2. CARGAR PLACA Y NOMBRE DESDE FIREBASE */
-    if (rallyId) {
+    // 2. CARGAR PLACA Y NOMBRE DESDE FIREBASE (Colección: config_rallies)
+    if (rId) {
         const db = firebase.firestore();
-        db.collection("config_rallies").doc(rallyId).get().then(doc => {
+        db.collection("config_rallies").doc(rId).onSnapshot(doc => {
             if (doc.exists) {
                 const data = doc.data();
-                // Aplicar Logo/Placa
-                if (data.logo) {
-                    document.getElementById('mainLogo').src = data.logo;
-                }
-                // Aplicar Nombre
-                if (data.nombre) {
-                    document.getElementById('mainTitle').innerText = data.nombre;
-                }
-            } else {
-                console.error("No existe el documento del rally en config_rallies");
+                if (data.logo) document.getElementById('mainLogo').src = data.logo;
+                if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+                console.log("Configuración aplicada para:", rId);
             }
-        }).catch(err => console.error("Error cargando configuración:", err));
+        });
     }
   </script>
 
