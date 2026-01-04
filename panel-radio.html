@@ -3,106 +3,55 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SECeD - Panel Radio v2</title>
-  <link rel="stylesheet" href="styles.css?v=42" />
-  <style>
-    /* Estilos para que las tarjetas de radio sean grandes y usables */
-    .card.radio-eligible { background: #ffffff !important; color: #111 !important; border: 3px solid #22c55e !important; cursor: pointer; height: 100px; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 900; }
-    .card.radio-clicked-by-me { background: #fef08a !important; border-color: #eab308 !important; pointer-events: none; opacity: 0.7; }
-    .setup-overlay { position: fixed; inset: 0; background: #111; z-index: 20000; display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; gap: 20px; }
-    .setup-overlay input { padding: 15px; font-size: 1.5rem; width: 200px; text-align: center; border-radius: 8px; border: none; }
-  </style>
+  <title>SECeD - Panel Radio</title>
+  <link rel="stylesheet" href="styles.css?v=41" />
 </head>
 <body class="radio-skin">
-  <div id="setupOverlay" class="setup-overlay">
-    <h2>Configuración de Radio</h2>
-    <input type="number" id="setupTramo" placeholder="Nº Tramo (TC)" />
-    <input type="number" id="setupRadio" placeholder="Nº Radio" />
-    <button id="btnStart" style="padding: 15px 40px; font-size: 1.2rem; background: #22c55e; color: white; border: none; border-radius: 8px; font-weight: bold;">ENTRAR AL PANEL</button>
-  </div>
-
   <main class="app">
+    <div class="brand"><img src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
+    <h1 id="mainTitle">SECeD - Panel Radio</h1>
+    
     <div class="clock-bar">
       <div class="clock"><span id="clockTime">--:--:--</span></div>
-      <div id="infoPunto" style="font-weight: bold; color: #ffd60a;"></div>
+      <div class="controls-right">
+        <button id="btnTramo" class="secondary">TRAMO ▾</button>
+        <button id="btnRadio" style="background:#0c2415; color:white; padding:8px; border-radius:5px;">RADIO: —</button>
+      </div>
     </div>
+
+    <div id="tramoMenu" class="tramo-menu hidden" style="position:absolute; background:white; border:1px solid #ccc; padding:10px; z-index:100;">
+      <input type="number" id="tramoInput" placeholder="Nº Tramo" />
+      <button id="tramoGo">IR</button>
+    </div>
+
     <section id="grid" class="grid"></section>
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
-  
   <script>
-    const db = firebase.firestore();
+    // Configuración de IDs desde la URL o LocalStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    window.TRAMO_ID = urlParams.get('tramo') || localStorage.getItem('seced_tramo') || '1';
     
-    // Bloqueo de inicio para pedir ID y TC
-    const setupOverlay = document.getElementById('setupOverlay');
-    const btnStart = document.getElementById('btnStart');
-
-    // Cargar si ya existen en memoria
-    if(localStorage.getItem('seced_tramo') && localStorage.getItem('seced_radio_id')) {
-      setupOverlay.style.display = 'none';
-      iniciarPanel();
-    }
-
-    btnStart.onclick = () => {
-      const t = document.getElementById('setupTramo').value;
-      const r = document.getElementById('setupRadio').value;
-      if(!t || !r) return alert("Indica Tramo y Radio");
-      localStorage.setItem('seced_tramo', t);
-      localStorage.setItem('seced_radio_id', r);
-      setupOverlay.style.display = 'none';
-      location.reload();
+    document.getElementById('btnRadio').onclick = () => {
+      const r = prompt("Introduce tu número de RADIO:", localStorage.getItem('seced_radio_id') || "1");
+      if (r) {
+        localStorage.setItem('seced_radio_id', r);
+        location.reload();
+      }
     };
 
-    function iniciarPanel() {
-      const TRAMO = localStorage.getItem('seced_tramo');
-      const RADIO = localStorage.getItem('seced_radio_id');
-      document.getElementById('infoPunto').innerText = `TC: ${TRAMO} | RADIO: ${RADIO}`;
-
-      // Escuchar dorsales activos en el tramo
-      db.collection('tramos').doc(TRAMO).collection('items')
-        .onSnapshot(snap => {
-          const grid = document.getElementById('grid');
-          grid.innerHTML = '';
-          
-          snap.forEach(doc => {
-            const data = doc.data();
-            if(data.status === 'abandon') return;
-
-            const card = document.createElement('div');
-            card.className = 'card radio-eligible';
-            card.innerText = data.value;
-            card.onclick = () => marcarPaso(data.value, TRAMO, RADIO, card);
-            
-            grid.appendChild(card);
-          });
-        });
-    }
-
-    async function marcarPaso(dorsal, tramo, radioId, element) {
-      if(!confirm(`¿Confirmar paso dorsal ${dorsal} por Radio ${radioId}?`)) return;
-      
-      element.classList.add('radio-clicked-by-me');
-      
-      try {
-        const docRef = db.collection('tramos').doc(tramo).collection('radios').doc(String(dorsal));
-        
-        await db.runTransaction(async (transaction) => {
-          const snap = await transaction.get(docRef);
-          const currentMarks = snap.exists ? (snap.data().marks || []) : [];
-          
-          transaction.set(docRef, {
-            marks: [...new Set([...currentMarks, parseInt(radioId)])].sort((a,b) => a-b),
-            lastUpdate: Date.now()
-          }, { merge: true });
-        });
-      } catch (e) {
-        alert("Error al marcar: " + e.message);
-        element.classList.remove('radio-clicked-by-me');
+    document.getElementById('tramoGo').onclick = () => {
+      const t = document.getElementById('tramoInput').value;
+      if (t) {
+        localStorage.setItem('seced_tramo', t);
+        window.location.search = '?tramo=' + t;
       }
-    }
+    };
   </script>
+  <script src="sync.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
