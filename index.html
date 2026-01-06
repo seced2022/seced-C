@@ -4,28 +4,29 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Control</title>
-  <link rel="stylesheet" href="styles.css?v=41" />
-  <meta name="theme-color" content="#0b1f12" />
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="favicon.png">
+  <meta name="theme-color" content="#0b1f12">
 </head>
 <body>
-  <main class="app">
+  <main class="app" aria-label="Aplicación de tarjetas numéricas">
     <div class="brand">
-      <img src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
+      <img src="logo.svg" alt="SECeD" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
     </div>
-
-    <h1>SECeD - Control</h1>
+    <h1 id="mainTitle">SECeD - Control</h1>
 
     <div class="clock-bar">
       <div class="clock">
         <span id="clockTime">--:--:--</span>
         <span class="tz" id="clockTz">Europe/Madrid</span>
-        <span class="sync" id="clockSync">sincronizando…</span>
+        <span class="sync" id="clockSync" title="Estado de sincronización">sincronizando…</span>
       </div>
 
       <div class="controls-right">
         <div class="tramo-picker">
           <button id="btnTramo" type="button" class="secondary">TRAMO ▾</button>
-          <div id="tramoMenu" class="tramo-menu hidden" role="menu">
+          <div id="tramoMenu" class="tramo-menu hidden" role="menu" aria-label="Seleccionar tramo">
             <div class="tm-section">
               <label for="tramoInput">Escribir tramo</label>
               <input id="tramoInput" type="text" placeholder="ej. tramo-1" />
@@ -38,176 +39,115 @@
           </div>
         </div>
 
+        <div class="mode-panel">
+          <button id="btnModeJefe"   type="button" class="mode-btn mode-jefe"   title="JEFE DE TRAMO: permite todo">ADJUNTO DE TRAMO</button>
+          <button id="btnModeSalida" type="button" class="mode-btn mode-salida" title="SALIDA: solo altas">SALIDA</button>
+          <button id="btnModeLlegada"type="button" class="mode-btn mode-llegada" title="LLEGADA: solo LL/Abandono">LLEGADA</button>
+        </div>
+
         <div class="micro-panel">
-          <button id="btnModeJefe"   class="micro-btn" title="Jefe de Tramo">Jefe</button>
-          <button id="btnModeSalida" class="micro-btn" title="Salida">Salida</button>
-          <button id="btnModeLlegada"class="micro-btn" title="Llegada">Llegada</button>
-          <button id="btnOperador"   class="micro-btn" title="Cambiar usuario">👤</button>
+          <button id="btnOperador" class="micro-btn" title="Identificarse como operador">👤</button>
+          <button id="btnAudit" class="micro-btn" title="Abrir auditoría (clave requerida)">🛡️</button>
         </div>
       </div>
     </div>
 
-    <section class="controls">
-      <div class="input-group">
-        <input id="inputNumero" type="text" inputmode="numeric" placeholder="Dorsal…" />
-        <button id="btnAgregar" class="primary">Añadir</button>
-        <button id="btnLimpiar" class="secondary">Vaciar</button>
-        <button id="btnResetRadios" class="danger" style="display:none;">Reset radios</button>
-      </div>
-      <div class="counters">
-        <div>Salida: <span id="countSalida">0</span></div>
-        <div>Llegada: <span id="countLlegada">0</span></div>
-        <div>Abandonos: <span id="countAbandonos">0</span></div>
-      </div>
-    </section>
+    <div class="row">
+      <input id="inputNumero" type="number" inputmode="numeric" placeholder="Escribe un número" />
+      <button id="btnAgregar" type="button">Agregar</button>
+    </div>
+
+    <p class="help"></p>
+
+    <div class="toolbar"></div>
 
     <section id="grid" class="grid" aria-live="polite"></section>
 
-    <!-- Auditoría -->
-    <section id="auditPanel" class="audit hidden" aria-hidden="true">
-      <header>
-        <h2>Auditoría</h2>
-        <div>Tramo: <span id="auditTramo">—</span> · Operador: <span id="auditOperador">—</span></div>
-        <div class="audit-actions">
-          <button id="btnAuditRefresh" class="secondary">Refrescar</button>
-          <button id="btnAuditCSV" class="secondary">CSV</button>
-          <button id="btnStatesCSV" class="secondary">Estados CSV</button>
-          <button id="btnAuditClose" class="danger">Cerrar</button>
-        </div>
-      </header>
-      <div id="auditList" class="audit-list"></div>
-    </section>
+    <div class="export-bar">
+      <button id="btnResetRadios" type="button" class="btn btn-warn" style="display:none">Reset dorsales</button>
+      <button id="btnLimpiar" class="secondary">Limpiar</button>
+      <button id="btnExportar" type="button" class="primary">Exportar a PDF</button>
+      <button id="btnFullscreen" type="button" class="secondary btn-fullscreen" title="Pantalla completa">Pantalla completa</button>
+      <div class="counters">
+        <div class="counter" title="Total de recuadros"><span class="label">Salida</span><span id="countSalida">0</span></div>
+        <div class="counter" title="Marcados en verde"><span class="label">LLegada</span><span id="countLlegada">0</span></div>
+        <div class="counter" title="En abandono (rojo)"><span class="label">Abandonos</span><span id="countAbandonos">0</span></div>
+      </div>
+    </div>
 
-    <button id="btnAudit" class="floating">Auditoría</button>
-    <button id="btnExportar" class="floating secondary">Exportar PDF</button>
-    <h2 id="printTitle" class="hidden"></h2>
-    <div id="printCounters" class="hidden"></div>
+    <div id="printTitle" class="print-title" aria-hidden="true"></div>
+    <div id="printCounters" class="print-counters" aria-hidden="true"></div>
+
+    <div id="auditPanel" class="audit hidden" role="dialog" aria-modal="true" aria-label="Panel de auditoría">
+      <div class="audit-head">
+        <strong>Auditoría</strong>
+        <div class="audit-tools">
+          <button id="btnAuditRefresh" class="secondary">Actualizar</button>
+          <button id="btnAuditCSV" class="secondary">Exportar auditoría (CSV)</button>
+          <button id="btnStatesCSV" class="secondary">Exportar estados (CSV)</button>
+          <button id="btnAuditClose">Cerrar ✕</button>
+        </div>
+      </div>
+      <div class="audit-meta">
+        <div>Tramo: <span id="auditTramo">—</span></div>
+        <div>Operador (actual): <span id="auditOperador">—</span></div>
+      </div>
+      <div id="auditList" class="audit-list"></div>
+    </div>
   </main>
 
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=16"></script>
+  <script src="firebase-config.js?v=2"></script>
 
-  <!-- Reloj en línea (igual que usas en otras páginas) -->
   <script>
-    (function(){
-      const TIMEZONE = 'Europe/Madrid';
-      const clockTime = document.getElementById('clockTime');
-      const clockTz = document.getElementById('clockTz');
-      const clockSync = document.getElementById('clockSync');
-      if (clockTz) clockTz.textContent = TIMEZONE;
-      let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
-      const pad = n => String(n).padStart(2,'0');
-      const renderClock = () => {
-        const d = new Date(Date.now() + timeOffsetMs);
-        if (clockTime) clockTime.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-      };
-      const syncTime = async () => {
-        try {
-          if (clockSync) { clockSync.textContent = 'sincronizando…'; clockSync.className = 'sync'; }
-          const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache: 'no-store' });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const data = await res.json();
-          const apiMs = Date.parse(data.datetime);
-          timeOffsetMs = apiMs - Date.now();
-          if (clockSync) { clockSync.textContent = 'ok'; clockSync.className = 'sync ok'; }
-        } catch {
-          if (clockSync) { clockSync.textContent = 'sin conexión'; clockSync.className = 'sync err'; }
+    if (!firebase.apps.length) {
+        firebase.initializeApp(window.FIREBASE_CONFIG);
+    }
+    const db = firebase.firestore();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    let rallyId = urlParams.get('id');
+
+    // Si no hay ID en la URL, se solicita
+    if (!rallyId) {
+        rallyId = prompt("Introduce el ID del Rally para cargar la configuración:");
+        if (rallyId) {
+            const separator = window.location.href.includes('?') ? '&' : '?';
+            window.location.href = window.location.href + separator + "id=" + rallyId;
         }
-      };
-      const startClock = () => {
-        clearInterval(tickTimer); tickTimer = setInterval(renderClock, 1000); renderClock();
-        clearInterval(resyncTimer); resyncTimer = setInterval(syncTime, 5*60*1000);
-      };
-      syncTime().then(startClock);
-    })();
-  </script>
-
-  <!-- Tu lógica principal -->
-  <script src="sync.js?v=16"></script>
-  <script src="app.js?v=16"></script>
-
-  <!-- Helpers de banner PARADA/REANUDADA para Control -->
-  <script>
-    function ensureStopBannerEditor() {
-      let b = document.getElementById('stopBannerEditor');
-      if (!b) {
-        b = document.createElement('div');
-        b.id = 'stopBannerEditor';
-        Object.assign(b.style, {
-          position:'fixed', top:'12px', left:'50%', transform:'translateX(-50%)',
-          zIndex:2000, padding:'14px 18px', borderRadius:'12px', fontWeight:'900',
-          fontSize:'16px', boxShadow:'0 10px 24px rgba(0,0,0,.45)', display:'none'
-        });
-        document.body.appendChild(b);
-      }
-      return b;
     }
-    function showStopBannerRedEditor(msg='SALIDA PARADA') {
-      const b = ensureStopBannerEditor();
-      b.textContent = msg;
-      b.style.background = '#b91c1c';
-      b.style.color = '#fff';
-      b.style.border = '2px solid #7f1d1d';
-      b.style.display = 'flex';
-    }
-    function flashGreenResumeEditor(msg='SALIDA REANUDADA') {
-      const b = ensureStopBannerEditor();
-      b.textContent = msg;
-      b.style.background = '#15803d';
-      b.style.color = '#fff';
-      b.style.border = '2px solid #16a34a';
-      b.style.display = 'flex';
-      clearTimeout(b._hide);
-      b._hide = setTimeout(()=>{ b.style.display='none'; }, 2500);
-    }
-    function hideStopBannerEditor() {
-      const b = ensureStopBannerEditor();
-      b.style.display = 'none';
-    }
-  </script>
 
-  <!-- Suscripción al estado de parada desde DC (solo Control) -->
-  <script>
-    (function(){
-      try{
-        if (!window.firebase || !firebase.firestore) return;
-        const db = firebase.firestore();
+    // Cargar Nombre y Logo dinámicamente
+    if (rallyId) {
+        db.collection("config_rallies").doc(rallyId).get().then(doc => {
+            if (doc.exists) {
+                const data = doc.data();
+                
+                // Actualizar Logo
+                const logoImg = document.getElementById('mainLogo');
+                if (logoImg && data.logo) {
+                    logoImg.src = data.logo;
+                }
 
-        // Lee ?id= (rally) y tramo (igual que usáis en Panel/Editor)
-        const rallyId = new URLSearchParams(location.search).get('id') || '';
-        if (!rallyId) return; // si no hay rally, no escuchamos (no rompemos nada)
-
-        const tramoNombre = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-
-        const ref = db.collection('rallies').doc(rallyId)
-                      .collection('estado_tramos').doc(tramoNombre);
-
-        let lastStopped = null;
-        ref.onSnapshot(snap => {
-          const stopped = snap.exists && snap.data() && (snap.data().pararSalida === true);
-
-          // Mostrar solo en modos JEFE o SALIDA
-          const showInThisMode = (window.MODE === 'JEFE' || window.MODE === 'SALIDA');
-
-          if (stopped) {
-            if (showInThisMode) showStopBannerRedEditor('SALIDA PARADA');
-            else hideStopBannerEditor();
-          } else {
-            if (lastStopped === true) {
-              if (showInThisMode) flashGreenResumeEditor('SALIDA REANUDADA');
-              else hideStopBannerEditor();
+                // Actualizar Título
+                const titleH1 = id="mainTitle"; 
+                // Usamos querySelector por seguridad si el ID fallara
+                const header = document.querySelector('h1');
+                if (header && data.nombre) {
+                    header.innerText = data.nombre;
+                }
+                
+                console.log("Configuración de Rally '" + rallyId + "' aplicada.");
             } else {
-              hideStopBannerEditor();
+                console.error("El ID de rally no existe en la base de datos.");
             }
-          }
-          lastStopped = stopped;
-        }, err => console.warn('estado_tramos (control) listener error', err));
-      } catch(e){
-        console.warn('subscribeStopFromDC (control) error', e);
-      }
-    })();
+        }).catch(err => console.error("Error al cargar datos del rally:", err));
+    }
   </script>
+
+  <script src="alerts-listener.js"></script>  
+  <script src="sync.js?v=2"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
