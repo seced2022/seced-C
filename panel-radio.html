@@ -1,91 +1,18 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  
-  <!-- Banner de parada/reanudación -->
-<div id="stopBanner" aria-live="assertive"></div>
-
-<script>
-(function(){
-  // Mostrar SOLO si el modo es JEFE o SALIDA
-  function allowedByMode(){ return (window.MODE === 'JEFE' || window.MODE === 'SALIDA'); }
-
-  const banner = document.getElementById('stopBanner');
-  let lastAnyStopped = null; // null | boolean
-  let hideTimer = null;
-
-  function showStop(){
-    if (!allowedByMode()) return hideBanner();
-    clearTimeout(hideTimer);
-    banner.className = 'stop';
-    banner.textContent = 'SALIDA PARADA';
-    banner.style.display = 'block';
-  }
-  function showResume(){
-    if (!allowedByMode()) return hideBanner();
-    clearTimeout(hideTimer);
-    banner.className = 'resume';
-    banner.innerHTML = 'REANUDADO<span class="small">La salida vuelve a estar operativa</span>';
-    banner.style.display = 'block';
-    hideTimer = setTimeout(hideBanner, 2000);
-  }
-  function hideBanner(){ banner.style.display = 'none'; }
-
-  // Si cambian los botones de modo, re-evaluar
-  ['btnModeJefe','btnModeSalida','btnModeLlegada'].forEach(id=>{
-    const b = document.getElementById(id);
-    if (b) b.addEventListener('click', ()=>{
-      if (lastAnyStopped === true && allowedByMode()) showStop();
-      else if (lastAnyStopped === false && allowedByMode()) showResume();
-      else hideBanner();
-    });
-  });
-
-  // Suscripción: escuchar TODOS los docs de estado_tramos
-  function subscribeStopResume(){
-    try{
-      const params = new URLSearchParams(location.search);
-      const rallyId = params.get('id');
-      if (!rallyId) return; // el index ya pide el id y recarga, aquí no forzamos nada
-
-      const colRef = firebase.firestore()
-        .collection('rallies').doc(rallyId)
-        .collection('estado_tramos');
-
-      colRef.onSnapshot(snap => {
-        let anyStopped = false;
-        snap.forEach(doc => {
-          const d = doc.data() || {};
-          if (d.pararSalida === true) anyStopped = true;
-        });
-
-        if (anyStopped !== lastAnyStopped) {
-          lastAnyStopped = anyStopped;
-          if (anyStopped) showStop(); else showResume();
-        } else {
-          // mismo estado → solo respetar el modo visible
-          if (!allowedByMode()) hideBanner();
-          else if (anyStopped) showStop();
-        }
-      }, err => console.warn('estado_tramos listener error:', err));
-    }catch(e){ console.warn('subscribeStopResume error', e); }
-  }
-
-  if (window.firebase && firebase.firestore) subscribeStopResume();
-  else document.addEventListener('DOMContentLoaded', subscribeStopResume);
-})();
-</script>
-
-  
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Panel Radio</title>
   <link rel="stylesheet" href="styles.css?v=41" />
   <meta name="theme-color" content="#0b1f12" />
+
   <style>
+    /* Solo lectura base (sin menús ni franjas) */
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
     .viewer .time-stack { display: none !important; }
 
+    /* Elegible → clic habilitado y “blanco brillo” */
     .viewer .card.radio-eligible,
     .viewer .card.radio-eligible * { pointer-events: auto !important; cursor: pointer !important; }
     .card.radio-eligible {
@@ -93,13 +20,17 @@
       box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset;
     }
 
+    /* No elegibles → visibles pero atenuadas */
     .card.radio-locked { display:block !important; opacity:.45; filter:grayscale(.2); pointer-events:none; cursor:default !important; }
 
+    /* Ya clicadas por este radio → amarillas persistentes */
     .card.radio-clicked-by-me {
       display:block !important; background:#fef08a !important; border-color:#eab308 !important;
       box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; pointer-events:none; cursor:default !important;
     }
-    .card.radio-clicking { background:#fef08a !important; border-color:#eab308 !important; box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; }
+
+    .card.radio-clicking { background:#fef08a !important; border-color:#eab308 !important;
+      box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; }
 
     .radio-inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     #btnRadio {
@@ -117,6 +48,7 @@
     .tramo-picker { position: relative; }
     .tramo-menu { z-index: 1000; }
 
+    /* Toast simple */
     #toast {
       position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
       background: #0b1f12; color: #eafff7; padding: 8px 12px; border-radius: 10px;
@@ -125,40 +57,41 @@
     #toast.ok { background: #065f46; border-color: #0c7a5c; }
     #toast.err { background: #7f1d1d; border-color: #991b1b; }
 
+    /* En Panel Radio ignoramos el estado 'selected' del editor/visor */
     .viewer .card.selected,
     body.viewer.radio-skin .grid .card.selected {
       background:#ffffff !important; color:#111 !important; border-color:#e5e7eb !important;
       box-shadow:none !important; opacity:1 !important; filter:none !important;
     }
+
+    /* ===== Banner SALIDA PARADA / REANUDADO ===== */
+    #stopBanner {
+      position: fixed;
+      top: 0; left: 50%; transform: translateX(-50%);
+      width: min(100%, 1100px);
+      margin: 10px auto;
+      padding: 18px 22px;
+      border-radius: 14px;
+      font-weight: 1000;
+      font-size: clamp(22px, 4vw, 40px);
+      letter-spacing: .5px;
+      color: #fff;
+      z-index: 99999;
+      display: none;
+      box-shadow: 0 14px 36px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.18);
+      border: 2px solid rgba(255,255,255,.25);
+      text-align: center;
+    }
+    #stopBanner.stop   { background:#b91c1c; border-color:#7f1d1d; }
+    #stopBanner.resume { background:#15803d; border-color:#166534; }
+    #stopBanner .small { display:block; font-size:.55em; font-weight:800; opacity:.95; margin-top:6px; }
   </style>
 </head>
 
-<style>
-  #stopBanner {
-    position: fixed;
-    top: 0; left: 50%; transform: translateX(-50%);
-    width: min(100%, 1100px);
-    margin: 10px auto;
-    padding: 18px 22px;
-    border-radius: 14px;
-    font-weight: 1000;
-    font-size: clamp(22px, 4vw, 40px);
-    letter-spacing: .5px;
-    color: #fff;
-    z-index: 99999;
-    display: none;
-    box-shadow: 0 14px 36px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.18);
-    border: 2px solid rgba(255,255,255,.25);
-    text-align: center;
-  }
-  #stopBanner.stop { background:#b91c1c; border-color:#7f1d1d; }
-  #stopBanner.resume { background:#15803d; border-color:#166534; }
-  #stopBanner .small { display:block; font-size:.55em; font-weight:800; opacity:.95; margin-top:6px; }
-</style>
-
-
-  
 <body class="radio-skin">
+  <!-- Banner correcto dentro del body -->
+  <div id="stopBanner" aria-live="assertive"></div>
+
   <main class="app" style="position:relative;">
     <span id="radioBadge" class="radio-badge" aria-hidden="true" hidden>RADIO: —</span>
 
@@ -226,7 +159,7 @@
           return;
         }
       }
-      // ⬇⬇⬇ Hacemos accesible el ID para otros scripts
+      // Hacemos accesible el ID para otros scripts
       window.RALLY_ID = rallyId || '';
 
       if (rallyId) {
@@ -244,6 +177,7 @@
   <script>
     window.VIEWER = true;
     document.body.classList.add('viewer');
+    // Fallback por si firebase-config.js fallara
     if (!window.FIREBASE_CONFIG) {
       window.FIREBASE_CONFIG = {
         apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
@@ -334,7 +268,7 @@
         setTimeout(()=>{ t.style.display='none'; }, 1200);
       };
 
-      /* ===== Selección de RADIO ===== */
+      /* ===== Selección de RADIO (compat v1/v2) ===== */
       const btnRadio = document.getElementById('btnRadio');
       const radioBadge = document.getElementById('radioBadge');
 
@@ -350,7 +284,7 @@
         const clean = String(v||'').trim();
         try {
           localStorage.setItem('seced_radio', clean);
-          localStorage.setItem('seced_radio_id', clean);
+          localStorage.setItem('seced_radio_id', clean); // sincronizado
         } catch {}
       }
       function getRadioIndex(){
@@ -384,7 +318,7 @@
       }
       updateRadioUI();
 
-      /* ===== Firestore ===== */
+      /* ===== Firestore: estado por radio ===== */
       const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
       const db = firebase.firestore();
       let radiosCol = null;
@@ -408,6 +342,7 @@
         return (radioState.get(key)?.last) || 0;
       }
 
+      /* ===== ACCESO A ITEMS (para ver tSalida) ===== */
       const getItems = (typeof window._getItems === 'function') ? window._getItems : () => [];
       function getItemByValue(val){
         const n = Number(val);
@@ -415,14 +350,18 @@
         return arr.find(x => Number(x.value) === n) || null;
       }
 
-      const GRACE_MS = 5 * 60 * 1000;
+      /* ===== Elegibilidad ===== */
+      const GRACE_MS = 5 * 60 * 1000; // 5 min
       function canThisRadioClick(value){
         const rIdx = getRadioIndex();
         const last = getLastFor(value);
         if (last === (rIdx - 1)) return true;
+
         if (rIdx === 1 && last > 0) {
           const it = getItemByValue(value);
-          if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) return true;
+          if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) {
+            return true;
+          }
         }
         return false;
       }
@@ -453,6 +392,7 @@
         });
       }
 
+      // Reaplicar elegibilidad tras cada render del app.js
       const origOnRemote = window._onRemoteUpdate;
       if (typeof origOnRemote === 'function') {
         window._onRemoteUpdate = (arr)=>{ origOnRemote(arr); applyEligibility(); };
@@ -462,6 +402,7 @@
       }
       setTimeout(applyEligibility, 0);
 
+      /* Watchdog */
       (function(){
         let _eligTimer = null;
         function startEligibilityWatchdog(){
@@ -471,7 +412,7 @@
         startEligibilityWatchdog();
       })();
 
-      // ===== Clic de RADIO: además de avanzar en /tramos, escribimos en /rallies/{id}/pasos/{TRAMO}
+      // ===== Clic en tarjeta para avanzar dorsal al siguiente RADIO =====
       document.getElementById('grid').addEventListener('click', async (ev)=>{
         const card = ev.target.closest('.card');
         if (!card) return;
@@ -486,7 +427,6 @@
         const docRef = radiosCol.doc(String(val));
 
         try {
-          // 1) Transacción: avanza last y marca radio en /tramos/{TRAMO}/radios/{dorsal}
           await db.runTransaction(async (tx)=>{
             const snap = await tx.get(docRef);
             const data = snap.exists ? (snap.data()||{}) : {};
@@ -506,7 +446,7 @@
             }, { merge:true });
           });
 
-          // 2) NUEVO: escribir paso visible para DC -> /rallies/{RALLY_ID}/pasos/{TRAMO}
+          // Además: registrar paso visible para DC -> /rallies/{RALLY_ID}/pasos/{TRAMO}
           if (window.RALLY_ID) {
             const pasosRef = db.collection('rallies').doc(window.RALLY_ID).collection('pasos').doc(TRAMO);
             const field = {};
@@ -538,7 +478,7 @@
         setTimeout(()=>{ applyEligibility(); }, 150);
       });
 
-      /* ===== Botón BANDERA (alerta a /tramos/{TRAMO}/alerts) ===== */
+      /* ===== Botón BANDERA (envía aviso a alerts) ===== */
       function getRadioIdForAlert(){
         const vDom = (window.RADIO_ID ? String(window.RADIO_ID).trim() : '');
         if (vDom) return vDom;
@@ -591,6 +531,61 @@
           btn.id = 'btnBandera'; btn.textContent = 'BANDERA'; wireClick(btn);
         }
       })();
+    })();
+  </script>
+
+  <!-- === Banner SALIDA PARADA / REANUDADO (solo RADIO 1 y por TRAMO) === -->
+  <script>
+    (function(){
+      const banner = document.getElementById('stopBanner');
+      let hideTimer = null;
+
+      function getRadioIndexLocal(){
+        try{
+          const v = (localStorage.getItem('seced_radio_id') || localStorage.getItem('seced_radio') || '').trim();
+          const n = parseInt(v,10);
+          return Number.isFinite(n) && n>0 ? n : 0;
+        } catch { return 0; }
+      }
+      function allowedForThisPage(){ return getRadioIndexLocal() === 1; }
+
+      function showStop(){
+        if (!allowedForThisPage()) return hideBanner();
+        clearTimeout(hideTimer);
+        banner.className = 'stop';
+        banner.textContent = 'SALIDA PARADA';
+        banner.style.display = 'block';
+      }
+      function showResume(){
+        if (!allowedForThisPage()) return hideBanner();
+        clearTimeout(hideTimer);
+        banner.className = 'resume';
+        banner.innerHTML = 'REANUDADO<span class="small">La salida vuelve a estar operativa</span>';
+        banner.style.display = 'block';
+        hideTimer = setTimeout(hideBanner, 2000);
+      }
+      function hideBanner(){ banner.style.display = 'none'; }
+
+      function subscribe(){
+        try{
+          if (!window.firebase || !firebase.firestore) return;
+          const rallyId = (window.RALLY_ID || new URLSearchParams(location.search).get('id') || '').toString();
+          const tramo = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
+          if (!rallyId) return;
+
+          const ref = firebase.firestore()
+            .collection('rallies').doc(rallyId)
+            .collection('estado_tramos').doc(tramo);
+
+          ref.onSnapshot(doc => {
+            const stopped = doc.exists && doc.data() && doc.data().pararSalida === true;
+            if (!allowedForThisPage()) { hideBanner(); return; }
+            if (stopped) showStop(); else showResume();
+          }, err => console.warn('estado_tramos listener error:', err));
+        } catch(e){ console.warn('subscribeStopResume error', e); }
+      }
+
+      document.addEventListener('DOMContentLoaded', subscribe);
     })();
   </script>
 </body>
