@@ -33,7 +33,83 @@
 </style>
 
 </head>
-<body>
+
+  <!-- Banner de parada/reanudación -->
+<div id="stopBanner" aria-live="assertive"></div>
+
+<script>
+(function(){
+  // Mostrar SOLO si el modo es JEFE o SALIDA
+  function allowedByMode(){ return (window.MODE === 'JEFE' || window.MODE === 'SALIDA'); }
+
+  const banner = document.getElementById('stopBanner');
+  let lastAnyStopped = null; // null | boolean
+  let hideTimer = null;
+
+  function showStop(){
+    if (!allowedByMode()) return hideBanner();
+    clearTimeout(hideTimer);
+    banner.className = 'stop';
+    banner.textContent = 'SALIDA PARADA';
+    banner.style.display = 'block';
+  }
+  function showResume(){
+    if (!allowedByMode()) return hideBanner();
+    clearTimeout(hideTimer);
+    banner.className = 'resume';
+    banner.innerHTML = 'REANUDADO<span class="small">La salida vuelve a estar operativa</span>';
+    banner.style.display = 'block';
+    hideTimer = setTimeout(hideBanner, 2000);
+  }
+  function hideBanner(){ banner.style.display = 'none'; }
+
+  // Si cambian los botones de modo, re-evaluar
+  ['btnModeJefe','btnModeSalida','btnModeLlegada'].forEach(id=>{
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', ()=>{
+      if (lastAnyStopped === true && allowedByMode()) showStop();
+      else if (lastAnyStopped === false && allowedByMode()) showResume();
+      else hideBanner();
+    });
+  });
+
+  // Suscripción: escuchar TODOS los docs de estado_tramos
+  function subscribeStopResume(){
+    try{
+      const params = new URLSearchParams(location.search);
+      const rallyId = params.get('id');
+      if (!rallyId) return; // el index ya pide el id y recarga, aquí no forzamos nada
+
+      const colRef = firebase.firestore()
+        .collection('rallies').doc(rallyId)
+        .collection('estado_tramos');
+
+      colRef.onSnapshot(snap => {
+        let anyStopped = false;
+        snap.forEach(doc => {
+          const d = doc.data() || {};
+          if (d.pararSalida === true) anyStopped = true;
+        });
+
+        if (anyStopped !== lastAnyStopped) {
+          lastAnyStopped = anyStopped;
+          if (anyStopped) showStop(); else showResume();
+        } else {
+          // mismo estado → solo respetar el modo visible
+          if (!allowedByMode()) hideBanner();
+          else if (anyStopped) showStop();
+        }
+      }, err => console.warn('estado_tramos listener error:', err));
+    }catch(e){ console.warn('subscribeStopResume error', e); }
+  }
+
+  if (window.firebase && firebase.firestore) subscribeStopResume();
+  else document.addEventListener('DOMContentLoaded', subscribeStopResume);
+})();
+</script>
+
+
+  <body>
   <main class="app" aria-label="Aplicación de tarjetas numéricas">
     <div class="brand">
       <img src="logo.svg" alt="SECeD" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
