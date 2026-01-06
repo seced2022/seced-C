@@ -8,6 +8,32 @@
   <link rel="icon" href="favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="favicon.png">
   <meta name="theme-color" content="#0b1f12">
+  <!-- ✅ Banner STOP/RESUME: solo estilos nuevos -->
+  <style>
+    #stopBanner {
+      position: fixed;
+      top: 0; left: 50%; transform: translateX(-50%);
+      width: min(100%, 1100px);
+      margin: 10px auto;
+      padding: 18px 22px;
+      border-radius: 14px;
+      font-weight: 1000;
+      font-size: clamp(22px, 4vw, 40px);
+      letter-spacing: .5px;
+      color: #fff;
+      z-index: 99999;
+      display: none;
+      box-shadow: 0 14px 36px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.18);
+      border: 2px solid rgba(255,255,255,.25);
+      text-align: center;
+    }
+    #stopBanner.stop { background:#b91c1c; border-color:#7f1d1d; }
+    #stopBanner.resume { background:#15803d; border-color:#166534; }
+    #stopBanner .small {
+      display:block; font-size: .55em; font-weight: 800; opacity:.95; margin-top:6px;
+    }
+    @media print { #stopBanner { display:none !important; } }
+  </style>
 </head>
 <body>
   <main class="app" aria-label="Aplicación de tarjetas numéricas">
@@ -149,5 +175,108 @@
   <script src="alerts-listener.js"></script>  
   <script src="sync.js?v=2"></script>
   <script src="app.js?v=2"></script>
+
+  <!-- ✅ Banner STOP/RESUME: solo lógica nueva -->
+  <div id="stopBanner" aria-live="assertive"></div>
+  <script>
+    (function(){
+      // Helpers banner
+      const banner = document.getElementById('stopBanner');
+      let lastState = null; // null | true | false
+      let hideTimer = null;
+
+      function allowedByMode(){
+        // Mostrar solo en JEFE o SALIDA
+        return (window.MODE === 'JEFE' || window.MODE === 'SALIDA');
+      }
+      function showStop(text){
+        if (!allowedByMode()) return hideBanner();
+        clearTimeout(hideTimer);
+        banner.className = 'stop';
+        banner.textContent = text || 'SALIDA PARADA';
+        banner.style.display = 'block';
+      }
+      function showResume(text){
+        if (!allowedByMode()) return hideBanner();
+        clearTimeout(hideTimer);
+        banner.className = 'resume';
+        banner.innerHTML = (text || 'REANUDADO') + '<span class="small">La salida vuelve a estar operativa</span>';
+        banner.style.display = 'block';
+        hideTimer = setTimeout(hideBanner, 2000);
+      }
+      function hideBanner(){ banner.style.display = 'none'; }
+
+      // Reaccionar si cambian los botones de modo
+      ['btnModeJefe','btnModeSalida','btnModeLlegada'].forEach(id=>{
+        const b = document.getElementById(id);
+        if (b) b.addEventListener('click', ()=> {
+          // Re-pinta acorde al modo
+          if (lastState === true && allowedByMode()) showStop('SALIDA PARADA');
+          else hideBanner();
+        });
+      });
+
+      // Suscripción a estado_tramos
+      function subscribeStopResume(){
+        try{
+          const params = new URLSearchParams(location.search);
+          const TRAMO = (params.get('tramo') || window.TRAMO_ID || '1').toString();
+          const rallyId = params.get('id');
+          if (!rallyId) return; // ya se pidió en el script anterior y recargará
+
+          const col = firebase.firestore().collection('rallies').doc(rallyId).collection('estado_tramos');
+
+          // Probamos varias keys (tolerante al nombre del documento)
+          const candidates = [
+            TRAMO,                   // "1"
+            'Tramo ' + TRAMO,        // "Tramo 1"
+            'TC ' + TRAMO,           // "TC 1"
+          ];
+
+          const unsubscribers = [];
+
+          function handler(snap){
+            const data = snap.exists ? (snap.data()||{}) : {};
+            const stopped = !!data.pararSalida;
+
+            // fusiona estado de todos los docs escuchados: si cualquiera pide stop => stop
+            const anyStopped = unsubscribers.some(u => u._last === true);
+
+            // actualiza el snap actual
+            this._last = stopped;
+
+            // recomputa
+            const mergedStopped = unsubscribers.some(u => u._last === true);
+
+            if (mergedStopped !== lastState){
+              lastState = mergedStopped;
+              if (mergedStopped) showStop('SALIDA PARADA');
+              else showResume('REANUDADO');
+            } else {
+              // mismo estado, refresca visibilidad por modo
+              if (!allowedByMode()) hideBanner();
+              else if (mergedStopped) showStop('SALIDA PARADA');
+            }
+          }
+
+          // Crear listeners
+          candidates.forEach(id => {
+            const unsub = col.doc(id).onSnapshot(handler, err => console.warn('estado_tramos listener:', err));
+            unsub._last = false;
+            unsubscribers.push(unsub);
+          });
+
+          // Limpieza al salir
+          window.addEventListener('beforeunload', ()=>{ unsubscribers.forEach(u=>{ try{ u(); }catch{} }); });
+        }catch(e){
+          console.warn('subscribeStopResume error', e);
+        }
+      }
+
+      // arranca cuando Firestore está listo
+      if (window.firebase && firebase.firestore) subscribeStopResume();
+      else document.addEventListener('DOMContentLoaded', subscribeStopResume);
+    })();
+  </script>
 </body>
 </html>
