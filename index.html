@@ -9,107 +9,32 @@
   <link rel="apple-touch-icon" href="favicon.png">
   <meta name="theme-color" content="#0b1f12">
   <style>
-  #stopBanner {
-    position: fixed;
-    top: 0; left: 50%; transform: translateX(-50%);
-    width: min(100%, 1100px);
-    margin: 10px auto;
-    padding: 18px 22px;
-    border-radius: 14px;
-    font-weight: 1000;
-    font-size: clamp(22px, 4vw, 40px);
-    letter-spacing: .5px;
-    color: #fff;
-    z-index: 99999;
-    display: none;
-    box-shadow: 0 14px 36px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.18);
-    border: 2px solid rgba(255,255,255,.25);
-    text-align: center;
-  }
-  #stopBanner.stop { background:#b91c1c; border-color:#7f1d1d; }
-  #stopBanner.resume { background:#15803d; border-color:#166534; }
-  #stopBanner .small { display:block; font-size:.55em; font-weight:800; opacity:.95; margin-top:6px; }
-  @media print { #stopBanner { display:none !important; } }
-</style>
-
+    /* Banner SALIDA PARADA / REANUDADO */
+    #stopBanner {
+      position: fixed;
+      top: 0; left: 50%; transform: translateX(-50%);
+      width: min(100%, 1100px);
+      margin: 10px auto;
+      padding: 18px 22px;
+      border-radius: 14px;
+      font-weight: 1000;
+      font-size: clamp(22px, 4vw, 40px);
+      letter-spacing: .5px;
+      color: #fff;
+      z-index: 99999;
+      display: none;
+      box-shadow: 0 14px 36px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.18);
+      border: 2px solid rgba(255,255,255,.25);
+      text-align: center;
+    }
+    #stopBanner.stop   { background:#b91c1c; border-color:#7f1d1d; }
+    #stopBanner.resume { background:#15803d; border-color:#166534; }
+    #stopBanner .small { display:block; font-size:.55em; font-weight:800; opacity:.95; margin-top:6px; }
+    @media print { #stopBanner { display:none !important; } }
+  </style>
 </head>
 
-  <!-- Banner de parada/reanudación -->
-<div id="stopBanner" aria-live="assertive"></div>
-
-<script>
-(function(){
-  // Mostrar SOLO si el modo es JEFE o SALIDA
-  function allowedByMode(){ return (window.MODE === 'JEFE' || window.MODE === 'SALIDA'); }
-
-  const banner = document.getElementById('stopBanner');
-  let lastAnyStopped = null; // null | boolean
-  let hideTimer = null;
-
-  function showStop(){
-    if (!allowedByMode()) return hideBanner();
-    clearTimeout(hideTimer);
-    banner.className = 'stop';
-    banner.textContent = 'SALIDA PARADA';
-    banner.style.display = 'block';
-  }
-  function showResume(){
-    if (!allowedByMode()) return hideBanner();
-    clearTimeout(hideTimer);
-    banner.className = 'resume';
-    banner.innerHTML = 'REANUDADO<span class="small">La salida vuelve a estar operativa</span>';
-    banner.style.display = 'block';
-    hideTimer = setTimeout(hideBanner, 2000);
-  }
-  function hideBanner(){ banner.style.display = 'none'; }
-
-  // Si cambian los botones de modo, re-evaluar
-  ['btnModeJefe','btnModeSalida','btnModeLlegada'].forEach(id=>{
-    const b = document.getElementById(id);
-    if (b) b.addEventListener('click', ()=>{
-      if (lastAnyStopped === true && allowedByMode()) showStop();
-      else if (lastAnyStopped === false && allowedByMode()) showResume();
-      else hideBanner();
-    });
-  });
-
-  // Suscripción: escuchar TODOS los docs de estado_tramos
-  function subscribeStopResume(){
-    try{
-      const params = new URLSearchParams(location.search);
-      const rallyId = params.get('id');
-      if (!rallyId) return; // el index ya pide el id y recarga, aquí no forzamos nada
-
-      const colRef = firebase.firestore()
-        .collection('rallies').doc(rallyId)
-        .collection('estado_tramos');
-
-      colRef.onSnapshot(snap => {
-        let anyStopped = false;
-        snap.forEach(doc => {
-          const d = doc.data() || {};
-          if (d.pararSalida === true) anyStopped = true;
-        });
-
-        if (anyStopped !== lastAnyStopped) {
-          lastAnyStopped = anyStopped;
-          if (anyStopped) showStop(); else showResume();
-        } else {
-          // mismo estado → solo respetar el modo visible
-          if (!allowedByMode()) hideBanner();
-          else if (anyStopped) showStop();
-        }
-      }, err => console.warn('estado_tramos listener error:', err));
-    }catch(e){ console.warn('subscribeStopResume error', e); }
-  }
-
-  if (window.firebase && firebase.firestore) subscribeStopResume();
-  else document.addEventListener('DOMContentLoaded', subscribeStopResume);
-})();
-</script>
-
-
-  <body>
+<body>
   <main class="app" aria-label="Aplicación de tarjetas numéricas">
     <div class="brand">
       <img src="logo.svg" alt="SECeD" class="brand-logo" id="mainLogo" onerror="this.src='logo.png'"/>
@@ -196,13 +121,18 @@
     </div>
   </main>
 
+  <!-- Banner (ahora SÍ dentro del body) -->
+  <div id="stopBanner" aria-live="assertive"></div>
+
+  <!-- Libs y config -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js?v=2"></script>
 
+  <!-- Carga de configuración del Rally (sin cambios salvo fix del id) -->
   <script>
     if (!firebase.apps.length) {
-        firebase.initializeApp(window.FIREBASE_CONFIG);
+      firebase.initializeApp(window.FIREBASE_CONFIG);
     }
     const db = firebase.firestore();
 
@@ -211,43 +141,111 @@
 
     // Si no hay ID en la URL, se solicita
     if (!rallyId) {
-        rallyId = prompt("Introduce el ID del Rally para cargar la configuración:");
-        if (rallyId) {
-            const separator = window.location.href.includes('?') ? '&' : '?';
-            window.location.href = window.location.href + separator + "id=" + rallyId;
-        }
+      rallyId = prompt("Introduce el ID del Rally para cargar la configuración:");
+      if (rallyId) {
+        const separator = window.location.href.includes('?') ? '&' : '?';
+        window.location.href = window.location.href + separator + "id=" + rallyId;
+      }
     }
 
     // Cargar Nombre y Logo dinámicamente
     if (rallyId) {
-        db.collection("config_rallies").doc(rallyId).get().then(doc => {
-            if (doc.exists) {
-                const data = doc.data();
-                
-                // Actualizar Logo
-                const logoImg = document.getElementById('mainLogo');
-                if (logoImg && data.logo) {
-                    logoImg.src = data.logo;
-                }
-
-                // Actualizar Título
-                const titleH1 = id="mainTitle"; 
-                // Usamos querySelector por seguridad si el ID fallara
-                const header = document.querySelector('h1');
-                if (header && data.nombre) {
-                    header.innerText = data.nombre;
-                }
-                
-                console.log("Configuración de Rally '" + rallyId + "' aplicada.");
-            } else {
-                console.error("El ID de rally no existe en la base de datos.");
-            }
-        }).catch(err => console.error("Error al cargar datos del rally:", err));
+      db.collection("config_rallies").doc(rallyId).get().then(doc => {
+        if (doc.exists) {
+          const data = doc.data();
+          // Logo
+          const logoImg = document.getElementById('mainLogo');
+          if (logoImg && data.logo) {
+            logoImg.src = data.logo;
+          }
+          // Título
+          const titleH1 = document.getElementById('mainTitle');
+          if (titleH1 && data.nombre) {
+            titleH1.innerText = data.nombre;
+          }
+          console.log("Configuración de Rally '" + rallyId + "' aplicada.");
+        } else {
+          console.error("El ID de rally no existe en la base de datos.");
+        }
+      }).catch(err => console.error("Error al cargar datos del rally:", err));
     }
   </script>
 
-  <script src="alerts-listener.js"></script>  
+  <!-- Tu lógica existente -->
+  <script src="alerts-listener.js"></script>
   <script src="sync.js?v=2"></script>
   <script src="app.js?v=2"></script>
+
+  <!-- Listener del banner: se carga al final para asegurar Firebase + MODE -->
+  <script>
+    (function(){
+      const banner = document.getElementById('stopBanner');
+      if (!banner) return;
+
+      function allowedByMode(){ return (window.MODE === 'JEFE' || window.MODE === 'SALIDA'); }
+
+      let lastAnyStopped = null; // null | boolean
+      let hideTimer = null;
+
+      function showStop(){
+        if (!allowedByMode()) return hideBanner();
+        clearTimeout(hideTimer);
+        banner.className = 'stop';
+        banner.textContent = 'SALIDA PARADA';
+        banner.style.display = 'block';
+      }
+      function showResume(){
+        if (!allowedByMode()) return hideBanner();
+        clearTimeout(hideTimer);
+        banner.className = 'resume';
+        banner.innerHTML = 'REANUDADO<span class="small">La salida vuelve a estar operativa</span>';
+        banner.style.display = 'block';
+        hideTimer = setTimeout(hideBanner, 2000);
+      }
+      function hideBanner(){ banner.style.display = 'none'; }
+
+      // Reevaluar al cambiar modo
+      ['btnModeJefe','btnModeSalida','btnModeLlegada'].forEach(id=>{
+        const b = document.getElementById(id);
+        if (b) b.addEventListener('click', ()=>{
+          if (lastAnyStopped === true && allowedByMode()) showStop();
+          else if (lastAnyStopped === false && allowedByMode()) showResume();
+          else hideBanner();
+        });
+      });
+
+      function subscribeStopResume(){
+        try{
+          const params = new URLSearchParams(location.search);
+          const rallyId = params.get('id');
+          if (!rallyId) return;
+
+          const colRef = firebase.firestore()
+            .collection('rallies').doc(rallyId)
+            .collection('estado_tramos');
+
+          colRef.onSnapshot(snap => {
+            let anyStopped = false;
+            snap.forEach(doc => {
+              const d = doc.data() || {};
+              if (d.pararSalida === true) anyStopped = true;
+            });
+
+            if (anyStopped !== lastAnyStopped) {
+              lastAnyStopped = anyStopped;
+              if (anyStopped) showStop(); else showResume();
+            } else {
+              // mismo estado → respetar modo
+              if (!allowedByMode()) hideBanner();
+              else if (anyStopped) showStop();
+            }
+          }, err => console.warn('estado_tramos listener error:', err));
+        }catch(e){ console.warn('subscribeStopResume error', e); }
+      }
+
+      // En este punto Firebase y app.js ya están cargados
+      subscribeStopResume();
+    })();
+  </script>
 </body>
 </html>
