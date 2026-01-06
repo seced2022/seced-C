@@ -7,7 +7,6 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    /* Estilos del Panel */
     .grid-dc { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; width: 100%; box-sizing: border-box; }
     .tc-selector-bar { padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 10px; background: #0f1a14; border-bottom: 1px solid #1d2d23; }
     .btn-tc-toggle { background: #1e293b; color: white; border: 1px solid #334155; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -15,14 +14,12 @@
     .card-dc { background: #0f1a14; border: 1px solid #1d2d23; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; height: 500px; }
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .map-dc { flex: 1; border-radius: 8px; background: #000; border: 1px solid #1d2d23; z-index: 1; }
-    
-    /* Botones de Control */
+
     .btn-stop { background: #7f1d1d; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: 800; cursor: pointer; }
     .btn-stop.blink { background: #ff0000; animation: blinker 1s linear infinite; box-shadow: 0 0 15px #ff0000; }
     @keyframes blinker { 50% { opacity: 0.4; } }
     .btn-resume { background: #15803d; color: white; border: 1px solid #16a34a; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: 800; margin-left: 5px; }
 
-    /* Badges de Radios */
     .radio-badge { background: #333; border: 2px solid #666; border-radius: 20px; color: #fff; font-weight: bold; text-align: center; min-width: 70px; padding: 2px 6px; font-size: 13px; }
     .radio-badge.active { background: #ffd60a; color: #000; border-color: #fff; }
     .tc-title { color: #22c55e; font-size: 1.3rem; margin: 0; font-weight: 900; }
@@ -50,34 +47,28 @@
     let tramosVisibles = new Set();
 
     async function initDC() {
-      // 1. Comprobar si existe la configuración de Firebase
       if (typeof window.FIREBASE_CONFIG === 'undefined') {
         alert("ERROR: No se encuentra 'firebase-config.js'. Revisa que el archivo esté en la misma carpeta.");
         return;
       }
-
-      // 2. Inicializar Firebase
       if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
       db = firebase.firestore();
 
-      // 3. Pedir ID si no está en la URL
       if (!rallyId) {
         rallyId = prompt("Por favor, introduce el ID del Rally:");
         if (!rallyId) return;
+        const sep = location.search ? '&' : '?';
+        location.search = (location.search || '?') + (sep === '&' ? '' : '') + 'id=' + encodeURIComponent(rallyId);
+        return;
       }
 
-      // 4. Cargar Configuración del Rally
       try {
         const doc = await db.collection("config_rallies").doc(rallyId).get();
-        if (!doc.exists) {
-          alert("El ID del Rally no existe en la base de datos.");
-          return;
-        }
+        if (!doc.exists) { alert("El ID del Rally no existe en la base de datos."); return; }
         configGlobal = doc.data();
         document.getElementById('dcLogo').src = configGlobal.logo || 'logo.png';
         document.getElementById('dcRallyName').innerText = configGlobal.nombre || 'SECeD - DC';
 
-        // Crear botones de tramos
         const selector = document.getElementById('tcSelector');
         selector.innerHTML = "";
         configGlobal.tramos.forEach((tramo, index) => {
@@ -108,15 +99,15 @@
 
       configGlobal.tramos.forEach((tramo, index) => {
         if (!tramosVisibles.has(index)) return;
-        
-        const tId = tramo.nombre.replace(/\s+/g, '_');
+
+        const tId = (tramo.nombre || ('tramo_'+(index+1))).replace(/\s+/g, '_');
         const cardHtml = `
           <div class="card-dc">
             <div class="card-header">
               <h2 class="tc-title">${tramo.nombre}</h2>
               <div>
-                <button class="btn-stop" id="stop-${tId}" onclick="actualizarEstado('${tramo.nombre}', true)">PARAR SALIDA</button>
-                <button class="btn-resume" onclick="actualizarEstado('${tramo.nombre}', false)">REANUDAR</button>
+                <button class="btn-stop" id="stop-${tId}" onclick="actualizarEstado('${tramo.id}', true)">PARAR SALIDA</button>
+                <button class="btn-resume" onclick="actualizarEstado('${tramo.id}', false)">REANUDAR</button>
               </div>
             </div>
             <div id="map-${tId}" class="map-dc"></div>
@@ -127,7 +118,7 @@
         setTimeout(() => {
           const map = L.map(`map-${tId}`).setView([37.88, -4.77], 12);
           L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-          
+
           if (tramo.track) {
             const poly = L.polyline(tramo.track, {color: '#22c55e', weight: 4}).addTo(map);
             map.fitBounds(poly.getBounds());
@@ -136,24 +127,26 @@
           if (tramo.radios) {
             tramo.radios.forEach((r, rIdx) => {
               const nR = rIdx + 1;
-              const icon = L.divIcon({ 
-                className: 'custom-icon', 
+              const icon = L.divIcon({
+                className: 'custom-icon',
                 html: `<div class="radio-badge" id="badge-${tId}-${nR}">R${nR}: --</div>`,
                 iconSize: [80, 25]
               });
               L.marker([r.lat, r.lng], {icon}).addTo(map);
             });
           }
-          suscribirTramo(tramo.nombre, tId);
+          // SUSCRIBE usando tramo.id (coherente con index/panel-radio)
+          suscribirTramo(tramo.id, tId);
         }, 50);
       });
     }
 
-    function suscribirTramo(nombreReal, tId) {
-      // Escuchar si el tramo está PARADO
-      db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal)
+    // === suscribir usando tramoId para coincidir con index/panel-radio ===
+    function suscribirTramo(tramoId, tDomId) {
+      // Estado de parada/reanudación por tramoId
+      db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(String(tramoId))
         .onSnapshot(doc => {
-          const btn = document.getElementById(`stop-${tId}`);
+          const btn = document.getElementById(`stop-${tDomId}`);
           if (!btn) return;
           if (doc.exists && doc.data().pararSalida === true) {
             btn.classList.add('blink');
@@ -164,22 +157,22 @@
           }
         });
 
-      // Escuchar pasos de coches y LIMPIEZA
-      db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal)
+      // Pasos (último dorsal por radio) por tramoId
+      db.collection("rallies").doc(rallyId).collection("pasos").doc(String(tramoId))
         .onSnapshot(doc => {
           if (!doc.exists) {
-            // SI NO HAY DOCUMENTO (se borró), LIMPIAMOS LOS RADIOS
-            document.querySelectorAll(`[id^="badge-${tId}-"]`).forEach(b => {
+            document.querySelectorAll(`[id^="badge-${tDomId}-"]`).forEach(b => {
+              const n = b.id.split('-').pop();
               b.classList.remove('active');
-              b.innerText = "R" + b.id.split('-').pop() + ": --";
+              b.innerText = "R" + n + ": --";
             });
             return;
           }
-          const data = doc.data();
+          const data = doc.data() || {};
           Object.keys(data).forEach(key => {
             if (key.startsWith('radio')) {
               const n = key.replace('radio', '');
-              const b = document.getElementById(`badge-${tId}-${n}`);
+              const b = document.getElementById(`badge-${tDomId}-${n}`);
               if (b) {
                 b.classList.add('active');
                 b.innerText = `R${n}: #${data[key]}`;
@@ -189,8 +182,9 @@
         });
     }
 
-    async function actualizarEstado(nombre, estado) {
-      await db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombre)
+    // === escribir usando tramoId coherente ===
+    async function actualizarEstado(tramoId, estado) {
+      await db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(String(tramoId))
         .set({ pararSalida: estado }, { merge: true });
     }
 
