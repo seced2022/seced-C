@@ -6,13 +6,10 @@
   <title>SECeD - Panel Radio</title>
   <link rel="stylesheet" href="styles.css?v=41" />
   <meta name="theme-color" content="#0b1f12" />
-
   <style>
-    /* Solo lectura base (sin menús ni franjas) */
     .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
     .viewer .time-stack { display: none !important; }
 
-    /* Elegible → clic habilitado y “blanco brillo” */
     .viewer .card.radio-eligible,
     .viewer .card.radio-eligible * { pointer-events: auto !important; cursor: pointer !important; }
     .card.radio-eligible {
@@ -20,17 +17,13 @@
       box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset;
     }
 
-    /* No elegibles → visibles pero atenuadas */
     .card.radio-locked { display:block !important; opacity:.45; filter:grayscale(.2); pointer-events:none; cursor:default !important; }
 
-    /* Ya clicadas por este radio → amarillas persistentes */
     .card.radio-clicked-by-me {
       display:block !important; background:#fef08a !important; border-color:#eab308 !important;
       box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; pointer-events:none; cursor:default !important;
     }
-
-    .card.radio-clicking { background:#fef08a !important; border-color:#eab308 !important;
-      box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; }
+    .card.radio-clicking { background:#fef08a !important; border-color:#eab308 !important; box-shadow:0 0 0 2px rgba(234,179,8,.35) inset; }
 
     .radio-inline { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     #btnRadio {
@@ -48,7 +41,6 @@
     .tramo-picker { position: relative; }
     .tramo-menu { z-index: 1000; }
 
-    /* Toast simple */
     #toast {
       position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
       background: #0b1f12; color: #eafff7; padding: 8px 12px; border-radius: 10px;
@@ -57,7 +49,6 @@
     #toast.ok { background: #065f46; border-color: #0c7a5c; }
     #toast.err { background: #7f1d1d; border-color: #991b1b; }
 
-    /* En Panel Radio ignoramos el estado 'selected' del editor/visor */
     .viewer .card.selected,
     body.viewer.radio-skin .grid .card.selected {
       background:#ffffff !important; color:#111 !important; border-color:#e5e7eb !important;
@@ -115,33 +106,35 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js?v=16"></script>
 
+  <!-- IIFE #1: obtiene rallyId y lo expone como window.RALLY_ID -->
   <script>
     (function(){
       if (!firebase.apps.length) {
-          firebase.initializeApp(window.FIREBASE_CONFIG);
+        firebase.initializeApp(window.FIREBASE_CONFIG);
       }
       const db = firebase.firestore();
       const urlParams = new URLSearchParams(window.location.search);
       let rallyId = urlParams.get('id');
 
-      // Si no hay ID, lo pide
       if (!rallyId) {
-          rallyId = prompt("Introduce el ID del Rally:");
-          if (rallyId) {
-              const sep = window.location.href.includes('?') ? '&' : '?';
-              window.location.href = window.location.href + sep + "id=" + rallyId;
-          }
+        rallyId = prompt("Introduce el ID del Rally:");
+        if (rallyId) {
+          const sep = window.location.href.includes('?') ? '&' : '?';
+          window.location.href = window.location.href + sep + "id=" + rallyId;
+          return;
+        }
       }
+      // ⬇⬇⬇ Hacemos accesible el ID para otros scripts
+      window.RALLY_ID = rallyId || '';
 
-      // Cargar Nombre y Logo
       if (rallyId) {
-          db.collection("config_rallies").doc(rallyId).get().then(doc => {
-              if (doc.exists) {
-                  const data = doc.data();
-                  if (data.logo) document.getElementById('mainLogo').src = data.logo;
-                  if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
-              }
-          });
+        db.collection("config_rallies").doc(rallyId).get().then(doc => {
+          if (doc.exists) {
+            const data = doc.data();
+            if (data.logo) document.getElementById('mainLogo').src = data.logo;
+            if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+          }
+        });
       }
     })();
   </script>
@@ -149,7 +142,6 @@
   <script>
     window.VIEWER = true;
     document.body.classList.add('viewer');
-    // Fallback por si firebase-config.js fallara
     if (!window.FIREBASE_CONFIG) {
       window.FIREBASE_CONFIG = {
         apiKey: "AIzaSyDYRNhYISTXpHt_jK8dpT7aDUQskV_ZzuE",
@@ -198,8 +190,8 @@
 
   <script src="sync.js?v=16"></script>
   <script src="app.js?v=16"></script>
-  <script src="js/panel-radio-pasos.js"></script>
-  
+
+  <!-- === Script principal con CLIC + escritura a rallies/{id}/pasos/{tramo} === -->
   <script>
     (function(){
       /* ===== Reloj online ===== */
@@ -240,7 +232,7 @@
         setTimeout(()=>{ t.style.display='none'; }, 1200);
       };
 
-      /* ===== Selección de RADIO (compat v1/v2) ===== */
+      /* ===== Selección de RADIO ===== */
       const btnRadio = document.getElementById('btnRadio');
       const radioBadge = document.getElementById('radioBadge');
 
@@ -256,7 +248,7 @@
         const clean = String(v||'').trim();
         try {
           localStorage.setItem('seced_radio', clean);
-          localStorage.setItem('seced_radio_id', clean); // sincronizado
+          localStorage.setItem('seced_radio_id', clean);
         } catch {}
       }
       function getRadioIndex(){
@@ -290,7 +282,7 @@
       }
       updateRadioUI();
 
-      /* ===== Firestore: estado por radio ===== */
+      /* ===== Firestore ===== */
       const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
       const db = firebase.firestore();
       let radiosCol = null;
@@ -314,7 +306,6 @@
         return (radioState.get(key)?.last) || 0;
       }
 
-      /* ===== ACCESO A ITEMS (para ver tSalida) ===== */
       const getItems = (typeof window._getItems === 'function') ? window._getItems : () => [];
       function getItemByValue(val){
         const n = Number(val);
@@ -322,18 +313,14 @@
         return arr.find(x => Number(x.value) === n) || null;
       }
 
-      /* ===== Elegibilidad ===== */
-      const GRACE_MS = 5 * 60 * 1000; // 5 min
+      const GRACE_MS = 5 * 60 * 1000;
       function canThisRadioClick(value){
         const rIdx = getRadioIndex();
         const last = getLastFor(value);
         if (last === (rIdx - 1)) return true;
-
         if (rIdx === 1 && last > 0) {
           const it = getItemByValue(value);
-          if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) {
-            return true;
-          }
+          if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) return true;
         }
         return false;
       }
@@ -364,7 +351,6 @@
         });
       }
 
-      // Reaplicar elegibilidad tras cada render del app.js
       const origOnRemote = window._onRemoteUpdate;
       if (typeof origOnRemote === 'function') {
         window._onRemoteUpdate = (arr)=>{ origOnRemote(arr); applyEligibility(); };
@@ -374,7 +360,6 @@
       }
       setTimeout(applyEligibility, 0);
 
-      /* Watchdog */
       (function(){
         let _eligTimer = null;
         function startEligibilityWatchdog(){
@@ -384,7 +369,7 @@
         startEligibilityWatchdog();
       })();
 
-      // ===== Click en tarjeta para avanzar dorsal al siguiente RADIO =====
+      // ===== Clic de RADIO: además de avanzar en /tramos, escribimos en /rallies/{id}/pasos/{TRAMO}
       document.getElementById('grid').addEventListener('click', async (ev)=>{
         const card = ev.target.closest('.card');
         if (!card) return;
@@ -399,6 +384,7 @@
         const docRef = radiosCol.doc(String(val));
 
         try {
+          // 1) Transacción: avanza last y marca radio en /tramos/{TRAMO}/radios/{dorsal}
           await db.runTransaction(async (tx)=>{
             const snap = await tx.get(docRef);
             const data = snap.exists ? (snap.data()||{}) : {};
@@ -417,6 +403,14 @@
               marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
             }, { merge:true });
           });
+
+          // 2) NUEVO: escribir paso visible para DC -> /rallies/{RALLY_ID}/pasos/{TRAMO}
+          if (window.RALLY_ID) {
+            const pasosRef = db.collection('rallies').doc(window.RALLY_ID).collection('pasos').doc(TRAMO);
+            const field = {};
+            field['radio'+rIdx] = Number(val);
+            await pasosRef.set(field, { merge: true });
+          }
 
           clickedSet.add(String(val));
           saveClickedSet(clickedSet);
@@ -442,7 +436,7 @@
         setTimeout(()=>{ applyEligibility(); }, 150);
       });
 
-      /* ===== Botón BANDERA (envía aviso a alerts) ===== */
+      /* ===== Botón BANDERA (alerta a /tramos/{TRAMO}/alerts) ===== */
       function getRadioIdForAlert(){
         const vDom = (window.RADIO_ID ? String(window.RADIO_ID).trim() : '');
         if (vDom) return vDom;
@@ -479,9 +473,7 @@
       (function ensureBanderaButton(){
         if (!document.body.classList.contains('radio-skin')) return;
         let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
-        function wireClick(b){
-          b.onclick = (ev)=>{ ev.preventDefault(); publishRadioAlert(); };
-        }
+        function wireClick(b){ b.onclick = (ev)=>{ ev.preventDefault(); publishRadioAlert(); }; }
         if (!btn) {
           btn = document.createElement('button');
           btn.id = 'btnBandera'; btn.type = 'button'; btn.textContent = 'BANDERA';
