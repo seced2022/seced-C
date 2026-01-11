@@ -38,6 +38,13 @@
       border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer;
     }
 
+    /* Botón PASO MANUAL (mismo estilo que RADIO) */
+    .below-clock { margin-top:8px; }
+    #btnPasoManual {
+      border: 1px solid var(--btn-border); background:#0c2415; color:#eafff7;
+      border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer;
+    }
+
     .radio-badge{
       position:absolute; top:14px; right:14px; background:#ffd60a; color:#0f1300;
       border:1px solid #e9b400; border-radius:9999px; padding:6px 12px; font-weight:900; font-size:18px; letter-spacing:.3px;
@@ -130,6 +137,11 @@
           <button id="btnOperador" class="micro-btn" title="Cambiar usuario">👤</button>
         </div>
       </div>
+    </div>
+
+    <!-- NUEVO: Botón PASO MANUAL debajo de la zona de la hora -->
+    <div class="below-clock">
+      <button id="btnPasoManual" type="button" title="Registrar paso manual">PASO MANUAL</button>
     </div>
 
     <section id="grid" class="grid" aria-live="polite"></section>
@@ -477,6 +489,61 @@
 
         setTimeout(()=>{ applyEligibility(); }, 150);
       });
+
+      /* ===== PASO MANUAL (nuevo botón) ===== */
+      (function(){
+        const btn = document.getElementById('btnPasoManual');
+        if (!btn) return;
+
+        btn.addEventListener('click', async ()=>{
+          try{
+            const rIdx = getRadioIndex();
+            if (!rIdx) { alert('Selecciona primero tu RADIO.'); return; }
+
+            const valStr = prompt('Dorsal a registrar manualmente:');
+            if (valStr === null) return;
+            const valNum = Number(String(valStr).trim());
+            if (!Number.isInteger(valNum) || valNum <= 0) { alert('Dorsal no válido.'); return; }
+
+            if (!radiosCol) { alert('No hay conexión con Firestore.'); return; }
+            const docRef = radiosCol.doc(String(valNum));
+
+            await db.runTransaction(async (tx)=>{
+              const snap = await tx.get(docRef);
+              const data = snap.exists ? (snap.data()||{}) : {};
+              let last = (typeof data.last==='number') ? data.last : 0;
+
+              if (!(last === (rIdx - 1))) {
+                if (rIdx === 1) {
+                  const it = getItemByValue(valNum);
+                  if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) { last = 0; }
+                }
+              }
+              if (last !== (rIdx - 1)) { throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`); }
+
+              tx.set(docRef, {
+                last: rIdx,
+                marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
+              }, { merge:true });
+            });
+
+            if (window.RALLY_ID) {
+              const pasosRef = db.collection('rallies').doc(window.RALLY_ID).collection('pasos').doc(TRAMO);
+              const field = {};
+              field['radio'+rIdx] = valNum;
+              await pasosRef.set(field, { merge: true });
+            }
+
+            clickedSet.add(String(valNum));
+            saveClickedSet(clickedSet);
+            toast(`Paso manual RADIO ${rIdx} → dorsal ${valNum}`, 'ok');
+            setTimeout(()=>applyEligibility(), 150);
+          } catch(e){
+            console.error(e);
+            toast('No se pudo registrar el paso manual: ' + (e && e.message ? e.message : e), 'err');
+          }
+        });
+      })();
 
       /* ===== Botón BANDERA (envía aviso a alerts) ===== */
       function getRadioIdForAlert(){
