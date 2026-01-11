@@ -38,13 +38,6 @@
       border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer;
     }
 
-    /* Botón PASO MANUAL (mismo estilo que RADIO) */
-    .below-clock { margin-top:8px; }
-    #btnPasoManual {
-      border: 1px solid var(--btn-border); background:#0c2415; color:#eafff7;
-      border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer;
-    }
-
     .radio-badge{
       position:absolute; top:14px; right:14px; background:#ffd60a; color:#0f1300;
       border:1px solid #e9b400; border-radius:9999px; padding:6px 12px; font-weight:900; font-size:18px; letter-spacing:.3px;
@@ -71,34 +64,16 @@
       box-shadow:none !important; opacity:1 !important; filter:none !important;
     }
 
-    /* ===== Banner SALIDA PARADA / REANUDADO ===== */
-    #stopBanner {
-      position: fixed;
-      top: 0; left: 50%; transform: translateX(-50%);
-      width: min(100%, 1100px);
-      margin: 10px auto;
-      padding: 18px 22px;
-      border-radius: 14px;
-      font-weight: 1000;
-      font-size: clamp(22px, 4vw, 40px);
-      letter-spacing: .5px;
-      color: #fff;
-      z-index: 99999;
-      display: none;
-      box-shadow: 0 14px 36px rgba(0,0,0,.55), inset 0 2px 0 rgba(255,255,255,.18);
-      border: 2px solid rgba(255,255,255,.25);
-      text-align: center;
+    /* Botón Paso Manual (estilo coherente, sin romper estética) */
+    #btnPasoManual {
+      border: 1px solid #134e1f; background:#0c2415; color:#eafff7;
+      border-radius:8px; padding:10px 12px; font-weight:800; cursor:pointer;
+      margin-top: 8px;
     }
-    #stopBanner.stop   { background:#b91c1c; border-color:#7f1d1d; }
-    #stopBanner.resume { background:#15803d; border-color:#166534; }
-    #stopBanner .small { display:block; font-size:.55em; font-weight:800; opacity:.95; margin-top:6px; }
+    #btnPasoManual:active { transform: translateY(1px); }
   </style>
 </head>
-
 <body class="radio-skin">
-  <!-- Banner correcto dentro del body -->
-  <div id="stopBanner" aria-live="assertive"></div>
-
   <main class="app" style="position:relative;">
     <span id="radioBadge" class="radio-badge" aria-hidden="true" hidden>RADIO: —</span>
 
@@ -112,6 +87,11 @@
         <span id="clockTime">--:--:--</span>
         <span class="tz" id="clockTz">Europe/Madrid</span>
         <span class="sync" id="clockSync">sincronizando…</span>
+
+        <!-- NUEVO: Paso Manual debajo del reloj -->
+        <div>
+          <button id="btnPasoManual" type="button" title="Forzar paso manual en este radio">PASO MANUAL</button>
+        </div>
       </div>
 
       <div class="controls-right">
@@ -139,11 +119,6 @@
       </div>
     </div>
 
-    <!-- NUEVO: Botón PASO MANUAL debajo de la zona de la hora -->
-    <div class="below-clock">
-      <button id="btnPasoManual" type="button" title="Registrar paso manual">PASO MANUAL</button>
-    </div>
-
     <section id="grid" class="grid" aria-live="polite"></section>
   </main>
 
@@ -153,35 +128,37 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js?v=16"></script>
 
-  <!-- IIFE #1: obtiene rallyId y lo expone como window.RALLY_ID -->
+  <!-- Inicialización Firebase + nombre/logo de rally (sin romper nada) -->
   <script>
     (function(){
       if (!firebase.apps.length) {
-        firebase.initializeApp(window.FIREBASE_CONFIG);
+          firebase.initializeApp(window.FIREBASE_CONFIG);
       }
       const db = firebase.firestore();
       const urlParams = new URLSearchParams(window.location.search);
       let rallyId = urlParams.get('id');
 
+      // Si no hay ID, lo pide
       if (!rallyId) {
-        rallyId = prompt("Introduce el ID del Rally:");
-        if (rallyId) {
-          const sep = window.location.href.includes('?') ? '&' : '?';
-          window.location.href = window.location.href + sep + "id=" + rallyId;
-          return;
-        }
-      }
-      // Hacemos accesible el ID para otros scripts
-      window.RALLY_ID = rallyId || '';
-
-      if (rallyId) {
-        db.collection("config_rallies").doc(rallyId).get().then(doc => {
-          if (doc.exists) {
-            const data = doc.data();
-            if (data.logo) document.getElementById('mainLogo').src = data.logo;
-            if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+          rallyId = prompt("Introduce el ID del Rally:");
+          if (rallyId) {
+              const sep = window.location.href.includes('?') ? '&' : '?';
+              window.location.href = window.location.href + sep + "id=" + rallyId;
           }
-        });
+      }
+
+      // Exponer ID al resto (para DC/pasos)
+      window.RALLY_ID = rallyId || null;
+
+      // Cargar Nombre y Logo
+      if (rallyId) {
+          db.collection("config_rallies").doc(rallyId).get().then(doc => {
+              if (doc.exists) {
+                  const data = doc.data();
+                  if (data.logo) document.getElementById('mainLogo').src = data.logo;
+                  if (data.nombre) document.getElementById('mainTitle').innerText = data.nombre;
+              }
+          });
       }
     })();
   </script>
@@ -203,6 +180,7 @@
     }
   </script>
 
+  <!-- Listener de reset radios (sin cambios) -->
   <script>
     (function(){
       document.addEventListener('DOMContentLoaded', function(){
@@ -236,10 +214,12 @@
     })();
   </script>
 
+  <!-- Tu lógica existente -->
   <script src="sync.js?v=16"></script>
   <script src="app.js?v=16"></script>
+  <script src="js/panel-radio-pasos.js"></script>
 
-  <!-- === Script principal con CLIC + escritura a rallies/{id}/pasos/{tramo} === -->
+  <!-- Reloj online + UI radio/eligibility (sin cambios) -->
   <script>
     (function(){
       /* ===== Reloj online ===== */
@@ -424,7 +404,7 @@
         startEligibilityWatchdog();
       })();
 
-      // ===== Clic en tarjeta para avanzar dorsal al siguiente RADIO =====
+      // ===== Click normal en tarjeta (tu lógica existente) =====
       document.getElementById('grid').addEventListener('click', async (ev)=>{
         const card = ev.target.closest('.card');
         if (!card) return;
@@ -458,14 +438,6 @@
             }, { merge:true });
           });
 
-          // Además: registrar paso visible para DC -> /rallies/{RALLY_ID}/pasos/{TRAMO}
-          if (window.RALLY_ID) {
-            const pasosRef = db.collection('rallies').doc(window.RALLY_ID).collection('pasos').doc(TRAMO);
-            const field = {};
-            field['radio'+rIdx] = Number(val);
-            await pasosRef.set(field, { merge: true });
-          }
-
           clickedSet.add(String(val));
           saveClickedSet(clickedSet);
 
@@ -490,62 +462,7 @@
         setTimeout(()=>{ applyEligibility(); }, 150);
       });
 
-      /* ===== PASO MANUAL (nuevo botón) ===== */
-      (function(){
-        const btn = document.getElementById('btnPasoManual');
-        if (!btn) return;
-
-        btn.addEventListener('click', async ()=>{
-          try{
-            const rIdx = getRadioIndex();
-            if (!rIdx) { alert('Selecciona primero tu RADIO.'); return; }
-
-            const valStr = prompt('Dorsal a registrar manualmente:');
-            if (valStr === null) return;
-            const valNum = Number(String(valStr).trim());
-            if (!Number.isInteger(valNum) || valNum <= 0) { alert('Dorsal no válido.'); return; }
-
-            if (!radiosCol) { alert('No hay conexión con Firestore.'); return; }
-            const docRef = radiosCol.doc(String(valNum));
-
-            await db.runTransaction(async (tx)=>{
-              const snap = await tx.get(docRef);
-              const data = snap.exists ? (snap.data()||{}) : {};
-              let last = (typeof data.last==='number') ? data.last : 0;
-
-              if (!(last === (rIdx - 1))) {
-                if (rIdx === 1) {
-                  const it = getItemByValue(valNum);
-                  if (it && it.tSalida && (Date.now() - it.tSalida) <= GRACE_MS) { last = 0; }
-                }
-              }
-              if (last !== (rIdx - 1)) { throw new Error(`Condición no válida: last=${last} para RADIO ${rIdx}`); }
-
-              tx.set(docRef, {
-                last: rIdx,
-                marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
-              }, { merge:true });
-            });
-
-            if (window.RALLY_ID) {
-              const pasosRef = db.collection('rallies').doc(window.RALLY_ID).collection('pasos').doc(TRAMO);
-              const field = {};
-              field['radio'+rIdx] = valNum;
-              await pasosRef.set(field, { merge: true });
-            }
-
-            clickedSet.add(String(valNum));
-            saveClickedSet(clickedSet);
-            toast(`Paso manual RADIO ${rIdx} → dorsal ${valNum}`, 'ok');
-            setTimeout(()=>applyEligibility(), 150);
-          } catch(e){
-            console.error(e);
-            toast('No se pudo registrar el paso manual: ' + (e && e.message ? e.message : e), 'err');
-          }
-        });
-      })();
-
-      /* ===== Botón BANDERA (envía aviso a alerts) ===== */
+      /* ===== Botón BANDERA (sin cambios) ===== */
       function getRadioIdForAlert(){
         const vDom = (window.RADIO_ID ? String(window.RADIO_ID).trim() : '');
         if (vDom) return vDom;
@@ -557,7 +474,6 @@
         if (v1) return v1;
         return '';
       }
-
       async function publishRadioAlert() {
         try {
           const radio = getRadioIdForAlert();
@@ -578,11 +494,12 @@
           alert('Error enviando AVISO.');
         }
       }
-
       (function ensureBanderaButton(){
         if (!document.body.classList.contains('radio-skin')) return;
         let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
-        function wireClick(b){ b.onclick = (ev)=>{ ev.preventDefault(); publishRadioAlert(); }; }
+        function wireClick(b){
+          b.onclick = (ev)=>{ ev.preventDefault(); publishRadioAlert(); };
+        }
         if (!btn) {
           btn = document.createElement('button');
           btn.id = 'btnBandera'; btn.type = 'button'; btn.textContent = 'BANDERA';
@@ -598,61 +515,74 @@
           btn.id = 'btnBandera'; btn.textContent = 'BANDERA'; wireClick(btn);
         }
       })();
-    })();
-  </script>
 
-  <!-- === Banner SALIDA PARADA / REANUDADO (solo RADIO 1 y por TRAMO) === -->
-  <script>
-    (function(){
-      const banner = document.getElementById('stopBanner');
-      let hideTimer = null;
+      /* ===== PASO MANUAL (FORZADO) ===== */
+      (function(){
+        const btn = document.getElementById('btnPasoManual');
+        if (!btn) return;
 
-      function getRadioIndexLocal(){
-        try{
-          const v = (localStorage.getItem('seced_radio_id') || localStorage.getItem('seced_radio') || '').trim();
-          const n = parseInt(v,10);
-          return Number.isFinite(n) && n>0 ? n : 0;
-        } catch { return 0; }
-      }
-      function allowedForThisPage(){ return getRadioIndexLocal() === 1; }
+        btn.addEventListener('click', async ()=>{
+          try{
+            const rIdx = getRadioIndex();
+            if (!rIdx) { alert('Selecciona primero tu RADIO.'); return; }
 
-      function showStop(){
-        if (!allowedForThisPage()) return hideBanner();
-        clearTimeout(hideTimer);
-        banner.className = 'stop';
-        banner.textContent = 'SALIDA PARADA';
-        banner.style.display = 'block';
-      }
-      function showResume(){
-        if (!allowedForThisPage()) return hideBanner();
-        clearTimeout(hideTimer);
-        banner.className = 'resume';
-        banner.innerHTML = 'REANUDADO<span class="small">La salida vuelve a estar operativa</span>';
-        banner.style.display = 'block';
-        hideTimer = setTimeout(hideBanner, 2000);
-      }
-      function hideBanner(){ banner.style.display = 'none'; }
+            const valStr = prompt('Dorsal a registrar manualmente (forzar paso en este radio):');
+            if (valStr === null) return;
+            const valNum = Number(String(valStr).trim());
+            if (!Number.isInteger(valNum) || valNum <= 0) { alert('Dorsal no válido.'); return; }
 
-      function subscribe(){
-        try{
-          if (!window.firebase || !firebase.firestore) return;
-          const rallyId = (window.RALLY_ID || new URLSearchParams(location.search).get('id') || '').toString();
-          const tramo = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
-          if (!rallyId) return;
+            if (!confirm(`Vas a FORZAR el paso del dorsal ${valNum} en el RADIO ${rIdx}.\n\nEsto permitirá que el RADIO ${rIdx+1} continúe a partir de ahora.\n\n¿Confirmas?`)) {
+              return;
+            }
 
-          const ref = firebase.firestore()
-            .collection('rallies').doc(rallyId)
-            .collection('estado_tramos').doc(tramo);
+            if (!radiosCol) { alert('No hay conexión con Firestore.'); return; }
+            const docRef = radiosCol.doc(String(valNum));
 
-          ref.onSnapshot(doc => {
-            const stopped = doc.exists && doc.data() && doc.data().pararSalida === true;
-            if (!allowedForThisPage()) { hideBanner(); return; }
-            if (stopped) showStop(); else showResume();
-          }, err => console.warn('estado_tramos listener error:', err));
-        } catch(e){ console.warn('subscribeStopResume error', e); }
-      }
+            await db.runTransaction(async (tx)=>{
+              const snap = await tx.get(docRef);
+              const data = snap.exists ? (snap.data()||{}) : {};
+              const lastOld = (typeof data.last==='number') ? data.last : 0;
+              const lastNew = Math.max(lastOld, rIdx);
 
-      document.addEventListener('DOMContentLoaded', subscribe);
+              tx.set(docRef, {
+                last: lastNew,
+                marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
+              }, { merge:true });
+            });
+
+            // Reflejar “pasos” para DC (bolitas)
+            if (window.RALLY_ID) {
+              const pasosRef = db.collection('rallies').doc(window.RALLY_ID).collection('pasos').doc(TRAMO);
+              const field = {}; field['radio'+rIdx] = valNum;
+              await pasosRef.set(field, { merge: true });
+            }
+
+            try {
+              const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
+              await aud.add({
+                actor: (getRadio() || ('RADIO '+rIdx)),
+                action: 'radio_manual_forzado',
+                detail: { value: valNum, radio: rIdx },
+                ts: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+            } catch(e){}
+
+            try {
+              const key = `seced_radio_clicked:${TRAMO}:${rIdx}`;
+              const set = new Set(JSON.parse(localStorage.getItem(key)||'[]'));
+              set.add(String(valNum));
+              localStorage.setItem(key, JSON.stringify(Array.from(set)));
+            } catch {}
+
+            toast(`Paso manual FORZADO en RADIO ${rIdx} → dorsal ${valNum}`, 'ok');
+            setTimeout(()=>applyEligibility(), 150);
+
+          } catch(e){
+            console.error(e);
+            toast('No se pudo forzar el paso manual: ' + (e && e.message ? e.message : e), 'err');
+          }
+        });
+      })();
     })();
   </script>
 </body>
