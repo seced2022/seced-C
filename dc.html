@@ -7,25 +7,21 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    /* Ensanchar el contenedor principal casi a todo ancho (sin tocar styles.css) */
-    .app { max-width: 96vw; margin: 0 auto; }
+    /* Mantener el ancho amplio del panel */
+    .app { max-width: 96vw; margin: 0 auto; position: relative; }
 
-    /* Barra del reloj */
-    .dc-clockbar{
-      display:flex; align-items:center; justify-content:space-between;
-      gap:12px; padding:10px 20px; background:#0f1a14; border-bottom:1px solid #1d2d23;
-    }
-    .dc-clock{
-      font-variant-numeric: tabular-nums; font-weight:900; letter-spacing:1px;
-      color:#22c55e; font-size:clamp(22px, 4.2vw, 44px);
+    /* Reloj arriba a la derecha (HH:MM:SS.mmm) */
+    .dc-clockbox{
+      position:absolute; top:10px; right:20px; z-index:10;
+      font-variant-numeric: tabular-nums;
+      font-weight:900; letter-spacing:1px;
+      color:#22c55e; 
+      font-size:clamp(18px, 3.8vw, 38px);
       text-shadow: 0 0 10px rgba(34,197,94,.35);
+      user-select:none;
     }
-    .dc-tz{ color:#a7f3d0; font-weight:700; margin-left:10px; font-size:.55em; opacity:.9; }
-    .dc-sync{ margin-left:10px; font-size:.55em; font-weight:800; }
-    .dc-sync.ok{ color:#86efac; }
-    .dc-sync.err{ color:#fca5a5; }
 
-    /* Estilos del Panel ya existentes */
+    /* Estilos existentes */
     .grid-dc { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; width: 100%; box-sizing: border-box; }
     .tc-selector-bar { padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 10px; background: #0f1a14; border-bottom: 1px solid #1d2d23; }
     .btn-tc-toggle { background: #1e293b; color: white; border: 1px solid #334155; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
@@ -50,17 +46,11 @@
 </head>
 <body>
   <main class="app">
+    <!-- Reloj en la esquina superior derecha -->
+    <div class="dc-clockbox" id="dcClock">--:--:--.---</div>
+
     <div class="brand"><img id="dcLogo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
     <h1 id="dcRallyName">SECeD - Dirección de Carrera</h1>
-
-    <!-- NUEVO: reloj sincronizado HH:MM:SS.mm -->
-    <div class="dc-clockbar">
-      <div class="dc-clock">
-        <span id="dcClock">--:--:--.--</span>
-        <span class="dc-tz" id="dcTz">Europe/Madrid</span>
-        <span class="dc-sync" id="dcSync">sincronizando…</span>
-      </div>
-    </div>
 
     <div id="tcSelector" class="tc-selector-bar"></div>
     <div id="gridDC" class="grid-dc"></div>
@@ -72,51 +62,31 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    /* ===== Reloj NTP-like con centésimas ===== */
+    /* ===== Reloj NTP-like: HH:MM:SS.mmm (sin mostrar zona/estado) ===== */
     (function(){
       const TIMEZONE = 'Europe/Madrid';
       const el = document.getElementById('dcClock');
-      const tz = document.getElementById('dcTz');
-      const syncEl = document.getElementById('dcSync');
-      if (tz) tz.textContent = TIMEZONE;
+      let offsetMs = 0, rafId = null;
 
-      let offsetMs = 0;
-      let rafId = null;
-
-      function pad2(n){ return String(n).padStart(2,'0'); }
-      function pad2cs(n){ return String(Math.floor(n/10)).padStart(2,'0'); } // centésimas
+      const pad2 = n => String(n).padStart(2,'0');
+      const pad3 = n => String(n).padStart(3,'0');
 
       async function syncTime(){
         try{
-          if (syncEl){ syncEl.textContent='sincronizando…'; syncEl.className='dc-sync'; }
-          const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache:'no-store' });
-          if(!res.ok) throw new Error('HTTP ' + res.status);
+          const res = await fetch(\`https://worldtimeapi.org/api/timezone/\${encodeURIComponent(TIMEZONE)}\`, { cache:'no-store' });
+          if(!res.ok) throw new Error();
           const data = await res.json();
           const apiMs = Date.parse(data.datetime);
           offsetMs = apiMs - Date.now();
-          if (syncEl){ syncEl.textContent='ok'; syncEl.className='dc-sync ok'; }
-        } catch {
-          if (syncEl){ syncEl.textContent='sin conexión'; syncEl.className='dc-sync err'; }
-        }
+        }catch{ /* silencioso */ }
       }
-
-      function render(){
+      function tick(){
         const now = Date.now() + offsetMs;
         const d = new Date(now);
-        const hh = pad2(d.getHours());
-        const mm = pad2(d.getMinutes());
-        const ss = pad2(d.getSeconds());
-        const cs = pad2cs(d.getMilliseconds());
-        if (el) el.textContent = `${hh}:${mm}:${ss}.${cs}`;
-        rafId = requestAnimationFrame(render);
+        el.textContent = \`\${pad2(d.getHours())}:\${pad2(d.getMinutes())}:\${pad2(d.getSeconds())}.\${pad3(d.getMilliseconds())}\`;
+        rafId = requestAnimationFrame(tick);
       }
-
-      syncTime().then(()=>{
-        if (rafId) cancelAnimationFrame(rafId);
-        render();
-        // re-sync cada 5 minutos
-        setInterval(syncTime, 5*60*1000);
-      });
+      syncTime().then(()=>{ if(rafId) cancelAnimationFrame(rafId); tick(); setInterval(syncTime, 5*60*1000); });
     })();
   </script>
 
@@ -127,34 +97,26 @@
     let tramosVisibles = new Set();
 
     async function initDC() {
-      // 1. Comprobar si existe la configuración de Firebase
       if (typeof window.FIREBASE_CONFIG === 'undefined') {
         alert("ERROR: No se encuentra 'firebase-config.js'. Revisa que el archivo esté en la misma carpeta.");
         return;
       }
-
-      // 2. Inicializar Firebase
       if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
       db = firebase.firestore();
 
-      // 3. Pedir ID si no está en la URL
       if (!rallyId) {
         rallyId = prompt("Por favor, introduce el ID del Rally:");
         if (!rallyId) return;
       }
 
-      // 4. Cargar Configuración del Rally
       try {
         const doc = await db.collection("config_rallies").doc(rallyId).get();
-        if (!doc.exists) {
-          alert("El ID del Rally no existe en la base de datos.");
-          return;
-        }
+        if (!doc.exists) { alert("El ID del Rally no existe en la base de datos."); return; }
+
         configGlobal = doc.data();
         document.getElementById('dcLogo').src = configGlobal.logo || 'logo.png';
         document.getElementById('dcRallyName').innerText = configGlobal.nombre || 'SECeD - DC';
 
-        // Crear botones de tramos
         const selector = document.getElementById('tcSelector');
         selector.innerHTML = "";
         configGlobal.tramos.forEach((tramo, index) => {
@@ -202,7 +164,7 @@
         container.insertAdjacentHTML('beforeend', cardHtml);
 
         setTimeout(() => {
-          const map = L.map(`map-\${tId}`).setView([37.88, -4.77], 12);
+          const map = L.map(\`map-\${tId}\`).setView([37.88, -4.77], 12);
           L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
           
           if (tramo.track) {
@@ -215,7 +177,7 @@
               const nR = rIdx + 1;
               const icon = L.divIcon({ 
                 className: 'custom-icon', 
-                html: `<div class="radio-badge" id="badge-\${tId}-\${nR}">R\${nR}: --</div>`,
+                html: `<div class="radio-badge" data-n="\${nR}" id="badge-\${tId}-\${nR}">R\${nR}: --</div>`,
                 iconSize: [80, 25]
               });
               L.marker([r.lat, r.lng], {icon}).addTo(map);
@@ -227,7 +189,7 @@
     }
 
     function suscribirTramo(nombreReal, tId) {
-      // Escuchar si el tramo está PARADO
+      // Estado PARADA/REANUDAR
       db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal)
         .onSnapshot(doc => {
           const btn = document.getElementById(`stop-${tId}`);
@@ -241,14 +203,15 @@
           }
         });
 
-      // Escuchar pasos de coches y LIMPIEZA
+      // Pasos (bolitas)
       db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal)
         .onSnapshot(doc => {
           if (!doc.exists) {
-            // SI NO HAY DOCUMENTO (se borró), LIMPIAMOS LOS RADIOS
+            // Si no hay doc, limpiar bolitas de este tramo
             document.querySelectorAll(`[id^="badge-${tId}-"]`).forEach(b => {
+              const n = b.dataset.n || b.id.split('-').pop();
               b.classList.remove('active');
-              b.innerText = "R" + b.id.split('-').pop() + ": --";
+              b.innerText = `R${n}: --`;
             });
             return;
           }
@@ -259,7 +222,7 @@
               const b = document.getElementById(`badge-${tId}-${n}`);
               if (b) {
                 b.classList.add('active');
-                /* Cambio solicitado: eliminar el símbolo # */
+                /* Sin #, contenido intacto del rally */
                 b.innerText = `R${n}: ${data[key]}`;
               }
             }
