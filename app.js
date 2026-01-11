@@ -1,4 +1,4 @@
-/* -------------- app.js (v=16 + R1 en SALIDA) -------------- */
+/* -------------- app.js (v=16 + R1 en SALIDA, fix tramo) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -30,17 +30,17 @@ const tramoRecent= document.getElementById('tramoRecent');
 async function clearRadioDocFor(value){
   try{
     if (!window.firebase || !firebase.firestore) return;
-    const tramo = (window.TRAMO_ID || '1').toString();
+    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
     const db = firebase.firestore();
     await db.collection('tramos').doc(tramo).collection('radios').doc(String(value)).delete();
   }catch(e){}
 }
 
-/* === NUEVO: helper para fijar R1 al dar de alta en MODO SALIDA === */
+/* === NUEVO: helper para fijar R1 al dar de alta en MODO SALIDA (con tramo robusto) === */
 async function setR1For(dorsal){
   try{
     if (!window.firebase || !firebase.firestore) return;
-    const tramo = (window.TRAMO_ID || '1').toString();
+    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
     const db = firebase.firestore();
     const docRef = db.collection('tramos').doc(tramo).collection('radios').doc(String(dorsal));
     await docRef.set({
@@ -229,7 +229,7 @@ if (btnOperador) btnOperador.addEventListener('click', ()=>{
 window._radioMarks = new Map();
 (function subscribeRadioMarks(){
   try{
-    const tramo = (window.TRAMO_ID || '1').toString();
+    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
     const db = firebase.firestore();
     db.collection('tramos').doc(tramo).collection('radios')
       .onSnapshot(snap => {
@@ -439,7 +439,7 @@ async function addNumber() {
   render();
   if (typeof syncSave === 'function') syncSave();
 
-  // 👉 NUEVA lógica: en SALIDA marcamos R1; en otros modos mantenemos el limpiado previo
+  // En SALIDA marcamos R1; en otros modos limpiamos radios previos
   if (window.MODE === 'SALIDA') {
     await setR1For(num);
   } else {
