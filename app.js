@@ -1,4 +1,4 @@
-/* -------------- app.js (v=16+fix-viewer) -------------- */
+/* -------------- app.js (v=16 + R1 en SALIDA) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -34,6 +34,23 @@ async function clearRadioDocFor(value){
     const db = firebase.firestore();
     await db.collection('tramos').doc(tramo).collection('radios').doc(String(value)).delete();
   }catch(e){}
+}
+
+/* === NUEVO: helper para fijar R1 al dar de alta en MODO SALIDA === */
+async function setR1For(dorsal){
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || '1').toString();
+    const db = firebase.firestore();
+    const docRef = db.collection('tramos').doc(tramo).collection('radios').doc(String(dorsal));
+    await docRef.set({
+      last: 1,
+      marks: firebase.firestore.FieldValue.arrayUnion(1),
+      tSalida: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  }catch(e){
+    console.warn('setR1For error', e);
+  }
 }
 
 function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
@@ -79,8 +96,8 @@ const clockSync = document.getElementById('clockSync');
 if (clockTz) clockTz.textContent = TIMEZONE;
 let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
 
-/* === FIX VIEWER: ya NO se activa por ?viewer; solo si ya estaba definido === */
-window.VIEWER = (typeof window.VIEWER === 'boolean') ? window.VIEWER : false;
+const urlViewerFlag = new URLSearchParams(location.search).has('viewer');
+window.VIEWER = (typeof window.VIEWER !== 'undefined') ? !!window.VIEWER : urlViewerFlag;
 if (window.VIEWER) document.body.classList.add('viewer');
 
 function pad(n){ return String(n).padStart(2,'0'); }
@@ -157,7 +174,7 @@ async function refreshAudit(){
   }
 }
 function auditCSV(){ (async ()=>{
-  const rows = await (typeof auditFetch === 'function') ? auditFetch() : Promise.resolve([]);
+  const rows = await (typeof auditFetch === 'function' ? auditFetch() : Promise.resolve([]));
   const headers = ['ts','actor','action','detail_json'];
   const lines = [headers.join(',')];
   for(const r of rows){
@@ -421,9 +438,16 @@ async function addNumber() {
 
   render();
   if (typeof syncSave === 'function') syncSave();
-  await clearRadioDocFor(num);
+
+  // 👉 NUEVA lógica: en SALIDA marcamos R1; en otros modos mantenemos el limpiado previo
+  if (window.MODE === 'SALIDA') {
+    await setR1For(num);
+  } else {
+    await clearRadioDocFor(num);
+  }
+
   input.value = ''; input.focus();
-  logAudit('alta', { value:num, tSalida:tS });
+  logAudit('alta', { value:num, tSalida:tS, mode: window.MODE });
 }
 
 async function editNumber(prevVal) {
