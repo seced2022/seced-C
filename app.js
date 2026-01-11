@@ -1,6 +1,4 @@
-<!-- app.js (v=17) -->
-<script>
-/* -------------- app.js (v=17) -------------- */
+/* -------------- app.js (v=16+fix-viewer) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -81,8 +79,8 @@ const clockSync = document.getElementById('clockSync');
 if (clockTz) clockTz.textContent = TIMEZONE;
 let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
 
-const urlViewerFlag = new URLSearchParams(location.search).has('viewer');
-window.VIEWER = (typeof window.VIEWER !== 'undefined') ? !!window.VIEWER : urlViewerFlag;
+/* === FIX VIEWER: ya NO se activa por ?viewer; solo si ya estaba definido === */
+window.VIEWER = (typeof window.VIEWER === 'boolean') ? window.VIEWER : false;
 if (window.VIEWER) document.body.classList.add('viewer');
 
 function pad(n){ return String(n).padStart(2,'0'); }
@@ -159,7 +157,7 @@ async function refreshAudit(){
   }
 }
 function auditCSV(){ (async ()=>{
-  const rows = await (typeof auditFetch === 'function' ? auditFetch() : Promise.resolve([]));
+  const rows = await (typeof auditFetch === 'function') ? auditFetch() : Promise.resolve([]);
   const headers = ['ts','actor','action','detail_json'];
   const lines = [headers.join(',')];
   for(const r of rows){
@@ -423,36 +421,7 @@ async function addNumber() {
 
   render();
   if (typeof syncSave === 'function') syncSave();
-
-  /* === NUEVO: si estamos en SALIDA, marcar automáticamente el paso por R1 === */
-  if (window.MODE === 'SALIDA') {
-    try {
-      if (window.firebase && firebase.firestore) {
-        const tramo = (window.TRAMO_ID || '1').toString();
-        const db = firebase.firestore();
-
-        // Marca de secuencia de radios: last = 1 y marks += 1
-        const rDoc = db.collection('tramos').doc(tramo).collection('radios').doc(String(num));
-        await rDoc.set({
-          last: 1,
-          marks: firebase.firestore.FieldValue.arrayUnion(1)
-        }, { merge: true });
-
-        // (Opcional) si hay RALLY_ID, reflejarlo para DC
-        if (window.RALLY_ID) {
-          await db.collection('rallies').doc(window.RALLY_ID)
-            .collection('pasos').doc(tramo)
-            .set({ radio1: num }, { merge: true });
-        }
-
-        try { logAudit('auto_r1_from_salida', { value:num, tramo }); } catch {}
-      }
-    } catch (e) {
-      console.warn('auto R1 desde SALIDA falló:', e);
-    }
-  }
-
-  await clearRadioDocFor(num); // (mantengo tu limpieza histórica)
+  await clearRadioDocFor(num);
   input.value = ''; input.focus();
   logAudit('alta', { value:num, tSalida:tS });
 }
@@ -738,4 +707,3 @@ function showRadioAlertBanner(radio) {
       }, err => console.warn('alerts listener error', err));
   }catch(e){ console.warn('subscribeRadioAlerts error', e); }
 })();
-</script>
