@@ -1,4 +1,6 @@
-/* -------------- app.js (v=16+beep) -------------- */
+<!-- app.js (v=17) -->
+<script>
+/* -------------- app.js (v=17) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -421,7 +423,36 @@ async function addNumber() {
 
   render();
   if (typeof syncSave === 'function') syncSave();
-  await clearRadioDocFor(num);
+
+  /* === NUEVO: si estamos en SALIDA, marcar automáticamente el paso por R1 === */
+  if (window.MODE === 'SALIDA') {
+    try {
+      if (window.firebase && firebase.firestore) {
+        const tramo = (window.TRAMO_ID || '1').toString();
+        const db = firebase.firestore();
+
+        // Marca de secuencia de radios: last = 1 y marks += 1
+        const rDoc = db.collection('tramos').doc(tramo).collection('radios').doc(String(num));
+        await rDoc.set({
+          last: 1,
+          marks: firebase.firestore.FieldValue.arrayUnion(1)
+        }, { merge: true });
+
+        // (Opcional) si hay RALLY_ID, reflejarlo para DC
+        if (window.RALLY_ID) {
+          await db.collection('rallies').doc(window.RALLY_ID)
+            .collection('pasos').doc(tramo)
+            .set({ radio1: num }, { merge: true });
+        }
+
+        try { logAudit('auto_r1_from_salida', { value:num, tramo }); } catch {}
+      }
+    } catch (e) {
+      console.warn('auto R1 desde SALIDA falló:', e);
+    }
+  }
+
+  await clearRadioDocFor(num); // (mantengo tu limpieza histórica)
   input.value = ''; input.focus();
   logAudit('alta', { value:num, tSalida:tS });
 }
@@ -620,41 +651,6 @@ setTramoBadge(window.TRAMO_ID);
 
 /* === AVISO de Panel Radio -> Editor (banner rojo) === */
 
-/* Sonido de alerta (WebAudio, sin archivos) */
-let _alertAudioCtx = null;
-function playAlertSound() {
-  try {
-    _alertAudioCtx = _alertAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    if (_alertAudioCtx.state === 'suspended') {
-      const resumeOnce = () => {
-        _alertAudioCtx.resume().catch(()=>{});
-        window.removeEventListener('click', resumeOnce);
-        window.removeEventListener('touchstart', resumeOnce);
-        window.removeEventListener('keydown', resumeOnce);
-      };
-      window.addEventListener('click', resumeOnce, { once: true });
-      window.addEventListener('touchstart', resumeOnce, { once: true });
-      window.addEventListener('keydown', resumeOnce, { once: true });
-    }
-    const ctx = _alertAudioCtx;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    const t0 = ctx.currentTime + 0.01;
-    gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.02);
-    osc.frequency.setValueAtTime(880, t0);
-    osc.frequency.setValueAtTime(660, t0 + 0.30);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.62);
-    osc.start(t0);
-    osc.stop(t0 + 0.64);
-  } catch (e) {
-    console.warn('playAlertSound error', e);
-  }
-}
-
 /* 1) Resolver radio de UI si existiese */
 function resolveSelectedRadioFromUI() {
   const checked = document.querySelector('[name="radio"]:checked');
@@ -689,8 +685,7 @@ function getRadioId() {
 /* 3) Banner en editor/visor */
 function showRadioAlertBanner(radio) {
   if (document.body.classList.contains('radio-skin')) return; // nunca en panel radio
-  // Antes: solo JEFE. Ahora: JEFE o VISOR (VIEWER), para que el visor también lo vea/escuche.
-  if (window.MODE !== 'JEFE' && !window.VIEWER) return;
+  if (window.MODE !== 'JEFE') return; // solo en JEFE
 
   let banner = document.getElementById('radioAlertBanner');
   if (!banner) {
@@ -712,9 +707,6 @@ function showRadioAlertBanner(radio) {
   banner.style.display = 'flex';
   clearTimeout(banner._hideTimer);
   banner._hideTimer = setTimeout(() => { if (banner && banner.parentNode) banner.remove(); }, 15000);
-
-  // Sonido de alerta
-  playAlertSound();
 }
 
 /* 4) Suscripción a /alerts del tramo (con ?tramo=) */
@@ -746,3 +738,4 @@ function showRadioAlertBanner(radio) {
       }, err => console.warn('alerts listener error', err));
   }catch(e){ console.warn('subscribeRadioAlerts error', e); }
 })();
+</script>
