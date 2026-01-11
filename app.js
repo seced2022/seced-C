@@ -1,4 +1,4 @@
-/* -------------- app.js (v=16 + R1 en SALIDA, fix tramo) -------------- */
+/* -------------- app.js (v=16 + R1 en SALIDA + LLEGADA marca último radio) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -27,30 +27,17 @@ const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
 
+/* === Helpers tramo/Firestore reutilizables === */
+function getTramoId(){
+  return (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
+}
+
 async function clearRadioDocFor(value){
   try{
     if (!window.firebase || !firebase.firestore) return;
-    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
     const db = firebase.firestore();
-    await db.collection('tramos').doc(tramo).collection('radios').doc(String(value)).delete();
+    await db.collection('tramos').doc(getTramoId()).collection('radios').doc(String(value)).delete();
   }catch(e){}
-}
-
-/* === NUEVO: helper para fijar R1 al dar de alta en MODO SALIDA (con tramo robusto) === */
-async function setR1For(dorsal){
-  try{
-    if (!window.firebase || !firebase.firestore) return;
-    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-    const db = firebase.firestore();
-    const docRef = db.collection('tramos').doc(tramo).collection('radios').doc(String(dorsal));
-    await docRef.set({
-      last: 1,
-      marks: firebase.firestore.FieldValue.arrayUnion(1),
-      tSalida: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  }catch(e){
-    console.warn('setR1For error', e);
-  }
 }
 
 function getOperator(){ try { return localStorage.getItem('seced_operator') || ''; } catch { return ''; } }
@@ -133,7 +120,7 @@ function existsValue(val){ return items.some(x => x.value === val); }
 function logAudit(action, detail){
   try {
     const entry = {
-      tramo:(window.TRAMO_ID||'').toString(),
+      tramo:(getTramoId()||'').toString(),
       actor:(window.OPERATOR||'').toString()||'—',
       action, detail:detail||{},
       clientTime:new Date(nowNetMs()).toISOString()
@@ -148,7 +135,7 @@ function askAudit(){
   if (key === (window.AUDIT_KEY||'')) { auditUnlocked=true; return true; }
   alert('Clave incorrecta.'); return false;
 }
-function updateAuditMeta(){ if (auditTramo) auditTramo.textContent=(window.TRAMO_ID||'—'); if (auditOperador) auditOperador.textContent=(window.OPERATOR||'—')||'—'; }
+function updateAuditMeta(){ if (auditTramo) auditTramo.textContent=(getTramoId()||'—'); if (auditOperador) auditOperador.textContent=(window.OPERATOR||'—')||'—'; }
 async function openAudit(){ if (!auditUnlocked && !askAudit()) return; updateAuditMeta(); if (auditPanel) auditPanel.classList.remove('hidden'); await refreshAudit(); }
 function closeAudit(){ if (auditPanel) auditPanel.classList.add('hidden'); }
 async function refreshAudit(){
@@ -186,7 +173,7 @@ function auditCSV(){ (async ()=>{
   }
   const blob = new Blob([lines.join('\n')], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download=`auditoria_${(window.TRAMO_ID||'tramo').toString()}.csv`;
+  const a = document.createElement('a'); a.href=url; a.download=`auditoria_${(getTramoId()||'tramo').toString()}.csv`;
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 })(); }
 function exportStatesCSV(){
@@ -196,7 +183,7 @@ function exportStatesCSV(){
     const lines = [headers.join(',')];
     for(const it of arr){
       const row = [
-        (window.TRAMO_ID||'').toString().replace(/,/g,' '),
+        (getTramoId()||'').toString().replace(/,/g,' '),
         it.value,
         it.status||'normal',
         (it.rNumber!=null? it.rNumber:''),
@@ -210,7 +197,7 @@ function exportStatesCSV(){
     }
     const blob = new Blob([lines.join('\n')], {type:'text/csv'});
     const url = URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=`estados_${(window.TRAMO_ID||'tramo')}.csv`;
+    const a=document.createElement('a'); a.href=url; a.download=`estados_${(getTramoId()||'tramo')}.csv`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }catch(e){ console.error('exportStatesCSV error', e); alert('Error exportando estados.'); }
 }
@@ -229,9 +216,8 @@ if (btnOperador) btnOperador.addEventListener('click', ()=>{
 window._radioMarks = new Map();
 (function subscribeRadioMarks(){
   try{
-    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
     const db = firebase.firestore();
-    db.collection('tramos').doc(tramo).collection('radios')
+    db.collection('tramos').doc(getTramoId()).collection('radios')
       .onSnapshot(snap => {
         snap.docChanges().forEach(ch => {
           const id = ch.doc.id;
@@ -247,6 +233,53 @@ window._radioMarks = new Map();
       }, err => console.warn('radio marks listener error', err));
   }catch(e){ console.warn('radio marks subscribe error', e); }
 })();
+
+/* === NUEVO: detectar el último número de radio del tramo === */
+function getMaxRadioNumber(){
+  try{
+    let max = 0;
+    if (window._radioMarks instanceof Map) {
+      for (const arr of window._radioMarks.values()){
+        if (!Array.isArray(arr)) continue;
+        for (const r of arr) if (Number.isFinite(r) && r > max) max = r;
+      }
+    }
+    return max; // 0 si aún no hay ninguna marca en el tramo
+  }catch{ return 0; }
+}
+
+/* === NUEVO: fijar R1 en SALIDA (igual que te pasé) === */
+async function setR1For(dorsal){
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const db = firebase.firestore();
+    const docRef = db.collection('tramos').doc(getTramoId()).collection('radios').doc(String(dorsal));
+    await docRef.set({
+      last: 1,
+      marks: firebase.firestore.FieldValue.arrayUnion(1),
+      tSalida: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  }catch(e){
+    console.warn('setR1For error', e);
+  }
+}
+
+/* === NUEVO: fijar último radio en LLEGADA (sin tocar nada más) === */
+async function setLastRadioFor(dorsal){
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const lastR = getMaxRadioNumber();
+    if (!lastR || lastR < 1) return; // si aún no conocemos radios, no forzamos nada
+    const db = firebase.firestore();
+    const docRef = db.collection('tramos').doc(getTramoId()).collection('radios').doc(String(dorsal));
+    await docRef.set({
+      last: lastR,
+      marks: firebase.firestore.FieldValue.arrayUnion(lastR)
+    }, { merge: true });
+  }catch(e){
+    console.warn('setLastRadioFor error', e);
+  }
+}
 
 /* === Render tarjetas (igual que tu versión) === */
 function render() {
@@ -296,6 +329,8 @@ function render() {
       if (window.MODE === 'SALIDA') return;
       if (!item.selected) {
         item.selected = true; if (!item.tLlegada) item.tLlegada = nowNetMs();
+        /* === NUEVO: al marcar LLEGADA, forzamos el paso por el ÚLTIMO RADIO conocido === */
+        try { setLastRadioFor(item.value); } catch(e){}
         render(); if (typeof syncSave === 'function') syncSave();
         logAudit('llegada', { value:item.value, tLlegada:item.tLlegada });
       } else {
@@ -512,7 +547,7 @@ if (btnLimpiar) btnLimpiar.addEventListener('click', () => {
 /* === Reset radios === */
 async function resetRadiosForTramo(tramoId){
   if (!window.firebase || !firebase.firestore) { alert('Firebase no está disponible en esta página.'); return; }
-  const tramo = (tramoId || window.TRAMO_ID || '').toString().trim();
+  const tramo = (tramoId || getTramoId() || '').toString().trim();
   if (!tramo) { alert('Tramo no determinado.'); return; }
 
   if (!confirm(`Vas a borrar TODOS los clics de radios del tramo "${tramo}".\n\nEsto NO borra las tarjetas ni tiempos.\n\n¿Continuar?`)) return;
@@ -537,13 +572,13 @@ async function resetRadiosForTramo(tramoId){
     alert('Error al borrar la subcolección de radios. Revisa permisos/Reglas Firestore.');
   }
 }
-if (btnResetRadios) { btnResetRadios.addEventListener('click', () => resetRadiosForTramo(window.TRAMO_ID)); }
+if (btnResetRadios) { btnResetRadios.addEventListener('click', () => resetRadiosForTramo(getTramoId())); }
 
 /* === Exportar PDF === */
 const btnExportar = document.getElementById('btnExportar');
 const printTitle = document.getElementById('printTitle');
 function exportarPDF() {
-  const tramo = prompt('Nombre del tramo (se usará como título y nombre del archivo):', (window.TRAMO_ID||'SECeD-Control'));
+  const tramo = prompt('Nombre del tramo (se usará como título y nombre del archivo):', (getTramoId()||'SECeD-Control'));
   if (tramo === null) return;
   const name = (tramo || 'SECeD-Control').trim();
   printTitle.textContent = name;
@@ -587,7 +622,7 @@ function fillRecent(){
   if(!tramoRecent) return;
   tramoRecent.innerHTML = '';
   let list=[]; try{ list = JSON.parse(localStorage.getItem('seced_tramos_recent')||'[]'); }catch{}
-  const curr = (window.TRAMO_ID||'').toString();
+  const curr = (getTramoId()||'').toString();
   if(curr && !list.includes(curr)) list = [curr, ...list].slice(0,10);
   for(const t of list){
     const li=document.createElement('li'); const b=document.createElement('button');
@@ -637,10 +672,10 @@ if (btnTramo) btnTramo.addEventListener('click', (e)=>{ e.stopPropagation(); tog
 if (tramoGo) tramoGo.addEventListener('click', ()=> goToTramo(tramoInput && tramoInput.value));
 if (tramoInput) tramoInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goToTramo(tramoInput.value); });
 function setTramoBadge(name){
-  const t = (name || window.TRAMO_ID || '').toString();
+  const t = (name || getTramoId() || '').toString();
   if (typeof btnTramo !== 'undefined' && btnTramo) btnTramo.textContent = `TRAMO: ${t || '—'} ▾`;
 }
-setTramoBadge(window.TRAMO_ID);
+setTramoBadge(getTramoId());
 
 /* === AVISO de Panel Radio -> Editor (banner rojo) === */
 
@@ -707,8 +742,8 @@ function showRadioAlertBanner(radio) {
   if (document.body.classList.contains('radio-skin')) return; // no escuchar en panel radio
   try{
     if (!window.firebase || !firebase.firestore) return;
-    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
     const db = firebase.firestore();
+    const tramo = getTramoId();
     const lastKey = `seced_last_alert_${tramo}`;
 
     let lastSeen = 0; try { lastSeen = Number(localStorage.getItem(lastKey) || '0'); } catch {}
