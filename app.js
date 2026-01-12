@@ -1,4 +1,4 @@
-/* -------------- app.js (v=16 + R1 en SALIDA + LLEGADA marca último radio) -------------- */
+/* -------------- app.js (v=16 + auto-LL) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -27,16 +27,12 @@ const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
 
-/* === Helpers tramo/Firestore reutilizables === */
-function getTramoId(){
-  return (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
-}
-
 async function clearRadioDocFor(value){
   try{
     if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || '1').toString();
     const db = firebase.firestore();
-    await db.collection('tramos').doc(getTramoId()).collection('radios').doc(String(value)).delete();
+    await db.collection('tramos').doc(tramo).collection('radios').doc(String(value)).delete();
   }catch(e){}
 }
 
@@ -120,7 +116,7 @@ function existsValue(val){ return items.some(x => x.value === val); }
 function logAudit(action, detail){
   try {
     const entry = {
-      tramo:(getTramoId()||'').toString(),
+      tramo:(window.TRAMO_ID||'').toString(),
       actor:(window.OPERATOR||'').toString()||'—',
       action, detail:detail||{},
       clientTime:new Date(nowNetMs()).toISOString()
@@ -135,7 +131,7 @@ function askAudit(){
   if (key === (window.AUDIT_KEY||'')) { auditUnlocked=true; return true; }
   alert('Clave incorrecta.'); return false;
 }
-function updateAuditMeta(){ if (auditTramo) auditTramo.textContent=(getTramoId()||'—'); if (auditOperador) auditOperador.textContent=(window.OPERATOR||'—')||'—'; }
+function updateAuditMeta(){ if (auditTramo) auditTramo.textContent=(window.TRAMO_ID||'—'); if (auditOperador) auditOperador.textContent=(window.OPERATOR||'—')||'—'; }
 async function openAudit(){ if (!auditUnlocked && !askAudit()) return; updateAuditMeta(); if (auditPanel) auditPanel.classList.remove('hidden'); await refreshAudit(); }
 function closeAudit(){ if (auditPanel) auditPanel.classList.add('hidden'); }
 async function refreshAudit(){
@@ -173,7 +169,7 @@ function auditCSV(){ (async ()=>{
   }
   const blob = new Blob([lines.join('\n')], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download=`auditoria_${(getTramoId()||'tramo').toString()}.csv`;
+  const a = document.createElement('a'); a.href=url; a.download=`auditoria_${(window.TRAMO_ID||'tramo').toString()}.csv`;
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 })(); }
 function exportStatesCSV(){
@@ -183,7 +179,7 @@ function exportStatesCSV(){
     const lines = [headers.join(',')];
     for(const it of arr){
       const row = [
-        (getTramoId()||'').toString().replace(/,/g,' '),
+        (window.TRAMO_ID||'').toString().replace(/,/g,' '),
         it.value,
         it.status||'normal',
         (it.rNumber!=null? it.rNumber:''),
@@ -197,7 +193,7 @@ function exportStatesCSV(){
     }
     const blob = new Blob([lines.join('\n')], {type:'text/csv'});
     const url = URL.createObjectURL(blob);
-    const a=document.createElement('a'); a.href=url; a.download=`estados_${(getTramoId()||'tramo')}.csv`;
+    const a=document.createElement('a'); a.href=url; a.download=`estados_${(window.TRAMO_ID||'tramo')}.csv`;
     document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   }catch(e){ console.error('exportStatesCSV error', e); alert('Error exportando estados.'); }
 }
@@ -214,10 +210,76 @@ if (btnOperador) btnOperador.addEventListener('click', ()=>{
 
 /* === Radio marks (bolitas) === */
 window._radioMarks = new Map();
+
+/* ===== [AUTO-LL] configuración y utilidades ===== */
+let LAST_RADIO = 3; // fallback por si no se conoce
+(function initLastRadio(){
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || '1').toString();
+    const db = firebase.firestore();
+    db.collection('tramos').doc(tramo).get().then(doc=>{
+      if (!doc.exists) return;
+      const d = doc.data() || {};
+      const fromCfg = Number(d.radiosCount || d.maxRadio || 0);
+      if (Number.isFinite(fromCfg) && fromCfg > 0) LAST_RADIO = fromCfg;
+    }).catch(()=>{});
+  }catch{}
+})();
+function updateLastRadioFromMarksArr(arr){
+  if (!Array.isArray(arr)) return;
+  const max = arr.reduce((m,n)=> Number.isFinite(n) ? Math.max(m,n) : m, 0);
+  if (max > LAST_RADIO) LAST_RADIO = max;
+}
+function findItem(valNum){
+  valNum = Number(valNum);
+  return items.find(x => Number(x.value) === valNum) || null;
+}
+// escritura en Firestore del último radio:
+async function markLastRadioInFirestore(value){
+  try{
+    if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || '1').toString();
+    const db = firebase.firestore();
+    const docRef = db.collection('tramos').doc(tramo).collection('radios').doc(String(value));
+    await docRef.set({
+      last: LAST_RADIO,
+      marks: firebase.firestore.FieldValue.arrayUnion(LAST_RADIO)
+    }, { merge:true });
+  }catch(e){
+    console.warn('markLastRadioInFirestore error', e);
+  }
+}
+// auto-marcar llegada si marks incluye el último radio
+function maybeAutoMarkArrivalFromRadios(){
+  try{
+    // Solo si NO es panel radio (no tocar panel) y no romper editor.
+    if (document.body.classList.contains('radio-skin')) return;
+
+    for (const it of items){
+      if (!it || it.status === 'abandon') continue;
+      if (it.tLlegada) continue; // ya en llegada
+      const arr = window._radioMarks.get(String(it.value));
+      if (!Array.isArray(arr) || arr.length === 0) continue;
+      updateLastRadioFromMarksArr(arr);
+      if (arr.includes(LAST_RADIO)) {
+        // marcar llegada suave
+        it.selected = true;
+        if (!it.tLlegada) it.tLlegada = nowNetMs();
+        if (!Array.isArray(it.llegadasHist)) it.llegadasHist = [];
+        render();
+        if (typeof syncSave === 'function') syncSave();
+        try { logAudit('auto_llegada_por_ultimo_radio', { value: it.value, lastRadio: LAST_RADIO }); } catch {}
+      }
+    }
+  }catch(e){ console.warn('maybeAutoMarkArrivalFromRadios error', e); }
+}
+
 (function subscribeRadioMarks(){
   try{
+    const tramo = (window.TRAMO_ID || '1').toString();
     const db = firebase.firestore();
-    db.collection('tramos').doc(getTramoId()).collection('radios')
+    db.collection('tramos').doc(tramo).collection('radios')
       .onSnapshot(snap => {
         snap.docChanges().forEach(ch => {
           const id = ch.doc.id;
@@ -227,59 +289,15 @@ window._radioMarks = new Map();
           else {
             const clean = arr.map(x => parseInt(x,10)).filter(n => Number.isFinite(n) && n>0).sort((a,b)=>a-b);
             window._radioMarks.set(id, clean);
+            updateLastRadioFromMarksArr(clean); // [AUTO-LL] observar máximo
           }
         });
         if (typeof render === 'function') render();
+        // [AUTO-LL] tras pintar, evaluar auto-llegada por último radio:
+        maybeAutoMarkArrivalFromRadios();
       }, err => console.warn('radio marks listener error', err));
   }catch(e){ console.warn('radio marks subscribe error', e); }
 })();
-
-/* === NUEVO: detectar el último número de radio del tramo === */
-function getMaxRadioNumber(){
-  try{
-    let max = 0;
-    if (window._radioMarks instanceof Map) {
-      for (const arr of window._radioMarks.values()){
-        if (!Array.isArray(arr)) continue;
-        for (const r of arr) if (Number.isFinite(r) && r > max) max = r;
-      }
-    }
-    return max; // 0 si aún no hay ninguna marca en el tramo
-  }catch{ return 0; }
-}
-
-/* === NUEVO: fijar R1 en SALIDA (igual que te pasé) === */
-async function setR1For(dorsal){
-  try{
-    if (!window.firebase || !firebase.firestore) return;
-    const db = firebase.firestore();
-    const docRef = db.collection('tramos').doc(getTramoId()).collection('radios').doc(String(dorsal));
-    await docRef.set({
-      last: 1,
-      marks: firebase.firestore.FieldValue.arrayUnion(1),
-      tSalida: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  }catch(e){
-    console.warn('setR1For error', e);
-  }
-}
-
-/* === NUEVO: fijar último radio en LLEGADA (sin tocar nada más) === */
-async function setLastRadioFor(dorsal){
-  try{
-    if (!window.firebase || !firebase.firestore) return;
-    const lastR = getMaxRadioNumber();
-    if (!lastR || lastR < 1) return; // si aún no conocemos radios, no forzamos nada
-    const db = firebase.firestore();
-    const docRef = db.collection('tramos').doc(getTramoId()).collection('radios').doc(String(dorsal));
-    await docRef.set({
-      last: lastR,
-      marks: firebase.firestore.FieldValue.arrayUnion(lastR)
-    }, { merge: true });
-  }catch(e){
-    console.warn('setLastRadioFor error', e);
-  }
-}
 
 /* === Render tarjetas (igual que tu versión) === */
 function render() {
@@ -319,7 +337,7 @@ function render() {
       const badge = document.createElement('div'); badge.className = 'badge-r'; badge.textContent = 'R' + item.rNumber; card.appendChild(badge);
     }
 
-    if (!VIEWER) card.addEventListener('click', () => {
+    if (!VIEWER) card.addEventListener('click', async () => {
       if (item.status === 'abandon') {
         item.status = 'normal'; item.rNumber = null; item.tAbandono = null; item.selected = false;
         render(); if (typeof syncSave === 'function') syncSave();
@@ -327,12 +345,14 @@ function render() {
         return;
       }
       if (window.MODE === 'SALIDA') return;
+
       if (!item.selected) {
         item.selected = true; if (!item.tLlegada) item.tLlegada = nowNetMs();
-        /* === NUEVO: al marcar LLEGADA, forzamos el paso por el ÚLTIMO RADIO conocido === */
-        try { setLastRadioFor(item.value); } catch(e){}
         render(); if (typeof syncSave === 'function') syncSave();
         logAudit('llegada', { value:item.value, tLlegada:item.tLlegada });
+
+        // ===== [AUTO-LL] si marcamos llegada manualmente, empujar último radio en Firestore también
+        try { await markLastRadioInFirestore(item.value); } catch(e){}
       } else {
         item.selected = false; const old = item.tLlegada;
         if (!Array.isArray(item.llegadasHist)) item.llegadasHist = [];
@@ -473,16 +493,9 @@ async function addNumber() {
 
   render();
   if (typeof syncSave === 'function') syncSave();
-
-  // En SALIDA marcamos R1; en otros modos limpiamos radios previos
-  if (window.MODE === 'SALIDA') {
-    await setR1For(num);
-  } else {
-    await clearRadioDocFor(num);
-  }
-
+  await clearRadioDocFor(num);
   input.value = ''; input.focus();
-  logAudit('alta', { value:num, tSalida:tS, mode: window.MODE });
+  logAudit('alta', { value:num, tSalida:tS });
 }
 
 async function editNumber(prevVal) {
@@ -547,7 +560,7 @@ if (btnLimpiar) btnLimpiar.addEventListener('click', () => {
 /* === Reset radios === */
 async function resetRadiosForTramo(tramoId){
   if (!window.firebase || !firebase.firestore) { alert('Firebase no está disponible en esta página.'); return; }
-  const tramo = (tramoId || getTramoId() || '').toString().trim();
+  const tramo = (tramoId || window.TRAMO_ID || '').toString().trim();
   if (!tramo) { alert('Tramo no determinado.'); return; }
 
   if (!confirm(`Vas a borrar TODOS los clics de radios del tramo "${tramo}".\n\nEsto NO borra las tarjetas ni tiempos.\n\n¿Continuar?`)) return;
@@ -572,13 +585,13 @@ async function resetRadiosForTramo(tramoId){
     alert('Error al borrar la subcolección de radios. Revisa permisos/Reglas Firestore.');
   }
 }
-if (btnResetRadios) { btnResetRadios.addEventListener('click', () => resetRadiosForTramo(getTramoId())); }
+if (btnResetRadios) { btnResetRadios.addEventListener('click', () => resetRadiosForTramo(window.TRAMO_ID)); }
 
 /* === Exportar PDF === */
 const btnExportar = document.getElementById('btnExportar');
 const printTitle = document.getElementById('printTitle');
 function exportarPDF() {
-  const tramo = prompt('Nombre del tramo (se usará como título y nombre del archivo):', (getTramoId()||'SECeD-Control'));
+  const tramo = prompt('Nombre del tramo (se usará como título y nombre del archivo):', (window.TRAMO_ID||'SECeD-Control'));
   if (tramo === null) return;
   const name = (tramo || 'SECeD-Control').trim();
   printTitle.textContent = name;
@@ -622,7 +635,7 @@ function fillRecent(){
   if(!tramoRecent) return;
   tramoRecent.innerHTML = '';
   let list=[]; try{ list = JSON.parse(localStorage.getItem('seced_tramos_recent')||'[]'); }catch{}
-  const curr = (getTramoId()||'').toString();
+  const curr = (window.TRAMO_ID||'').toString();
   if(curr && !list.includes(curr)) list = [curr, ...list].slice(0,10);
   for(const t of list){
     const li=document.createElement('li'); const b=document.createElement('button');
@@ -672,10 +685,10 @@ if (btnTramo) btnTramo.addEventListener('click', (e)=>{ e.stopPropagation(); tog
 if (tramoGo) tramoGo.addEventListener('click', ()=> goToTramo(tramoInput && tramoInput.value));
 if (tramoInput) tramoInput.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goToTramo(tramoInput.value); });
 function setTramoBadge(name){
-  const t = (name || getTramoId() || '').toString();
+  const t = (name || window.TRAMO_ID || '').toString();
   if (typeof btnTramo !== 'undefined' && btnTramo) btnTramo.textContent = `TRAMO: ${t || '—'} ▾`;
 }
-setTramoBadge(getTramoId());
+setTramoBadge(window.TRAMO_ID);
 
 /* === AVISO de Panel Radio -> Editor (banner rojo) === */
 
@@ -742,8 +755,8 @@ function showRadioAlertBanner(radio) {
   if (document.body.classList.contains('radio-skin')) return; // no escuchar en panel radio
   try{
     if (!window.firebase || !firebase.firestore) return;
+    const tramo = (window.TRAMO_ID || new URLSearchParams(location.search).get('tramo') || '1').toString();
     const db = firebase.firestore();
-    const tramo = getTramoId();
     const lastKey = `seced_last_alert_${tramo}`;
 
     let lastSeen = 0; try { lastSeen = Number(localStorage.getItem(lastKey) || '0'); } catch {}
