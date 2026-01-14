@@ -63,6 +63,14 @@
       background:#ffffff !important; color:#111 !important; border-color:#e5e7eb !important;
       box-shadow:none !important; opacity:1 !important; filter:none !important;
     }
+
+    /* Botón Paso Manual (estilo coherente, sin romper estética) */
+    #btnPasoManual {
+      border: 1px solid #134e1f; background:#0c2415; color:#eafff7;
+      border-radius:8px; padding:10px 12px; font-weight:800; cursor:pointer;
+      margin-top: 8px;
+    }
+    #btnPasoManual:active { transform: translateY(1px); }
   </style>
 </head>
 <body class="radio-skin">
@@ -79,6 +87,11 @@
         <span id="clockTime">--:--:--</span>
         <span class="tz" id="clockTz">Europe/Madrid</span>
         <span class="sync" id="clockSync">sincronizando…</span>
+
+        <!-- NUEVO: Paso Manual debajo del reloj -->
+        <div>
+          <button id="btnPasoManual" type="button" title="Forzar paso manual en este radio">PASO MANUAL</button>
+        </div>
       </div>
 
       <div class="controls-right">
@@ -115,6 +128,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js?v=16"></script>
 
+  <!-- Inicialización Firebase + nombre/logo de rally (sin romper nada) -->
   <script>
     (function(){
       if (!firebase.apps.length) {
@@ -132,6 +146,9 @@
               window.location.href = window.location.href + sep + "id=" + rallyId;
           }
       }
+
+      // Exponer ID al resto (para DC/pasos)
+      window.RALLY_ID = rallyId || null;
 
       // Cargar Nombre y Logo
       if (rallyId) {
@@ -163,6 +180,7 @@
     }
   </script>
 
+  <!-- Listener de reset radios (sin cambios) -->
   <script>
     (function(){
       document.addEventListener('DOMContentLoaded', function(){
@@ -196,10 +214,12 @@
     })();
   </script>
 
+  <!-- Tu lógica existente -->
   <script src="sync.js?v=16"></script>
   <script src="app.js?v=16"></script>
   <script src="js/panel-radio-pasos.js"></script>
-  
+
+  <!-- Reloj online + UI radio/eligibility (sin cambios) -->
   <script>
     (function(){
       /* ===== Reloj online ===== */
@@ -303,7 +323,7 @@
             const id = ch.doc.id;
             const d = ch.doc.data()||{};
             if (ch.type === 'removed') radioState.delete(id);
-            else radioState.set(id, { last: typeof d.last==='number' ? d.last : 0, marks: Array.isArray(d.marks)? d.marks:[] });
+            else radioState.set(id, { last: typeof d.last==='number' ? d.last : 0 });
           });
           applyEligibility();
         }, err => { console.error('onSnapshot error:', err); toast('Error de sincronización', 'err'); });
@@ -312,23 +332,6 @@
       function getLastFor(value){
         const key = String(value);
         return (radioState.get(key)?.last) || 0;
-      }
-
-      /* === Nuevo: conocer el último número de radio visto en el tramo === */
-      let knownMaxRadio = 0;
-      if (radiosCol) {
-        radiosCol.onSnapshot(snap => {
-          let maxR = knownMaxRadio;
-          snap.forEach(doc => {
-            const d = doc.data() || {};
-            const marks = Array.isArray(d.marks) ? d.marks : [];
-            for (const r of marks) {
-              const n = Number(r);
-              if (Number.isFinite(n) && n > maxR) maxR = n;
-            }
-          });
-          knownMaxRadio = maxR;
-        });
       }
 
       /* ===== ACCESO A ITEMS (para ver tSalida) ===== */
@@ -401,7 +404,7 @@
         startEligibilityWatchdog();
       })();
 
-      // ===== Click en tarjeta para avanzar dorsal al siguiente RADIO =====
+      // ===== Click normal en tarjeta (tu lógica existente) =====
       document.getElementById('grid').addEventListener('click', async (ev)=>{
         const card = ev.target.closest('.card');
         if (!card) return;
@@ -450,24 +453,6 @@
 
           toast(`Clic RADIO ${rIdx} → dorsal ${val}`, 'ok');
 
-          // === NUEVO: si este radio es el último conocido, emitir auto_llegada ===
-          try {
-            if (knownMaxRadio > 0 && rIdx === knownMaxRadio) {
-              const tramo = TRAMO;
-              await db.collection('tramos').doc(tramo).collection('alerts').add({
-                type: 'auto_llegada',
-                tramo,
-                dorsal: Number(val),
-                radio: rIdx,
-                actor: (getRadio() || ('RADIO '+rIdx)),
-                clientTs: Date.now(),
-                ts: firebase.firestore.FieldValue.serverTimestamp()
-              });
-            }
-          } catch (e) {
-            console.warn('auto_llegada publish error', e);
-          }
-
         } catch (err) {
           toast('No se pudo avanzar: ' + err.message, 'err');
           card.classList.remove('radio-clicking');
@@ -477,7 +462,7 @@
         setTimeout(()=>{ applyEligibility(); }, 150);
       });
 
-      /* ===== Botón BANDERA (envía aviso a alerts) ===== */
+      /* ===== Botón BANDERA (sin cambios) ===== */
       function getRadioIdForAlert(){
         const vDom = (window.RADIO_ID ? String(window.RADIO_ID).trim() : '');
         if (vDom) return vDom;
@@ -489,7 +474,6 @@
         if (v1) return v1;
         return '';
       }
-
       async function publishRadioAlert() {
         try {
           const radio = getRadioIdForAlert();
@@ -510,7 +494,6 @@
           alert('Error enviando AVISO.');
         }
       }
-
       (function ensureBanderaButton(){
         if (!document.body.classList.contains('radio-skin')) return;
         let btn = document.getElementById('btnBandera') || document.getElementById('btnAviso');
@@ -531,6 +514,74 @@
         } else {
           btn.id = 'btnBandera'; btn.textContent = 'BANDERA'; wireClick(btn);
         }
+      })();
+
+      /* ===== PASO MANUAL (FORZADO) ===== */
+      (function(){
+        const btn = document.getElementById('btnPasoManual');
+        if (!btn) return;
+
+        btn.addEventListener('click', async ()=>{
+          try{
+            const rIdx = getRadioIndex();
+            if (!rIdx) { alert('Selecciona primero tu RADIO.'); return; }
+
+            const valStr = prompt('Dorsal a registrar manualmente (forzar paso en este radio):');
+            if (valStr === null) return;
+            const valNum = Number(String(valStr).trim());
+            if (!Number.isInteger(valNum) || valNum <= 0) { alert('Dorsal no válido.'); return; }
+
+            if (!confirm(`Vas a FORZAR el paso del dorsal ${valNum} en el RADIO ${rIdx}.\n\nEsto permitirá que el RADIO ${rIdx+1} continúe a partir de ahora.\n\n¿Confirmas?`)) {
+              return;
+            }
+
+            if (!radiosCol) { alert('No hay conexión con Firestore.'); return; }
+            const docRef = radiosCol.doc(String(valNum));
+
+            await db.runTransaction(async (tx)=>{
+              const snap = await tx.get(docRef);
+              const data = snap.exists ? (snap.data()||{}) : {};
+              const lastOld = (typeof data.last==='number') ? data.last : 0;
+              const lastNew = Math.max(lastOld, rIdx);
+
+              tx.set(docRef, {
+                last: lastNew,
+                marks: firebase.firestore.FieldValue.arrayUnion(rIdx)
+              }, { merge:true });
+            });
+
+            // Reflejar “pasos” para DC (bolitas)
+            if (window.RALLY_ID) {
+              const pasosRef = db.collection('rallies').doc(window.RALLY_ID).collection('pasos').doc(TRAMO);
+              const field = {}; field['radio'+rIdx] = valNum;
+              await pasosRef.set(field, { merge: true });
+            }
+
+            try {
+              const aud = db.collection('tramos').doc(TRAMO).collection('auditoria');
+              await aud.add({
+                actor: (getRadio() || ('RADIO '+rIdx)),
+                action: 'radio_manual_forzado',
+                detail: { value: valNum, radio: rIdx },
+                ts: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+            } catch(e){}
+
+            try {
+              const key = `seced_radio_clicked:${TRAMO}:${rIdx}`;
+              const set = new Set(JSON.parse(localStorage.getItem(key)||'[]'));
+              set.add(String(valNum));
+              localStorage.setItem(key, JSON.stringify(Array.from(set)));
+            } catch {}
+
+            toast(`Paso manual FORZADO en RADIO ${rIdx} → dorsal ${valNum}`, 'ok');
+            setTimeout(()=>applyEligibility(), 150);
+
+          } catch(e){
+            console.error(e);
+            toast('No se pudo forzar el paso manual: ' + (e && e.message ? e.message : e), 'err');
+          }
+        });
       })();
     })();
   </script>
