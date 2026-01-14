@@ -1,4 +1,4 @@
-/* -------------- app.js (v=16 + auto-LL) -------------- */
+/* -------------- app.js (v=16, AUTO_LL desactivado) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -26,6 +26,9 @@ const tramoMenu  = document.getElementById('tramoMenu');
 const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
+
+/* ===== NUEVO: bandera global para auto-llegada (desactivada) ===== */
+const AUTO_LL = false; // <<--- si en el futuro lo quieres, pon true
 
 async function clearRadioDocFor(value){
   try{
@@ -211,10 +214,11 @@ if (btnOperador) btnOperador.addEventListener('click', ()=>{
 /* === Radio marks (bolitas) === */
 window._radioMarks = new Map();
 
-/* ===== [AUTO-LL] configuración y utilidades ===== */
-let LAST_RADIO = 3; // fallback por si no se conoce
+/* ===== Bloque auto-LL (queda inerte por AUTO_LL=false) ===== */
+let LAST_RADIO = 3; // fallback
 (function initLastRadio(){
   try{
+    if (!AUTO_LL) return; // inactivo
     if (!window.firebase || !firebase.firestore) return;
     const tramo = (window.TRAMO_ID || '1').toString();
     const db = firebase.firestore();
@@ -227,7 +231,9 @@ let LAST_RADIO = 3; // fallback por si no se conoce
   }catch{}
 })();
 function updateLastRadioFromMarksArr(arr){
+  if (!AUTO_LL) return;
   if (!Array.isArray(arr)) return;
+  // si algún día lo activas y NO quieres deducir por marks, comenta lo de abajo:
   const max = arr.reduce((m,n)=> Number.isFinite(n) ? Math.max(m,n) : m, 0);
   if (max > LAST_RADIO) LAST_RADIO = max;
 }
@@ -235,8 +241,8 @@ function findItem(valNum){
   valNum = Number(valNum);
   return items.find(x => Number(x.value) === valNum) || null;
 }
-// escritura en Firestore del último radio:
 async function markLastRadioInFirestore(value){
+  if (!AUTO_LL) return; // inactivo
   try{
     if (!window.firebase || !firebase.firestore) return;
     const tramo = (window.TRAMO_ID || '1').toString();
@@ -250,20 +256,17 @@ async function markLastRadioInFirestore(value){
     console.warn('markLastRadioInFirestore error', e);
   }
 }
-// auto-marcar llegada si marks incluye el último radio
 function maybeAutoMarkArrivalFromRadios(){
+  if (!AUTO_LL) return; // inactivo
   try{
-    // Solo si NO es panel radio (no tocar panel) y no romper editor.
     if (document.body.classList.contains('radio-skin')) return;
-
     for (const it of items){
       if (!it || it.status === 'abandon') continue;
-      if (it.tLlegada) continue; // ya en llegada
+      if (it.tLlegada) continue;
       const arr = window._radioMarks.get(String(it.value));
       if (!Array.isArray(arr) || arr.length === 0) continue;
       updateLastRadioFromMarksArr(arr);
       if (arr.includes(LAST_RADIO)) {
-        // marcar llegada suave
         it.selected = true;
         if (!it.tLlegada) it.tLlegada = nowNetMs();
         if (!Array.isArray(it.llegadasHist)) it.llegadasHist = [];
@@ -289,11 +292,10 @@ function maybeAutoMarkArrivalFromRadios(){
           else {
             const clean = arr.map(x => parseInt(x,10)).filter(n => Number.isFinite(n) && n>0).sort((a,b)=>a-b);
             window._radioMarks.set(id, clean);
-            updateLastRadioFromMarksArr(clean); // [AUTO-LL] observar máximo
+            updateLastRadioFromMarksArr(clean);
           }
         });
         if (typeof render === 'function') render();
-        // [AUTO-LL] tras pintar, evaluar auto-llegada por último radio:
         maybeAutoMarkArrivalFromRadios();
       }, err => console.warn('radio marks listener error', err));
   }catch(e){ console.warn('radio marks subscribe error', e); }
@@ -351,8 +353,8 @@ function render() {
         render(); if (typeof syncSave === 'function') syncSave();
         logAudit('llegada', { value:item.value, tLlegada:item.tLlegada });
 
-        // ===== [AUTO-LL] si marcamos llegada manualmente, empujar último radio en Firestore también
-        try { await markLastRadioInFirestore(item.value); } catch(e){}
+        // Si en el futuro reactivas AUTO_LL, también se empujará el último radio:
+        if (AUTO_LL) { try { await markLastRadioInFirestore(item.value); } catch(e){} }
       } else {
         item.selected = false; const old = item.tLlegada;
         if (!Array.isArray(item.llegadasHist)) item.llegadasHist = [];
