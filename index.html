@@ -247,5 +247,63 @@
       subscribeStopResume();
     })();
   </script>
+
+  <!-- INSERCIÓN MÍNIMA: al dar de alta en SALIDA, marcar R1 en Firestore -->
+  <script>
+    (function(){
+      // Esperamos a que app.js haya definido addNumber y _getItems
+      function setup(){
+        if (typeof addNumber !== 'function') return false;
+        if (!window.firebase || !firebase.firestore) return false;
+
+        const db = firebase.firestore();
+        const TRAMO = (new URLSearchParams(location.search).get('tramo') || window.TRAMO_ID || '1').toString();
+
+        async function markR1For(dorsal){
+          try{
+            await db.collection('tramos')
+              .doc(TRAMO)
+              .collection('radios')
+              .doc(String(dorsal))
+              .set({
+                last: 1,
+                marks: firebase.firestore.FieldValue.arrayUnion(1)
+              }, { merge: true });
+          }catch(e){
+            console.warn('No se pudo marcar R1 para dorsal', dorsal, e);
+          }
+        }
+
+        const originalAdd = addNumber;
+        window.addNumber = async function(...args){
+          // Antes: tamaño actual
+          const before = (typeof window._getItems === 'function') ? window._getItems().length : null;
+
+          await originalAdd.apply(this, args);
+
+          // Solo en modo SALIDA activamos R1
+          if (window.MODE === 'SALIDA') {
+            // Detectar dorsal recién añadido (último de la lista)
+            const list = (typeof window._getItems === 'function') ? window._getItems() : [];
+            let dorsalNuevo = null;
+            if (before !== null && list.length === before + 1) {
+              dorsalNuevo = list[list.length - 1]?.value;
+            } else if (list.length > 0) {
+              dorsalNuevo = list[list.length - 1]?.value;
+            }
+            if (dorsalNuevo != null) {
+              await markR1For(dorsalNuevo);
+            }
+          }
+        };
+
+        return true;
+      }
+
+      if (!setup()) {
+        window.addEventListener('load', setup, { once:true });
+      }
+    })();
+  </script>
 </body>
 </html>
