@@ -265,3 +265,10 @@ body.radio-skin .radio-dots{
 body.radio-skin .radio-dots {
   display: none !important;
 }
+
+/* Reanudación tras abandono: resaltar radio en VERDE */
+.radio-dots .radio-dot.resumed {
+  background: #22c55e !important;
+  border-color: #16a34a !important;
+  box-shadow: 0 0 0 2px rgba(34,197,94,.35) inset !important;
+}
