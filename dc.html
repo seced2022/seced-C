@@ -4,154 +4,40 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Dirección de Carrera</title>
-
-  <!-- Hoja de estilos de tu proyecto -->
   <link rel="stylesheet" href="styles.css">
-
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
   <style>
-    /* Que el “recuadro” principal ocupe casi todo el ancho */
-    .app {
-      max-width: 98vw;
-      margin: 0 auto;
-      position: relative;
-    }
-
-    /* Reloj arriba a la derecha, muy visible */
-    .net-clock {
-      position: absolute;
-      top: 12px;
-      right: 14px;
-      z-index: 1000;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-weight: 900;
-      font-size: 20px; /* tamaño legible */
-      letter-spacing: 0.5px;
-      background: rgba(15, 26, 20, 0.85);
-      color: #eafff7;
-      border: 1px solid #1d2d23;
-      border-radius: 10px;
-      padding: 6px 10px;
-      box-shadow: 0 8px 18px rgba(0,0,0,.25);
-      user-select: none;
-    }
-
-    /* Layout de tarjetas (igual, pero ocupando ancho total) */
-    .grid-dc {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      padding: 15px;
-      width: 100%;
-      box-sizing: border-box;
-    }
-
-    .tc-selector-bar {
-      padding: 10px 20px;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      background: #0f1a14;
-      border-bottom: 1px solid #1d2d23;
-    }
-
-    .btn-tc-toggle {
-      background: #1e293b;
-      color: white;
-      border: 1px solid #334155;
-      padding: 8px 16px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-    }
+    .grid-dc { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; width: 100%; box-sizing: border-box; }
+    .tc-selector-bar { padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 10px; background: #0f1a14; border-bottom: 1px solid #1d2d23; }
+    .btn-tc-toggle { background: #1e293b; color: white; border: 1px solid #334155; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
     .btn-tc-toggle.active { background: #16a34a; border-color: #fff; }
-
-    .card-dc {
-      background: #0f1a14;
-      border: 1px solid #1d2d23;
-      border-radius: 12px;
-      padding: 15px;
-      display: flex;
-      flex-direction: column;
-      height: 500px;
-    }
-
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
+    .card-dc { background: #0f1a14; border: 1px solid #1d2d23; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; height: 500px; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .map-dc { flex: 1; border-radius: 8px; background: #000; border: 1px solid #1d2d23; z-index: 1; }
 
-    /* Botones de Control */
-    .btn-stop {
-      background: #7f1d1d;
-      color: white;
-      border: none;
-      padding: 10px 15px;
-      border-radius: 5px;
-      font-weight: 800;
-      cursor: pointer;
-    }
+    .btn-stop { background: #7f1d1d; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: 800; cursor: pointer; }
     .btn-stop.blink { background: #ff0000; animation: blinker 1s linear infinite; box-shadow: 0 0 15px #ff0000; }
     @keyframes blinker { 50% { opacity: 0.4; } }
+    .btn-resume { background: #15803d; color: white; border: 1px solid #16a34a; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: 800; margin-left: 5px; }
 
-    .btn-resume {
-      background: #15803d;
-      color: white;
-      border: 1px solid #16a34a;
-      padding: 10px 15px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: 800;
-      margin-left: 5px;
-    }
-
-    /* Badges de Radios */
-    .radio-badge {
-      background: #333;
-      border: 2px solid #666;
-      border-radius: 20px;
-      color: #fff;
-      font-weight: bold;
-      text-align: center;
-      min-width: 70px;
-      padding: 2px 6px;
-      font-size: 13px;
-    }
+    .radio-badge { background: #333; border: 2px solid #666; border-radius: 20px; color: #fff; font-weight: bold; text-align: center; min-width: 70px; padding: 2px 6px; font-size: 13px; }
     .radio-badge.active { background: #ffd60a; color: #000; border-color: #fff; }
-
     .tc-title { color: #22c55e; font-size: 1.3rem; margin: 0; font-weight: 900; }
 
-    @media (max-width: 900px) {
-      .grid-dc { grid-template-columns: 1fr; }
-      .net-clock { font-size: 18px; top: 8px; right: 10px; }
-    }
+    @media (max-width: 900px) { .grid-dc { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
   <main class="app">
-    <!-- Reloj en la esquina superior derecha -->
-    <div id="netClock" class="net-clock">00:00:00.000</div>
-
-    <div class="brand">
-      <img id="dcLogo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/>
-    </div>
+    <div class="brand"><img id="dcLogo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/></div>
     <h1 id="dcRallyName">SECeD - Dirección de Carrera</h1>
-
     <div id="tcSelector" class="tc-selector-bar"></div>
     <div id="gridDC" class="grid-dc"></div>
   </main>
 
-  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js"></script>
-
-  <!-- Leaflet -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
@@ -160,62 +46,22 @@
     let configGlobal = null;
     let tramosVisibles = new Set();
 
-    /* ===== Reloj NTP (worldtimeapi) HH:MM:SS.mmm ===== */
-    (function setupNetClock(){
-      const TIMEZONE = 'Europe/Madrid';
-      const el = document.getElementById('netClock');
-      if (!el) return;
-
-      let offsetMs = 0, tickTimer = null, resyncTimer = null;
-
-      function pad2(n){ return String(n).padStart(2,'0'); }
-      function pad3(n){ return String(n).padStart(3,'0'); }
-      function render(){
-        const now = new Date(Date.now() + offsetMs);
-        const h = pad2(now.getHours());
-        const m = pad2(now.getMinutes());
-        const s = pad2(now.getSeconds());
-        const ms = pad3(now.getMilliseconds());
-        el.textContent = `${h}:${m}:${s}.${ms}`;
-      }
-      async function syncTime(){
-        try{
-          const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache: 'no-store' });
-          if (!res.ok) throw new Error('HTTP '+res.status);
-          const data = await res.json();
-          const apiMs = Date.parse(data.datetime);
-          offsetMs = apiMs - Date.now();
-        }catch(e){
-          // si falla, mantenemos el offset anterior (o 0)
-        }
-      }
-      function start(){
-        clearInterval(tickTimer); tickTimer = setInterval(render, 25); // 40 FPS para ms fluidas
-        render();
-        clearInterval(resyncTimer); resyncTimer = setInterval(syncTime, 5*60*1000);
-      }
-      syncTime().then(start);
-    })();
-
     async function initDC() {
-      // 1) Config Firebase presente
       if (typeof window.FIREBASE_CONFIG === 'undefined') {
         alert("ERROR: No se encuentra 'firebase-config.js'. Revisa que el archivo esté en la misma carpeta.");
         return;
       }
-
-      // 2) Inicializar Firebase
       if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
       db = firebase.firestore();
 
-      // 3) Pedir ID si no viene por URL
       if (!rallyId) {
         rallyId = prompt("Por favor, introduce el ID del Rally:");
         if (!rallyId) return;
-        // opcional: podrías recargar con ?id=...
+        const sep = window.location.href.includes('?') ? '&' : '?';
+        window.location.href = window.location.href + sep + "id=" + rallyId;
+        return;
       }
 
-      // 4) Cargar Config del Rally
       try {
         const doc = await db.collection("config_rallies").doc(rallyId).get();
         if (!doc.exists) {
@@ -223,18 +69,15 @@
           return;
         }
         configGlobal = doc.data();
-
-        // Branding
         document.getElementById('dcLogo').src = configGlobal.logo || 'logo.png';
         document.getElementById('dcRallyName').innerText = configGlobal.nombre || 'SECeD - DC';
 
-        // Botones de tramos
         const selector = document.getElementById('tcSelector');
         selector.innerHTML = "";
-        (configGlobal.tramos || []).forEach((tramo, index) => {
+        configGlobal.tramos.forEach((tramo, index) => {
           const btn = document.createElement('button');
           btn.className = 'btn-tc-toggle';
-          btn.innerText = tramo.nombre;
+          btn.innerText = tramo.nombre || tramo.name || ('Tramo ' + (tramo.id || index+1));
           btn.onclick = () => {
             if (tramosVisibles.has(index)) {
               tramosVisibles.delete(index);
@@ -257,17 +100,20 @@
       const container = document.getElementById('gridDC');
       container.innerHTML = "";
 
-      (configGlobal.tramos || []).forEach((tramo, index) => {
+      configGlobal.tramos.forEach((tramo, index) => {
         if (!tramosVisibles.has(index)) return;
 
-        const tId = tramo.nombre.replace(/\s+/g, '_');
+        const nombre = tramo.nombre || tramo.name || ('Tramo ' + (tramo.id || index+1));
+        const tramoId = String(tramo.id || nombre).trim(); // usamos tramo.id para enlazar con /tramos/{id}
+        const tId = nombre.replace(/\s+/g, '_');
+
         const cardHtml = `
           <div class="card-dc">
             <div class="card-header">
-              <h2 class="tc-title">${tramo.nombre}</h2>
+              <h2 class="tc-title">${nombre}</h2>
               <div>
-                <button class="btn-stop" id="stop-${tId}" onclick="actualizarEstado('${tramo.nombre}', true)">PARAR SALIDA</button>
-                <button class="btn-resume" onclick="actualizarEstado('${tramo.nombre}', false)">REANUDAR</button>
+                <button class="btn-stop" id="stop-${tId}" onclick="actualizarEstado('${nombre}', true)">PARAR SALIDA</button>
+                <button class="btn-resume" onclick="actualizarEstado('${nombre}', false)">REANUDAR</button>
               </div>
             </div>
             <div id="map-${tId}" class="map-dc"></div>
@@ -275,22 +121,17 @@
         `;
         container.insertAdjacentHTML('beforeend', cardHtml);
 
-        // Inicializar mapa y marcadores
         setTimeout(() => {
           const map = L.map(`map-${tId}`).setView([37.88, -4.77], 12);
-          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap & CARTO'
-          }).addTo(map);
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-          // Track si viene precalculado como polilínea (opcional)
           if (tramo.track) {
             const poly = L.polyline(tramo.track, {color: '#22c55e', weight: 4}).addTo(map);
             map.fitBounds(poly.getBounds());
-          } else if (tramo.center && Array.isArray(tramo.center) && tramo.center.length === 2) {
-            map.setView(tramo.center, tramo.zoom || 12);
           }
 
-          // Radios (bolitas)
+          // Colocar marcadores de radios
+          const badgeRefs = {};
           if (tramo.radios) {
             tramo.radios.forEach((r, rIdx) => {
               const nR = rIdx + 1;
@@ -300,17 +141,20 @@
                 iconSize: [80, 25]
               });
               L.marker([r.lat, r.lng], {icon}).addTo(map);
+              badgeRefs[nR] = document.getElementById(`badge-${tId}-${nR}`);
             });
           }
 
-          // Subscripciones Firestore
-          suscribirTramo(tramo.nombre, tId);
+          // Suscripciones
+          suscribirParada(nombre, tId);
+          suscribirPasosManual(nombre, tId, badgeRefs);           // rallies/{rallyId}/pasos/{nombre}
+          suscribirClicksRadios(tramoId, tId, badgeRefs);         // tramos/{tramoId}/radios  (NUEVO)
         }, 50);
       });
     }
 
-    function suscribirTramo(nombreReal, tId) {
-      // Estado de parada/reanudación
+    // ----- AVISO PARADA / REANUDAR -----
+    function suscribirParada(nombreReal, tId) {
       db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal)
         .onSnapshot(doc => {
           const btn = document.getElementById(`stop-${tId}`);
@@ -323,32 +167,82 @@
             btn.innerText = "PARAR SALIDA";
           }
         });
+    }
 
-      // Pasos de coches por radio (actualiza bolitas)
+    // ----- PASOS MANUALES (ya lo tenías) -----
+    function suscribirPasosManual(nombreReal, tId, badgeRefs) {
       db.collection("rallies").doc(rallyId).collection("pasos").doc(nombreReal)
         .onSnapshot(doc => {
           if (!doc.exists) {
-            // Si el doc se borró, limpiar badges
-            document.querySelectorAll(`[id^="badge-${tId}-"]`).forEach(b => {
-              b.classList.remove('active');
-              const n = b.id.split('-').pop(); // último segmento es el número
-              b.innerText = `R${n}: --`;
+            // limpiar badges
+            Object.keys(badgeRefs).forEach(n => {
+              const b = badgeRefs[n];
+              if (b) { b.classList.remove('active'); b.innerText = `R${n}: --`; }
             });
             return;
           }
-          const data = doc.data();
+          const data = doc.data() || {};
           Object.keys(data).forEach(key => {
             if (key.startsWith('radio')) {
               const n = key.replace('radio', '');
-              const b = document.getElementById(`badge-${tId}-${n}`);
+              const b = badgeRefs[n];
               if (b) {
-                // Quitar el # -> Mostrar “R1: 3”
                 b.classList.add('active');
-                b.innerText = `R${n}: ${data[key]}`;
+                b.innerText = `R${n}: ${data[key]}`; // sin "#"
               }
             }
           });
         });
+    }
+
+    // ----- CLICS EN DORSALES (NUEVO: leer /tramos/{tramoId}/radios) -----
+    function suscribirClicksRadios(tramoId, tId, badgeRefs) {
+      // Mantendremos "últimos dorsales por radio" aquí
+      const ultPorRadio = {}; // { '1': dorsalMax, '2': dorsalMax, ... }
+
+      const tramoDoc = db.collection('tramos').doc(String(tramoId));
+      tramoDoc.collection('radios').onSnapshot(snap => {
+        snap.docChanges().forEach(ch => {
+          const dorsal = Number(ch.doc.id);      // cada doc es un dorsal
+          if (!Number.isFinite(dorsal) || dorsal <= 0) return;
+          const d = ch.doc.data() || {};
+          // Tomamos tanto marks[] (histórico de radios por los que pasó) como last (último radio)
+          const marks = Array.isArray(d.marks) ? d.marks : [];
+          const last = (typeof d.last === 'number') ? d.last : 0;
+
+          // Para cada radio marcado por este dorsal, si es el más alto visto, lo guardamos
+          marks.forEach(r => {
+            const n = String(r);
+            if (!(n in ultPorRadio) || dorsal > ultPorRadio[n]) {
+              ultPorRadio[n] = dorsal;
+            }
+          });
+
+          if (last > 0) {
+            const n = String(last);
+            if (!(n in ultPorRadio) || dorsal > ultPorRadio[n]) {
+              ultPorRadio[n] = dorsal;
+            }
+          }
+        });
+
+        // Reflejar en badges
+        Object.keys(badgeRefs).forEach(n => {
+          const b = badgeRefs[n];
+          if (!b) return;
+          const valor = ultPorRadio[String(n)];
+          if (Number.isFinite(valor)) {
+            b.classList.add('active');
+            b.innerText = `R${n}: ${valor}`;  // sin "#"
+          } else if (!b.innerText || /--$/.test(b.innerText)) {
+            // si no había nada (se mantiene lo que venga del manual si lo hay)
+            b.classList.remove('active');
+            b.innerText = `R${n}: --`;
+          }
+        });
+      }, err => {
+        console.warn('onSnapshot radios error', err);
+      });
     }
 
     async function actualizarEstado(nombre, estado) {
