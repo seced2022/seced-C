@@ -1,4 +1,4 @@
-/* -------------- app.js (v=16, AUTO_LL desactivado) -------------- */
+/* -------------- app.js (v=17) -------------- */
 /* === Referencias y estado base (igual que tu versión) === */
 const input = document.getElementById('inputNumero');
 const btnAgregar = document.getElementById('btnAgregar');
@@ -26,9 +26,6 @@ const tramoMenu  = document.getElementById('tramoMenu');
 const tramoInput = document.getElementById('tramoInput');
 const tramoGo    = document.getElementById('tramoGo');
 const tramoRecent= document.getElementById('tramoRecent');
-
-/* ===== NUEVO: bandera global para auto-llegada (desactivada) ===== */
-const AUTO_LL = false; // <<--- si en el futuro lo quieres, pon true
 
 async function clearRadioDocFor(value){
   try{
@@ -213,71 +210,6 @@ if (btnOperador) btnOperador.addEventListener('click', ()=>{
 
 /* === Radio marks (bolitas) === */
 window._radioMarks = new Map();
-
-/* ===== Bloque auto-LL (queda inerte por AUTO_LL=false) ===== */
-let LAST_RADIO = 3; // fallback
-(function initLastRadio(){
-  try{
-    if (!AUTO_LL) return; // inactivo
-    if (!window.firebase || !firebase.firestore) return;
-    const tramo = (window.TRAMO_ID || '1').toString();
-    const db = firebase.firestore();
-    db.collection('tramos').doc(tramo).get().then(doc=>{
-      if (!doc.exists) return;
-      const d = doc.data() || {};
-      const fromCfg = Number(d.radiosCount || d.maxRadio || 0);
-      if (Number.isFinite(fromCfg) && fromCfg > 0) LAST_RADIO = fromCfg;
-    }).catch(()=>{});
-  }catch{}
-})();
-function updateLastRadioFromMarksArr(arr){
-  if (!AUTO_LL) return;
-  if (!Array.isArray(arr)) return;
-  // si algún día lo activas y NO quieres deducir por marks, comenta lo de abajo:
-  const max = arr.reduce((m,n)=> Number.isFinite(n) ? Math.max(m,n) : m, 0);
-  if (max > LAST_RADIO) LAST_RADIO = max;
-}
-function findItem(valNum){
-  valNum = Number(valNum);
-  return items.find(x => Number(x.value) === valNum) || null;
-}
-async function markLastRadioInFirestore(value){
-  if (!AUTO_LL) return; // inactivo
-  try{
-    if (!window.firebase || !firebase.firestore) return;
-    const tramo = (window.TRAMO_ID || '1').toString();
-    const db = firebase.firestore();
-    const docRef = db.collection('tramos').doc(tramo).collection('radios').doc(String(value));
-    await docRef.set({
-      last: LAST_RADIO,
-      marks: firebase.firestore.FieldValue.arrayUnion(LAST_RADIO)
-    }, { merge:true });
-  }catch(e){
-    console.warn('markLastRadioInFirestore error', e);
-  }
-}
-function maybeAutoMarkArrivalFromRadios(){
-  if (!AUTO_LL) return; // inactivo
-  try{
-    if (document.body.classList.contains('radio-skin')) return;
-    for (const it of items){
-      if (!it || it.status === 'abandon') continue;
-      if (it.tLlegada) continue;
-      const arr = window._radioMarks.get(String(it.value));
-      if (!Array.isArray(arr) || arr.length === 0) continue;
-      updateLastRadioFromMarksArr(arr);
-      if (arr.includes(LAST_RADIO)) {
-        it.selected = true;
-        if (!it.tLlegada) it.tLlegada = nowNetMs();
-        if (!Array.isArray(it.llegadasHist)) it.llegadasHist = [];
-        render();
-        if (typeof syncSave === 'function') syncSave();
-        try { logAudit('auto_llegada_por_ultimo_radio', { value: it.value, lastRadio: LAST_RADIO }); } catch {}
-      }
-    }
-  }catch(e){ console.warn('maybeAutoMarkArrivalFromRadios error', e); }
-}
-
 (function subscribeRadioMarks(){
   try{
     const tramo = (window.TRAMO_ID || '1').toString();
@@ -292,16 +224,14 @@ function maybeAutoMarkArrivalFromRadios(){
           else {
             const clean = arr.map(x => parseInt(x,10)).filter(n => Number.isFinite(n) && n>0).sort((a,b)=>a-b);
             window._radioMarks.set(id, clean);
-            updateLastRadioFromMarksArr(clean);
           }
         });
         if (typeof render === 'function') render();
-        maybeAutoMarkArrivalFromRadios();
       }, err => console.warn('radio marks listener error', err));
   }catch(e){ console.warn('radio marks subscribe error', e); }
 })();
 
-/* === Render tarjetas (igual que tu versión) === */
+/* === Render tarjetas (igual que tu versión, con realce verde “reanuda”) === */
 function render() {
   if (countSalida) countSalida.textContent = String(items.length);
   if (countLlegada) countLlegada.textContent = String(items.filter(x => x.status !== 'abandon' && x.selected).length);
@@ -339,7 +269,7 @@ function render() {
       const badge = document.createElement('div'); badge.className = 'badge-r'; badge.textContent = 'R' + item.rNumber; card.appendChild(badge);
     }
 
-    if (!VIEWER) card.addEventListener('click', async () => {
+    if (!VIEWER) card.addEventListener('click', () => {
       if (item.status === 'abandon') {
         item.status = 'normal'; item.rNumber = null; item.tAbandono = null; item.selected = false;
         render(); if (typeof syncSave === 'function') syncSave();
@@ -347,14 +277,10 @@ function render() {
         return;
       }
       if (window.MODE === 'SALIDA') return;
-
       if (!item.selected) {
         item.selected = true; if (!item.tLlegada) item.tLlegada = nowNetMs();
         render(); if (typeof syncSave === 'function') syncSave();
         logAudit('llegada', { value:item.value, tLlegada:item.tLlegada });
-
-        // Si en el futuro reactivas AUTO_LL, también se empujará el último radio:
-        if (AUTO_LL) { try { await markLastRadioInFirestore(item.value); } catch(e){} }
       } else {
         item.selected = false; const old = item.tLlegada;
         if (!Array.isArray(item.llegadasHist)) item.llegadasHist = [];
@@ -368,19 +294,39 @@ function render() {
 
     cell.appendChild(card);
 
+    // ---- Bolitas de radios (mini) — SOLO en editor/visor, NO en panel radio ----
     if (!document.body.classList.contains('radio-skin')) {
-      const dots = document.createElement('div'); dots.className = 'radio-dots';
+      const dots = document.createElement('div');
+      dots.className = 'radio-dots';
+
       const m = window._radioMarks && window._radioMarks.get(String(item.value));
       if (Array.isArray(m) && m.length > 0) {
+        // Último radio marcado para este dorsal (para “reanuda”)
+        const lastMark = m[m.length - 1];
+
         for (const r of m) {
-          const dot = document.createElement('span'); dot.className = 'radio-dot';
-          dot.title = `R:${r}`; dot.setAttribute('aria-label', `R${r}`); dots.appendChild(dot);
+          const dot = document.createElement('span');
+          dot.className = 'radio-dot';
+          dot.title = `R:${r}`;
+
+          // *** Realce “reanuda”: si el dorsal está en abandono y algún radio lo marcó,
+          // se pinta en verde SOLO la bolita del último radio registrado. ***
+          if (item.status === 'abandon' && r === lastMark) {
+            dot.style.background = '#22c55e';
+            dot.style.borderColor = '#15803d';
+            dot.title = `R:${r} (reanuda)`;
+          }
+
+          dot.setAttribute('aria-label', `R${r}`);
+          dots.appendChild(dot);
         }
       }
       cell.appendChild(dots);
     }
+    // ---- /bolitas ----
 
-    const timeStack = document.createElement('div'); timeStack.className = 'time-stack';
+    const timeStack = document.createElement('div');
+    timeStack.className = 'time-stack';
     if (item.tSalida) {
       const bS = document.createElement('div'); bS.className = 'timebar-out time-salida';
       const lblS = document.createElement('span'); lblS.className = 'time-label'; lblS.textContent = 'S';
