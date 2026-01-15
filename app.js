@@ -312,9 +312,10 @@ function render() {
           // *** Realce “reanuda”: si el dorsal está en abandono y algún radio lo marcó,
           // se pinta en verde SOLO la bolita del último radio registrado. ***
           if (item.status === 'abandon' && r === lastMark) {
-            dot.style.background = '#22c55e';
-            dot.style.borderColor = '#15803d';
-            dot.title = `R:${r} (reanuda)`;
+           dot.style.setProperty('background', '#22c55e', 'important');
+           dot.style.setProperty('border-color', '#15803d', 'important');
+           dot.style.setProperty('box-shadow','0 0 0 2px rgba(34,197,94,.35) inset, 0 0 6px rgba(34,197,94,.8)','important');
+           dot.title = `R:${r} (reanuda)`; 
           }
 
           dot.setAttribute('aria-label', `R${r}`);
