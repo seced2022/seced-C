@@ -4,380 +4,412 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>SECeD - Escoba</title>
-  <link rel="stylesheet" href="styles.css?v=41" />
+  <link rel="stylesheet" href="styles.css" />
   <meta name="theme-color" content="#0b1f12" />
-
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
   <style>
-    /* Escoba: solo mostrar abandonos (ocultamos lo demás del renderer genérico) */
-    body.escoba-skin .grid { display: none !important; }
-    body.escoba-skin .radio-dots { display: none !important; } /* sin bolitas en las tarjetas */
-
-    /* Contenedor principal ancho */
-    .app { max-width: 1600px; width: 95%; margin: 0 auto; }
-
-    /* Barra superior: reloj + tramos */
-    .escoba-top {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 16px; padding: 12px 0;
+    :root{
+      --bg:#0b1f12;
+      --panel:#0f1a14;
+      --panel-border:#1d2d23;
+      --text:#eafff7;
+      --accent:#22c55e;
+      --danger:#991b1b;
+      --danger-bg:#7f1d1d;
+      --danger-strong:#dc2626;
     }
+
+    body{ background:var(--bg); color:var(--text); }
+
+    .app{ max-width:1280px; margin:0 auto; padding:16px; }
+
+    .brand{ display:flex; align-items:center; gap:12px; }
+    .brand-logo{ height:42px; }
+
+    .header-row{
+      display:flex; align-items:center; justify-content:space-between; gap:12px;
+      margin:10px 0 16px;
+    }
+
     .clock {
-      font-variant-numeric: tabular-nums; font-weight: 900; font-size: 28px;
-      background: #0b1f12; border: 1px solid #13301e; color: #eafff7;
-      border-radius: 10px; padding: 10px 14px;
+      display:flex; align-items:baseline; gap:10px;
+      font-variant-numeric: tabular-nums;
+      font-weight:900;
+      letter-spacing:.5px;
     }
-    .tc-selector-bar { display: flex; flex-wrap: wrap; gap: 8px; }
-    .btn-tc {
-      background: #0c2415; color: #eafff7; border: 1px solid #144a2b;
-      padding: 8px 12px; border-radius: 8px; font-weight: 800; cursor: pointer;
-    }
-    .btn-tc.active { background: #16a34a; border-color: #22c55e; color: #041308; }
+    .clock .big { font-size:28px; }
+    .clock .ms { opacity:.85; font-size:16px; }
 
-    .brand { margin-top: 12px; }
-    .brand-logo { height: 48px; }
-
-    /* Hilera de abandonos (una sola línea con scroll) */
-    #abandRowWrap { margin-top: 10px; }
-    #abandRow {
-      display: flex; align-items: center; gap: 10px;
-      overflow-x: auto; padding: 10px; scrollbar-width: thin;
-      border: 1px solid #13301e; border-radius: 12px; background: #0f1a14;
+    .tc-buttons{
+      display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;
     }
-    .aband-tile {
-      min-width: 90px; padding: 10px 12px; text-align: center;
-      background: #3f0a0a; border: 1px solid #661717; color: #ffeaea;
-      border-radius: 10px; font-weight: 900; letter-spacing: .3px;
-      box-shadow: 0 4px 10px rgba(0,0,0,.35);
+    .btn-tramo{
+      background:#0c2415; border:1px solid #13301e; color:#eafff7;
+      padding:8px 12px; border-radius:10px; font-weight:800; cursor:pointer;
     }
-    .aband-tile .num { font-size: 20px; display:block; }
-    .aband-tile .r { font-size: 12px; opacity: .85; display:block; margin-top: 2px; }
+    .btn-tramo.active{ background:#115e38; border-color:#1aa165; }
 
-    /* Mapa y “bolitas” de dorsales en radios */
-    #mapWrap { margin-top: 14px; }
-    #mapEscoba { height: 520px; border-radius: 12px; border: 1px solid #1d2d23; }
+    .panel{
+      background:var(--panel);
+      border:1px solid var(--panel-border);
+      border-radius:14px;
+      padding:14px;
+    }
+
+    /* Línea de tarjetas (solo abandonos) */
+    .aband-row{
+      display:flex; gap:10px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:6px;
+    }
+    .aband-card{
+      background:#3b0f10; border:1px solid #6b181a; color:#fff; min-width:90px;
+      border-radius:10px; padding:8px 10px; text-align:center; font-weight:900;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+      white-space:nowrap;
+    }
+    .aband-card .r{ font-size:12px; opacity:.85; font-weight:700; }
+
+    /* Mapa */
+    #mapEscoba { width:100%; height:460px; border-radius:10px; border:1px solid var(--panel-border); }
+
+    /* Placa de radio (debajo de las bolitas) */
     .radio-badge {
-      background: #333; border: 2px solid #666; border-radius: 20px; color: #fff; font-weight: 800;
-      text-align: center; min-width: 70px; padding: 2px 6px; font-size: 13px;
+      background:#333;
+      border:2px solid #666;
+      border-radius:20px;
+      color:#fff;
+      font-weight:900;
+      text-align:center;
+      min-width:70px;
+      padding:2px 8px;
+      font-size:13px;
+      box-shadow:0 6px 16px rgba(0,0,0,.35);
+      user-select:none;
     }
 
-    /* Pila de bolitas junto a cada radio (los dorsales abandonados en ese radio) */
-    .escoba-pile {
-      display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
-      background: rgba(15, 26, 20, .75); border: 1px solid #1d2d23;
-      padding: 6px; border-radius: 10px;
+    /* Bolitas agrupadas (pile) */
+    .escoba-pile{
+      display:flex; gap:5px; flex-wrap:wrap;
+      align-items:center;
+      padding:4px 6px;
+      background:#0d2618;
+      border:1px solid #16422a;
+      border-radius:12px;
+      box-shadow:0 6px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
     }
-    .escoba-pill {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-width: 18px; height: 18px; padding: 0 4px;
-      font-size: 11px; font-weight: 900; color: #0a140f;
-      background: #ffd60a; border: 1px solid #eab308; border-radius: 9999px;
-      line-height: 1;
+    .escoba-pill{
+      display:inline-flex; align-items:center; justify-content:center;
+      width:18px; height:18px;
+      border-radius:9999px;
+      background:#ef4444;
+      border:1px solid #b91c1c;
+      font-size:11px; font-weight:900; color:#fff;
+      line-height:1;
+      user-select:none;
     }
 
-    @media (max-width: 900px) {
-      #mapEscoba { height: 420px; }
-    }
+    .row-gap{ height:12px; }
   </style>
 </head>
-<body class="viewer escoba-skin">
+<body>
   <main class="app">
     <div class="brand">
-      <img id="mainLogo" src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
-    </div>
-    <h1 id="mainTitle">SECeD — Escoba</h1>
-
-    <div class="escoba-top">
-      <div class="clock"><span id="clockTime">--:--:--.---</span></div>
-      <div id="tcSelector" class="tc-selector-bar"></div>
+      <img id="logo" src="logo.svg" class="brand-logo" onerror="this.src='logo.png'"/>
+      <h1 id="title">SECeD — Escoba</h1>
     </div>
 
-    <!-- Hilera de abandonos -->
-    <div id="abandRowWrap">
-      <div id="abandRow" aria-live="polite"></div>
+    <div class="header-row">
+      <div class="clock">
+        <span id="hhmmss" class="big">--:--:--</span><span id="ms" class="ms">.000</span>
+      </div>
+      <div class="tc-buttons" id="tcButtons"></div>
     </div>
 
-    <!-- Mapa del tramo con dots en radios -->
-    <div id="mapWrap">
+    <div class="panel" id="panelEscoba">
+      <div id="abandRow" class="aband-row" aria-live="polite"></div>
+      <div class="row-gap"></div>
       <div id="mapEscoba"></div>
     </div>
   </main>
 
-  <!-- Firebase + config -->
+  <!-- Firebase + Leaflet -->
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-  <script src="firebase-config.js?v=16"></script>
-
-  <!-- Leaflet -->
+  <script src="firebase-config.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Reutilizamos tu motor de sincronización y el renderer estándar -->
-  <script src="sync.js?v=16"></script>
-  <script src="app.js?v=16"></script>
-
   <script>
-    (function(){
-      /* ===== 1) Reloj NTP HH:MM:SS.mmm ===== */
-      const TIMEZONE = 'Europe/Madrid';
-      const clockTime = document.getElementById('clockTime');
-      let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
+    // ----------------- Estado base -----------------
+    let db;
+    let rallyId = new URLSearchParams(location.search).get('id');
+    let configGlobal = null;
+    let tramoActivo = null; // nombre visible exacto del tramo
+    let map = null;
+    let overlayLayerGroup = null;
+    let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
 
-      const pad2 = n => String(n).padStart(2,'0');
-      const pad3 = n => String(n).padStart(3,'0');
+    // ----------------- Reloj NTP HH:MM:SS.mmm -----------------
+    const pad2 = n => String(n).padStart(2,'0');
+    const pad3 = n => String(n).padStart(3,'0');
 
-      function renderClock(){
-        const now = new Date(Date.now() + timeOffsetMs);
-        const h = pad2(now.getHours());
-        const m = pad2(now.getMinutes());
-        const s = pad2(now.getSeconds());
-        const ms = pad3(now.getMilliseconds());
-        if (clockTime) clockTime.textContent = `${h}:${m}:${s}.${ms}`;
+    function renderClock(){
+      const now = new Date(Date.now() + timeOffsetMs);
+      const hh = pad2(now.getHours());
+      const mm = pad2(now.getMinutes());
+      const ss = pad2(now.getSeconds());
+      const ms = pad3(now.getMilliseconds());
+      const elH = document.getElementById('hhmmss');
+      const elM = document.getElementById('ms');
+      if (elH) elH.textContent = `${hh}:${mm}:${ss}`;
+      if (elM) elM.textContent = `.${ms}`;
+    }
+    async function syncTime(){
+      try{
+        const res = await fetch('https://worldtimeapi.org/api/timezone/Europe/Madrid',{cache:'no-store'});
+        if(!res.ok) throw new Error('HTTP '+res.status);
+        const json = await res.json();
+        const api = Date.parse(json.datetime);
+        timeOffsetMs = api - Date.now();
+      }catch(e){
+        // si falla, nos quedamos con offset 0 para no bloquear la UI
+        timeOffsetMs = 0;
+      }
+    }
+    function startClock(){
+      clearInterval(tickTimer);
+      tickTimer = setInterval(renderClock, 33); // ~30fps para ms
+      renderClock();
+      clearInterval(resyncTimer);
+      resyncTimer = setInterval(syncTime, 5*60*1000);
+    }
+
+    // ----------------- Leaflet helpers -----------------
+    function buildMapIfNeeded(){
+      if (map) return;
+      map = L.map('mapEscoba').setView([37.88, -4.77], 12);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+
+      // ✅ panes para controlar superposición
+      map.createPane('radiosPane');  // radios debajo
+      map.getPane('radiosPane').style.zIndex = 400;
+
+      map.createPane('abandPane');   // bolitas arriba
+      map.getPane('abandPane').style.zIndex = 450;
+
+      overlayLayerGroup = L.layerGroup().addTo(map);
+    }
+
+    function clearMap(){
+      if (!overlayLayerGroup) return;
+      overlayLayerGroup.clearLayers();
+    }
+
+    // Dibuja track y radios según tramo (estructura del doc config_rallies)
+    function drawTrackAndRadios(tramoCfg){
+      if (!tramoCfg) return;
+      clearMap();
+
+      // track como polilínea si viene como array de [lat,lng]
+      if (Array.isArray(tramoCfg.track) && tramoCfg.track.length){
+        const poly = L.polyline(tramoCfg.track, { color: '#22c55e', weight: 4 }).addTo(overlayLayerGroup);
+        try { map.fitBounds(poly.getBounds(), { padding:[20,20] }); } catch {}
+      } else if (Array.isArray(tramoCfg.center) && tramoCfg.center.length===2) {
+        try { map.setView(tramoCfg.center, tramoCfg.zoom || 12); } catch {}
       }
 
-      async function syncTime(){
-        try{
-          const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache:'no-store' });
-          if (!res.ok) throw new Error('HTTP '+res.status);
-          const data = await res.json();
-          const apiMs = Date.parse(data.datetime);
-          timeOffsetMs = apiMs - Date.now();
-        }catch(e){
-          timeOffsetMs = 0;
-        }
-      }
-
-      function startClock(){
-        clearInterval(tickTimer);
-        tickTimer = setInterval(renderClock, 30);
-        renderClock();
-        clearInterval(resyncTimer);
-        resyncTimer = setInterval(syncTime, 5*60*1000);
-      }
-
-      syncTime().then(startClock);
-
-      /* ===== 2) Inicialización Firebase y carga config rally ===== */
-      if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
-      const db = firebase.firestore();
-
-      const qs = new URLSearchParams(location.search);
-      let rallyId = qs.get('id');
-      let tramoName = qs.get('tramo');
-
-      let cfgRally = null;
-      let map = null;
-      let overlayLayerGroup = null;
-
-      async function ensureRallyId(){
-        if (rallyId) return true;
-        const ask = prompt('Introduce el ID del Rally:');
-        if (!ask) return false;
-        rallyId = ask.trim();
-        const p = new URLSearchParams(location.search);
-        p.set('id', rallyId);
-        if (tramoName) p.set('tramo', tramoName);
-        location.search = p.toString();
-        return false;
-      }
-
-      function setTitleAndLogo(cfg){
-        if (cfg?.logo) document.getElementById('mainLogo').src = cfg.logo;
-        if (cfg?.nombre) document.getElementById('mainTitle').innerText = `${cfg.nombre} — Escoba`;
-      }
-
-      function drawTramoButtons(cfg){
-        const bar = document.getElementById('tcSelector');
-        bar.innerHTML = '';
-        const tramos = Array.isArray(cfg?.tramos) ? cfg.tramos : [];
-        tramos.forEach(t=>{
-          const name = t?.nombre || t?.name || t?.id || 'Tramo';
-          const btn = document.createElement('button');
-          btn.className = 'btn-tc' + ((tramoName && tramoName === name) ? ' active' : '');
-          btn.textContent = name;
-          btn.addEventListener('click', ()=>{
-            const p = new URLSearchParams(location.search);
-            p.set('id', rallyId);
-            p.set('tramo', name);
-            location.search = p.toString();
-          });
-          bar.appendChild(btn);
-        });
-      }
-
-      function getCfgTramoByName(cfg, name){
-        const tramos = Array.isArray(cfg?.tramos) ? cfg.tramos : [];
-        return tramos.find(t => (t?.nombre||t?.name||t?.id) === name) || null;
-      }
-
-      function buildMapIfNeeded(){
-        if (map) return;
-        map = L.map('mapEscoba').setView([37.88, -4.77], 12);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-        overlayLayerGroup = L.layerGroup().addTo(map);
-      }
-
-      function clearOverlay(){
-        if (overlayLayerGroup) overlayLayerGroup.clearLayers();
-      }
-
-      function fitToBoundsIf(poly){
-        try { map.fitBounds(poly.getBounds()); } catch {}
-      }
-
-      function drawTrackAndRadios(tramoCfg){
-        if (!map || !tramoCfg) return;
-        clearOverlay();
-
-        // Track (como en DC, si viene como array de pares [lat,lng])
-        if (Array.isArray(tramoCfg.track) && tramoCfg.track.length >= 2) {
-          const poly = L.polyline(tramoCfg.track, { color: '#22c55e', weight: 4 }).addTo(overlayLayerGroup);
-          fitToBoundsIf(poly);
-        }
-
-        // Radios base
-        if (Array.isArray(tramoCfg.radios)) {
-          tramoCfg.radios.forEach((r, idx) => {
-            const nR = idx + 1;
-            const icon = L.divIcon({
-              className: 'custom-icon',
-              html: `<div class="radio-badge">R${nR}</div>`,
-              iconSize: [70, 25]
-            });
-            L.marker([r.lat, r.lng], {icon}).addTo(overlayLayerGroup);
-          });
-        }
-      }
-
-      /* ===== 3) Fuente de datos de abandonos: usamos items del renderer (sync.js + app.js) ===== */
-      function getItems(){ return (typeof window._getItems === 'function') ? window._getItems() : []; }
-
-      // Render de la hilera horizontal
-      function renderAbandonRow(){
-        const row = document.getElementById('abandRow');
-        if (!row) return;
-        const items = getItems();
-        const aband = items
-          .filter(x => x && x.status === 'abandon')
-          .sort((a,b)=> (a.value||0) - (b.value||0));
-
-        row.innerHTML = '';
-        for (const it of aband){
-          const tile = document.createElement('div');
-          tile.className = 'aband-tile';
-          tile.innerHTML = `
-            <span class="num">${it.value}</span>
-            <span class="r">${(it.rNumber!=null) ? ('R' + it.rNumber) : 'R?'}</span>
-          `;
-          row.appendChild(tile);
-        }
-      }
-
-      // Dibuja bolitas de dorsales abandonados en cada radio
-      function renderAbandDotsOnMap(){
-        if (!map || !cfgRally || !tramoName) return;
-
-        const tramoCfg = getCfgTramoByName(cfgRally, tramoName);
-        if (!tramoCfg || !Array.isArray(tramoCfg.radios) || tramoCfg.radios.length === 0) return;
-
-        // Agrupar por rNumber
-        const items = getItems();
-        const aband = items.filter(x => x && x.status === 'abandon' && Number.isInteger(x.rNumber) && x.rNumber>0);
-        const groups = new Map(); // rNumber -> dorsales[]
-        for (const it of aband){
-          const r = it.rNumber;
-          if (!groups.has(r)) groups.set(r, []);
-          groups.get(r).push(it.value);
-        }
-
-        // Pintar cada grupo junto a su radio
+      if (Array.isArray(tramoCfg.radios)) {
         tramoCfg.radios.forEach((r, idx)=>{
           const nR = idx + 1;
-          const dorsales = groups.get(nR) || [];
-          if (dorsales.length === 0) return;
-
-          const html = `
-            <div class="escoba-pile">
-              ${dorsales.slice(0, 50).map(d => `<span class="escoba-pill" title="Dorsal ${d}">${d}</span>`).join('')}
-            </div>
-          `;
           const icon = L.divIcon({
             className: 'custom-icon',
-            html,
-            iconSize: [1,1],
-            iconAnchor: [0,0]
+            html: `<div class="radio-badge">R${nR}</div>`,
+            iconSize: [1,1], iconAnchor: [0,0]
           });
-
-          // Un pequeño offset para no tapar la placa de Rn
-          const lat = r.lat + 0.00020;
-          const lng = r.lng + 0.00020;
-          L.marker([lat, lng], { icon }).addTo(overlayLayerGroup);
+          // ✅ en el pane de radios
+          L.marker([r.lat, r.lng], { icon, pane:'radiosPane' }).addTo(overlayLayerGroup);
         });
       }
+    }
 
-      // Orquestación cuando cambie el tramo o lleguen datos nuevos
-      function refreshMapLayering(){
-        if (!cfgRally || !tramoName) return;
-        buildMapIfNeeded();
-        const tramoCfg = getCfgTramoByName(cfgRally, tramoName);
-        drawTrackAndRadios(tramoCfg);
-        renderAbandDotsOnMap();
+    // ----------------- Fila horizontal de abandonos (cajas rojas) -----------------
+    function renderAbandCards(docData){
+      const row = document.getElementById('abandRow');
+      if (!row) return;
+      row.innerHTML = '';
+
+      // docData se espera como: { radio1:[d1,d2], radio2:[...], ... }  (compat)
+      // Aplanamos y formateamos en una sola línea
+      const entries = [];
+      Object.keys(docData || {}).forEach(k=>{
+        if (!k.startsWith('radio')) return;
+        const n = Number(k.replace('radio',''));
+        const arr = Array.isArray(docData[k]) ? docData[k] : [];
+        arr.forEach(d => entries.push({ dorsal:d, radio:n }));
+      });
+
+      // Ordenamos por dorsal asc; si prefieres por radio, cambia key
+      entries.sort((a,b)=> a.dorsal - b.dorsal);
+
+      for (const it of entries){
+        const card = document.createElement('div');
+        card.className = 'aband-card';
+        card.innerHTML = `<div>${it.dorsal}</div><div class="r">R${it.radio}</div>`;
+        row.appendChild(card);
       }
+    }
 
-      // Hook: cuando el sync remoto actualiza, re-rendereamos nuestra hilera + dots
-      const origOnRemote = window._onRemoteUpdate;
-      if (typeof origOnRemote === 'function') {
-        window._onRemoteUpdate = (arr) => {
-          origOnRemote(arr);
-          renderAbandonRow();
-          refreshMapLayering();
-        };
-      }
+    // ----------------- Bolitas en el mapa (por radio) con offset/anti-choque -----------------
+    function renderAbandDotsOnMap(tramoCfg, docData){
+      if (!tramoCfg || !Array.isArray(tramoCfg.radios)) return;
 
-      // Init
-      (async function init(){
-        const ok = await ensureRallyId();
-        if (!ok) return;
+      // Preparamos agrupación por radio: radioN -> [dorsales]
+      const groups = new Map();
+      Object.keys(docData || {}).forEach(k=>{
+        if (!k.startsWith('radio')) return;
+        const n = Number(k.replace('radio',''));
+        const arr = Array.isArray(docData[k]) ? docData[k] : [];
+        groups.set(n, arr.slice()); // copia
+      });
 
-        try {
-          const doc = await db.collection('config_rallies').doc(rallyId).get();
-          if (!doc.exists) {
-            alert('El ID del Rally no existe en la base de datos.');
-            return;
-          }
-          cfgRally = doc.data();
-          setTitleAndLogo(cfgRally);
-          drawTramoButtons(cfgRally);
+      // offsets suaves por índice de radio (anti choque con placa)
+      const baseOffsets = [
+        { lat:  0.00022, lng:  0.00000 },
+        { lat:  0.00018, lng:  0.00018 },
+        { lat:  0.00000, lng:  0.00022 },
+        { lat: -0.00018, lng:  0.00018 },
+        { lat: -0.00022, lng:  0.00000 },
+        { lat: -0.00018, lng: -0.00018 },
+        { lat:  0.00000, lng: -0.00022 },
+        { lat:  0.00018, lng: -0.00018 },
+      ];
 
-          // Si no hay tramo en la URL, intentar usar el primero
-          if (!tramoName) {
-            const t0 = Array.isArray(cfgRally?.tramos) ? cfgRally.tramos[0] : null;
-            if (t0) {
-              const name = t0?.nombre || t0?.name || t0?.id;
-              const p = new URLSearchParams(location.search);
-              p.set('id', rallyId);
-              p.set('tramo', name);
-              location.search = p.toString();
-              return;
-            }
-          }
+      tramoCfg.radios.forEach((r, idx)=>{
+        const nR = idx + 1;
+        const dorsales = groups.get(nR) || [];
+        if (dorsales.length === 0) return;
 
-          // Mapa base
+        // Si hay muchos dorsales, dividimos en 2 piles cercanas para que no se amontonen.
+        const splitNeeded = dorsales.length > 30;
+        const mid = splitNeeded ? Math.ceil(dorsales.length/2) : dorsales.length;
+        const piles = splitNeeded ? [dorsales.slice(0, mid), dorsales.slice(mid)] : [dorsales];
+
+        piles.forEach((pile, pi)=>{
+          // HTML de la "pile"
+          const html = `
+            <div class="escoba-pile">
+              ${pile.slice(0, 80).map(d => `<span class="escoba-pill" title="Dorsal ${d}">${d}</span>`).join('')}
+            </div>
+          `;
+
+          // offset base por radio
+          const off = baseOffsets[idx % baseOffsets.length];
+
+          // offset secundario si hay 2 piles
+          const sec = splitNeeded
+            ? (pi === 0 ? { lat:  0.00007, lng:  0.00007 } : { lat: -0.00007, lng: -0.00007 })
+            : { lat:0, lng:0 };
+
+          const icon = L.divIcon({
+            className:'custom-icon',
+            html,
+            iconSize:[1,1],
+            iconAnchor:[0,0]
+          });
+
+          // ✅ pane superior
+          L.marker([r.lat + off.lat + sec.lat, r.lng + off.lng + sec.lng], { icon, pane:'abandPane' })
+            .addTo(overlayLayerGroup);
+        });
+      });
+    }
+
+    // ----------------- Suscripciones -----------------
+    let unsubAband = null;
+
+    function subscribeAbandonos(nombreTramo, tramoCfg){
+      // Limpia subs previas
+      if (unsubAband) { try { unsubAband(); } catch {} unsubAband = null; }
+
+      // Escuchamos doc con dorsales abandonados: rallies/{id}/abandono_tramos/{nombreTramo}
+      unsubAband = db.collection('rallies').doc(rallyId)
+        .collection('abandono_tramos').doc(nombreTramo)
+        .onSnapshot(snap=>{
+          const data = snap.exists ? (snap.data()||{}) : {};
+          renderAbandCards(data);
+          drawTrackAndRadios(tramoCfg);
+          renderAbandDotsOnMap(tramoCfg, data);
+        }, err => console.warn('abandono_tramos listener error', err));
+    }
+
+    // ----------------- UI Tramos -----------------
+    function renderTramoButtons(){
+      const box = document.getElementById('tcButtons');
+      box.innerHTML = '';
+      (configGlobal.tramos || []).forEach((tr, i)=>{
+        const btn = document.createElement('button');
+        btn.className = 'btn-tramo' + (tramoActivo === tr.nombre ? ' active' : '');
+        btn.textContent = tr.nombre;
+        btn.addEventListener('click', ()=>{
+          tramoActivo = tr.nombre;
+          // Activa visual
+          document.querySelectorAll('.btn-tramo').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          // (Re)carga mapa + subs
           buildMapIfNeeded();
+          subscribeAbandonos(tramoActivo, tr);
+        });
+        box.appendChild(btn);
+      });
+    }
 
-          // Primer render
-          renderAbandonRow();
-          refreshMapLayering();
+    // ----------------- Init -----------------
+    async function init(){
+      // Firebase config
+      if (typeof window.FIREBASE_CONFIG === 'undefined') {
+        alert("ERROR: No se encuentra 'firebase-config.js'.");
+        return;
+      }
+      if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+      db = firebase.firestore();
 
-        } catch (e) {
-          console.error(e);
-          alert('Error cargando configuración del rally.');
-        }
-      })();
+      // Reloj
+      await syncTime();
+      startClock();
 
-      // Modo viewer explícito
-      window.VIEWER = true;
-      document.body.classList.add('viewer');
-    })();
+      // ID de rally
+      if (!rallyId) {
+        rallyId = prompt("Introduce el ID del Rally:");
+        if (!rallyId) return;
+        const p = new URLSearchParams(location.search);
+        p.set('id', rallyId);
+        window.history.replaceState({}, '', `${location.pathname}?${p.toString()}`);
+      }
+
+      // Carga config del rally (logo, nombre, tramos con radios/track)
+      const cfg = await db.collection('config_rallies').doc(rallyId).get();
+      if (!cfg.exists) {
+        alert('El ID de rally no existe en config_rallies.');
+        return;
+      }
+      configGlobal = cfg.data() || {};
+      if (configGlobal.logo) document.getElementById('logo').src = configGlobal.logo;
+      if (configGlobal.nombre) document.getElementById('title').textContent = `${configGlobal.nombre} — Escoba`;
+
+      renderTramoButtons();
+
+      // Activa automáticamente el primer tramo visible (si quieres otro comportamiento, comenta esto)
+      if (Array.isArray(configGlobal.tramos) && configGlobal.tramos.length) {
+        tramoActivo = configGlobal.tramos[0].nombre;
+        // marca botón
+        const firstBtn = document.querySelector('.btn-tramo');
+        if (firstBtn) firstBtn.classList.add('active');
+        // crea mapa + subs
+        buildMapIfNeeded();
+        subscribeAbandonos(tramoActivo, configGlobal.tramos[0]);
+      }
+    }
+
+    window.addEventListener('load', init);
   </script>
 </body>
 </html>
