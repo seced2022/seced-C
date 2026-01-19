@@ -16,6 +16,9 @@
     /* Escoba: solo mostrar abandonos */
     body.escoba-skin .grid .card:not(.abandon) { display: none !important; }
 
+    /* ⛔ Ocultar bolitas en ESCoba */
+    body.escoba-skin .radio-dots { display: none !important; }
+
     /* Contenedor principal más ancho (aprovecha pantalla) */
     .app { max-width: 1600px; width: 95%; margin: 0 auto; }
 
@@ -29,20 +32,16 @@
       background: #0b1f12; border: 1px solid #13301e; color: #eafff7;
       border-radius: 10px; padding: 10px 14px;
     }
-    .tc-selector-bar {
-      display: flex; flex-wrap: wrap; gap: 8px;
-    }
+    .tc-selector-bar { display: flex; flex-wrap: wrap; gap: 8px; }
     .btn-tc {
       background: #0c2415; color: #eafff7; border: 1px solid #144a2b;
       padding: 8px 12px; border-radius: 8px; font-weight: 800; cursor: pointer;
     }
     .btn-tc.active { background: #16a34a; border-color: #22c55e; color: #041308; }
 
-    /* Encabezado y logo (opcional) */
     .brand { margin-top: 12px; }
     .brand-logo { height: 48px; }
 
-    /* Grilla estándar reutilizando styles.css .grid */
     #gridWrap { margin-top: 14px; }
   </style>
 </head>
@@ -58,7 +57,6 @@
       <div id="tcSelector" class="tc-selector-bar"></div>
     </div>
 
-    <!-- Contenedor de tarjetas (lo pinta app.js) -->
     <div id="gridWrap">
       <section id="grid" class="grid" aria-live="polite"></section>
     </div>
@@ -100,14 +98,13 @@
           const apiMs = Date.parse(data.datetime);
           timeOffsetMs = apiMs - Date.now();
         }catch(e){
-          // Si falla, seguimos con el reloj local.
           timeOffsetMs = 0;
         }
       }
 
       function startClock(){
         clearInterval(tickTimer);
-        tickTimer = setInterval(renderClock, 30); // 30ms para ms “vivos”
+        tickTimer = setInterval(renderClock, 30);
         renderClock();
         clearInterval(resyncTimer);
         resyncTimer = setInterval(syncTime, 5*60*1000);
@@ -121,7 +118,7 @@
 
       const qs = new URLSearchParams(location.search);
       let rallyId = qs.get('id');
-      let tramoQS = qs.get('tramo'); // tramo activo
+      let tramoQS = qs.get('tramo');
 
       async function ensureRallyId(){
         if (rallyId) return rallyId;
@@ -130,10 +127,9 @@
         rallyId = ask.trim();
         const p = new URLSearchParams(location.search);
         p.set('id', rallyId);
-        // si ya hay tramo, lo mantenemos
         if (tramoQS) p.set('tramo', tramoQS);
         location.search = p.toString();
-        return null; // la página recarga
+        return null;
       }
 
       function setTitleAndLogo(cfg){
@@ -146,13 +142,11 @@
         bar.innerHTML = '';
         const tramos = Array.isArray(cfg?.tramos) ? cfg.tramos : [];
         tramos.forEach(t=>{
-          // usamos nombre como identificador visual (como en DC)
           const name = t?.nombre || t?.name || t?.id || 'Tramo';
           const btn = document.createElement('button');
           btn.className = 'btn-tc' + ((tramoQS && tramoQS === name) ? ' active' : '');
           btn.textContent = name;
           btn.addEventListener('click', ()=>{
-            // Cambiamos ?tramo= y recargamos para que sync.js levante el tramo correcto
             const p = new URLSearchParams(location.search);
             p.set('id', rallyId);
             p.set('tramo', name);
@@ -164,7 +158,7 @@
 
       (async function init(){
         const ok = await ensureRallyId();
-        if (ok === null) return; // ya recargó si era necesario
+        if (ok === null) return;
 
         try{
           const doc = await db.collection('config_rallies').doc(rallyId).get();
@@ -179,13 +173,9 @@
           console.error(e);
           alert('Error cargando configuración del rally.');
         }
-
-        // Si no hay tramo en QS, no mostramos nada hasta que elijan uno (grid se queda vacío).
-        // Cuando hay ?tramo=, sync.js + app.js dibujan todas las tarjetas;
-        // nuestro CSS filtra para que solo se vean las de ABANDONO con su badge Rn.
       })();
 
-      /* ===== 3) Marcar explícitamente modo viewer (ya puesto en <body>) ===== */
+      /* ===== 3) Marcar explícitamente modo viewer ===== */
       window.VIEWER = true;
       document.body.classList.add('viewer');
     })();
