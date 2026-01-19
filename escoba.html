@@ -129,7 +129,8 @@
         const now = new Date(Date.now() + timeOffsetMs);
         const h = pad2(now.getHours());
         const m = pad2(now.getMinutes());
-        const s = pad2(now.getSeconds());
+        a = pad2(now.getSeconds());
+        const s = a;
         const ms = pad3(now.getMilliseconds());
         if (clockTime) clockTime.textContent = `${h}:${m}:${s}.${ms}`;
       }
@@ -243,7 +244,8 @@
               html: `<div class="radio-badge">R${nR}</div>`,
               iconSize: [70, 25]
             });
-            L.marker([r.lat, r.lng], {icon}).addTo(overlayLayerGroup);
+            // zIndex más bajo que las pilas de dorsales
+            L.marker([r.lat, r.lng], {icon, zIndexOffset: 100}).addTo(overlayLayerGroup);
           });
         }
       }
@@ -289,6 +291,9 @@
           groups.get(r).push(it.value);
         }
 
+        // Ángulos prefijados para offset circular (evitar solapado con la placa y entre radios cercanos)
+        const ANGLES_DEG = [210, 240, 270, 300, 330, 0, 30, 60, 90, 120, 150, 180];
+
         // Pintar cada grupo junto a su radio
         tramoCfg.radios.forEach((r, idx)=>{
           const nR = idx + 1;
@@ -307,10 +312,17 @@
             iconAnchor: [0,0]
           });
 
-          // Un pequeño offset para no tapar la placa de Rn
-          const lat = r.lat + 0.00020;
-          const lng = r.lng + 0.00020;
-          L.marker([lat, lng], { icon }).addTo(overlayLayerGroup);
+          // Offset circular respecto al radio para no tapar la placa
+          // Radio ~0.00045 grados (~50 m aprox según lat), ángulo depende del índice
+          const angDeg = ANGLES_DEG[idx % ANGLES_DEG.length];
+          const ang = (angDeg * Math.PI) / 180;
+          const R = 0.00045;
+
+          const lat = r.lat + R * Math.cos(ang);
+          const lng = r.lng + R * Math.sin(ang);
+
+          // zIndex alto para que la pila quede por encima de la placa del radio
+          L.marker([lat, lng], { icon, zIndexOffset: 1000 }).addTo(overlayLayerGroup);
         });
       }
 
