@@ -15,13 +15,8 @@
       --panel-border:#1d2d23;
       --text:#eafff7;
       --accent:#22c55e;
-      --danger:#991b1b;
-      --danger-bg:#7f1d1d;
-      --danger-strong:#dc2626;
     }
-
     body{ background:var(--bg); color:var(--text); }
-
     .app{ max-width:1280px; margin:0 auto; padding:16px; }
 
     .brand{ display:flex; align-items:center; gap:12px; }
@@ -32,14 +27,14 @@
       margin:10px 0 16px;
     }
 
+    /* Reloj: HH:MM:SS (sin ms) */
     .clock {
       display:flex; align-items:baseline; gap:10px;
       font-variant-numeric: tabular-nums;
       font-weight:900;
       letter-spacing:.5px;
+      font-size:28px;
     }
-    .clock .big { font-size:28px; }
-    .clock .ms { opacity:.85; font-size:16px; }
 
     .tc-buttons{
       display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;
@@ -57,7 +52,7 @@
       padding:14px;
     }
 
-    /* Línea de tarjetas (solo abandonos) */
+    /* Línea horizontal de abandonos */
     .aband-row{
       display:flex; gap:10px; flex-wrap:nowrap; overflow-x:auto; padding-bottom:6px;
     }
@@ -87,8 +82,8 @@
       user-select:none;
     }
 
-    /* Bolitas agrupadas (pile) */
-    .escoba-pile{
+    /* “Pile” de bolitas pequeñas (dorsales) */
+    .pile{
       display:flex; gap:5px; flex-wrap:wrap;
       align-items:center;
       padding:4px 6px;
@@ -97,7 +92,7 @@
       border-radius:12px;
       box-shadow:0 6px 16px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
     }
-    .escoba-pill{
+    .pill{
       display:inline-flex; align-items:center; justify-content:center;
       width:18px; height:18px;
       border-radius:9999px;
@@ -119,9 +114,7 @@
     </div>
 
     <div class="header-row">
-      <div class="clock">
-        <span id="hhmmss" class="big">--:--:--</span><span id="ms" class="ms">.000</span>
-      </div>
+      <div class="clock"><span id="hhmmss">--:--:--</span></div>
       <div class="tc-buttons" id="tcButtons"></div>
     </div>
 
@@ -139,29 +132,24 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // ----------------- Estado base -----------------
+    // ===== Estado base =====
     let db;
     let rallyId = new URLSearchParams(location.search).get('id');
     let configGlobal = null;
     let tramoActivo = null; // nombre visible exacto del tramo
     let map = null;
     let overlayLayerGroup = null;
+
+    // ===== Reloj (HH:MM:SS) =====
     let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
-
-    // ----------------- Reloj NTP HH:MM:SS.mmm -----------------
     const pad2 = n => String(n).padStart(2,'0');
-    const pad3 = n => String(n).padStart(3,'0');
-
     function renderClock(){
       const now = new Date(Date.now() + timeOffsetMs);
       const hh = pad2(now.getHours());
       const mm = pad2(now.getMinutes());
       const ss = pad2(now.getSeconds());
-      const ms = pad3(now.getMilliseconds());
       const elH = document.getElementById('hhmmss');
-      const elM = document.getElementById('ms');
       if (elH) elH.textContent = `${hh}:${mm}:${ss}`;
-      if (elM) elM.textContent = `.${ms}`;
     }
     async function syncTime(){
       try{
@@ -171,40 +159,33 @@
         const api = Date.parse(json.datetime);
         timeOffsetMs = api - Date.now();
       }catch(e){
-        // si falla, nos quedamos con offset 0 para no bloquear la UI
-        timeOffsetMs = 0;
+        timeOffsetMs = 0; // no bloquea UI si falla
       }
     }
     function startClock(){
       clearInterval(tickTimer);
-      tickTimer = setInterval(renderClock, 33); // ~30fps para ms
+      tickTimer = setInterval(renderClock, 1000);
       renderClock();
       clearInterval(resyncTimer);
       resyncTimer = setInterval(syncTime, 5*60*1000);
     }
 
-    // ----------------- Leaflet helpers -----------------
+    // ===== Leaflet helpers =====
     function buildMapIfNeeded(){
       if (map) return;
       map = L.map('mapEscoba').setView([37.88, -4.77], 12);
       L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-      // ✅ panes para controlar superposición
-      map.createPane('radiosPane');  // radios debajo
-      map.getPane('radiosPane').style.zIndex = 400;
-
-      map.createPane('abandPane');   // bolitas arriba
-      map.getPane('abandPane').style.zIndex = 450;
+      // panes para controlar superposición (no afecta a datos)
+      map.createPane('radiosPane');  map.getPane('radiosPane').style.zIndex = 400;
+      map.createPane('abandPane');   map.getPane('abandPane').style.zIndex = 450;
 
       overlayLayerGroup = L.layerGroup().addTo(map);
     }
-
     function clearMap(){
       if (!overlayLayerGroup) return;
       overlayLayerGroup.clearLayers();
     }
-
-    // Dibuja track y radios según tramo (estructura del doc config_rallies)
     function drawTrackAndRadios(tramoCfg){
       if (!tramoCfg) return;
       clearMap();
@@ -225,20 +206,18 @@
             html: `<div class="radio-badge">R${nR}</div>`,
             iconSize: [1,1], iconAnchor: [0,0]
           });
-          // ✅ en el pane de radios
           L.marker([r.lat, r.lng], { icon, pane:'radiosPane' }).addTo(overlayLayerGroup);
         });
       }
     }
 
-    // ----------------- Fila horizontal de abandonos (cajas rojas) -----------------
+    // ===== Línea horizontal de abandonos (cajas rojas) =====
     function renderAbandCards(docData){
       const row = document.getElementById('abandRow');
       if (!row) return;
       row.innerHTML = '';
 
-      // docData se espera como: { radio1:[d1,d2], radio2:[...], ... }  (compat)
-      // Aplanamos y formateamos en una sola línea
+      // docData: { radio1:[d1,d2], radio2:[...], ... }
       const entries = [];
       Object.keys(docData || {}).forEach(k=>{
         if (!k.startsWith('radio')) return;
@@ -247,7 +226,7 @@
         arr.forEach(d => entries.push({ dorsal:d, radio:n }));
       });
 
-      // Ordenamos por dorsal asc; si prefieres por radio, cambia key
+      // Orden simple por dorsal asc (igual que antes)
       entries.sort((a,b)=> a.dorsal - b.dorsal);
 
       for (const it of entries){
@@ -258,20 +237,20 @@
       }
     }
 
-    // ----------------- Bolitas en el mapa (por radio) con offset/anti-choque -----------------
+    // ===== Bolitas pequeñas en el mapa (dorsales abandonados) =====
     function renderAbandDotsOnMap(tramoCfg, docData){
       if (!tramoCfg || !Array.isArray(tramoCfg.radios)) return;
 
-      // Preparamos agrupación por radio: radioN -> [dorsales]
+      // Agrupamos por radio
       const groups = new Map();
       Object.keys(docData || {}).forEach(k=>{
         if (!k.startsWith('radio')) return;
         const n = Number(k.replace('radio',''));
         const arr = Array.isArray(docData[k]) ? docData[k] : [];
-        groups.set(n, arr.slice()); // copia
+        groups.set(n, arr.slice());
       });
 
-      // offsets suaves por índice de radio (anti choque con placa)
+      // offset suave por radio (para no montar sobre la placa)
       const baseOffsets = [
         { lat:  0.00022, lng:  0.00000 },
         { lat:  0.00018, lng:  0.00018 },
@@ -288,49 +267,28 @@
         const dorsales = groups.get(nR) || [];
         if (dorsales.length === 0) return;
 
-        // Si hay muchos dorsales, dividimos en 2 piles cercanas para que no se amontonen.
-        const splitNeeded = dorsales.length > 30;
-        const mid = splitNeeded ? Math.ceil(dorsales.length/2) : dorsales.length;
-        const piles = splitNeeded ? [dorsales.slice(0, mid), dorsales.slice(mid)] : [dorsales];
-
-        piles.forEach((pile, pi)=>{
-          // HTML de la "pile"
-          const html = `
-            <div class="escoba-pile">
-              ${pile.slice(0, 80).map(d => `<span class="escoba-pill" title="Dorsal ${d}">${d}</span>`).join('')}
-            </div>
-          `;
-
-          // offset base por radio
-          const off = baseOffsets[idx % baseOffsets.length];
-
-          // offset secundario si hay 2 piles
-          const sec = splitNeeded
-            ? (pi === 0 ? { lat:  0.00007, lng:  0.00007 } : { lat: -0.00007, lng: -0.00007 })
-            : { lat:0, lng:0 };
-
-          const icon = L.divIcon({
-            className:'custom-icon',
-            html,
-            iconSize:[1,1],
-            iconAnchor:[0,0]
-          });
-
-          // ✅ pane superior
-          L.marker([r.lat + off.lat + sec.lat, r.lng + off.lng + sec.lng], { icon, pane:'abandPane' })
-            .addTo(overlayLayerGroup);
+        const html = `
+          <div class="pile">
+            ${dorsales.slice(0, 120).map(d => `<span class="pill" title="Dorsal ${d}">${d}</span>`).join('')}
+          </div>
+        `;
+        const off = baseOffsets[idx % baseOffsets.length];
+        const icon = L.divIcon({
+          className:'custom-icon',
+          html,
+          iconSize:[1,1],
+          iconAnchor:[0,0]
         });
+        L.marker([r.lat + off.lat, r.lng + off.lng], { icon, pane:'abandPane' })
+          .addTo(overlayLayerGroup);
       });
     }
 
-    // ----------------- Suscripciones -----------------
+    // ===== Suscripciones =====
     let unsubAband = null;
-
     function subscribeAbandonos(nombreTramo, tramoCfg){
-      // Limpia subs previas
       if (unsubAband) { try { unsubAband(); } catch {} unsubAband = null; }
 
-      // Escuchamos doc con dorsales abandonados: rallies/{id}/abandono_tramos/{nombreTramo}
       unsubAband = db.collection('rallies').doc(rallyId)
         .collection('abandono_tramos').doc(nombreTramo)
         .onSnapshot(snap=>{
@@ -341,20 +299,18 @@
         }, err => console.warn('abandono_tramos listener error', err));
     }
 
-    // ----------------- UI Tramos -----------------
+    // ===== Botones de tramo =====
     function renderTramoButtons(){
       const box = document.getElementById('tcButtons');
       box.innerHTML = '';
-      (configGlobal.tramos || []).forEach((tr, i)=>{
+      (configGlobal.tramos || []).forEach((tr)=>{
         const btn = document.createElement('button');
         btn.className = 'btn-tramo' + (tramoActivo === tr.nombre ? ' active' : '');
         btn.textContent = tr.nombre;
         btn.addEventListener('click', ()=>{
           tramoActivo = tr.nombre;
-          // Activa visual
           document.querySelectorAll('.btn-tramo').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
-          // (Re)carga mapa + subs
           buildMapIfNeeded();
           subscribeAbandonos(tramoActivo, tr);
         });
@@ -362,9 +318,9 @@
       });
     }
 
-    // ----------------- Init -----------------
+    // ===== Init =====
     async function init(){
-      // Firebase config
+      // Firebase
       if (typeof window.FIREBASE_CONFIG === 'undefined') {
         alert("ERROR: No se encuentra 'firebase-config.js'.");
         return;
@@ -372,7 +328,7 @@
       if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
       db = firebase.firestore();
 
-      // Reloj
+      // Reloj (igual que antes pero sólo HH:MM:SS)
       await syncTime();
       startClock();
 
@@ -385,7 +341,7 @@
         window.history.replaceState({}, '', `${location.pathname}?${p.toString()}`);
       }
 
-      // Carga config del rally (logo, nombre, tramos con radios/track)
+      // Config del rally (logo, nombre, tramos)
       const cfg = await db.collection('config_rallies').doc(rallyId).get();
       if (!cfg.exists) {
         alert('El ID de rally no existe en config_rallies.');
@@ -395,18 +351,20 @@
       if (configGlobal.logo) document.getElementById('logo').src = configGlobal.logo;
       if (configGlobal.nombre) document.getElementById('title').textContent = `${configGlobal.nombre} — Escoba`;
 
+      // Construir botones de tramo (selección manual como antes)
       renderTramoButtons();
 
-      // Activa automáticamente el primer tramo visible (si quieres otro comportamiento, comenta esto)
+      // No auto-activamos tramo: se mantiene la interacción “como antes”
+      // (Si quisieras auto-activar el primero: descomenta abajo)
+      /*
       if (Array.isArray(configGlobal.tramos) && configGlobal.tramos.length) {
         tramoActivo = configGlobal.tramos[0].nombre;
-        // marca botón
         const firstBtn = document.querySelector('.btn-tramo');
         if (firstBtn) firstBtn.classList.add('active');
-        // crea mapa + subs
         buildMapIfNeeded();
         subscribeAbandonos(tramoActivo, configGlobal.tramos[0]);
       }
+      */
     }
 
     window.addEventListener('load', init);
