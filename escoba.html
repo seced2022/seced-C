@@ -7,22 +7,17 @@
   <link rel="stylesheet" href="styles.css?v=41" />
   <meta name="theme-color" content="#0b1f12" />
 
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
   <style>
-    /* Modo lectura (sin menús, sin franjas) */
-    .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
-    .viewer .time-stack { display: none !important; }
-    .viewer .card { pointer-events: none !important; }
+    /* Escoba: solo mostrar abandonos (ocultamos lo demás del renderer genérico) */
+    body.escoba-skin .grid { display: none !important; }
+    body.escoba-skin .radio-dots { display: none !important; } /* sin bolitas en las tarjetas */
 
-    /* Escoba: solo mostrar abandonos */
-    body.escoba-skin .grid .card:not(.abandon) { display: none !important; }
-
-    /* ⛔ Ocultar bolitas en ESCoba */
-    body.escoba-skin .radio-dots { display: none !important; }
-
-    /* Contenedor principal más ancho (aprovecha pantalla) */
+    /* Contenedor principal ancho */
     .app { max-width: 1600px; width: 95%; margin: 0 auto; }
 
-    /* Barra superior: reloj + botones */
+    /* Barra superior: reloj + tramos */
     .escoba-top {
       display: flex; align-items: center; justify-content: space-between;
       gap: 16px; padding: 12px 0;
@@ -42,7 +37,47 @@
     .brand { margin-top: 12px; }
     .brand-logo { height: 48px; }
 
-    #gridWrap { margin-top: 14px; }
+    /* Hilera de abandonos (una sola línea con scroll) */
+    #abandRowWrap { margin-top: 10px; }
+    #abandRow {
+      display: flex; align-items: center; gap: 10px;
+      overflow-x: auto; padding: 10px; scrollbar-width: thin;
+      border: 1px solid #13301e; border-radius: 12px; background: #0f1a14;
+    }
+    .aband-tile {
+      min-width: 90px; padding: 10px 12px; text-align: center;
+      background: #3f0a0a; border: 1px solid #661717; color: #ffeaea;
+      border-radius: 10px; font-weight: 900; letter-spacing: .3px;
+      box-shadow: 0 4px 10px rgba(0,0,0,.35);
+    }
+    .aband-tile .num { font-size: 20px; display:block; }
+    .aband-tile .r { font-size: 12px; opacity: .85; display:block; margin-top: 2px; }
+
+    /* Mapa y “bolitas” de dorsales en radios */
+    #mapWrap { margin-top: 14px; }
+    #mapEscoba { height: 520px; border-radius: 12px; border: 1px solid #1d2d23; }
+    .radio-badge {
+      background: #333; border: 2px solid #666; border-radius: 20px; color: #fff; font-weight: 800;
+      text-align: center; min-width: 70px; padding: 2px 6px; font-size: 13px;
+    }
+
+    /* Pila de bolitas junto a cada radio (los dorsales abandonados en ese radio) */
+    .escoba-pile {
+      display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+      background: rgba(15, 26, 20, .75); border: 1px solid #1d2d23;
+      padding: 6px; border-radius: 10px;
+    }
+    .escoba-pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 18px; height: 18px; padding: 0 4px;
+      font-size: 11px; font-weight: 900; color: #0a140f;
+      background: #ffd60a; border: 1px solid #eab308; border-radius: 9999px;
+      line-height: 1;
+    }
+
+    @media (max-width: 900px) {
+      #mapEscoba { height: 420px; }
+    }
   </style>
 </head>
 <body class="viewer escoba-skin">
@@ -57,8 +92,14 @@
       <div id="tcSelector" class="tc-selector-bar"></div>
     </div>
 
-    <div id="gridWrap">
-      <section id="grid" class="grid" aria-live="polite"></section>
+    <!-- Hilera de abandonos -->
+    <div id="abandRowWrap">
+      <div id="abandRow" aria-live="polite"></div>
+    </div>
+
+    <!-- Mapa del tramo con dots en radios -->
+    <div id="mapWrap">
+      <div id="mapEscoba"></div>
     </div>
   </main>
 
@@ -66,6 +107,9 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
   <script src="firebase-config.js?v=16"></script>
+
+  <!-- Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- Reutilizamos tu motor de sincronización y el renderer estándar -->
   <script src="sync.js?v=16"></script>
@@ -112,24 +156,28 @@
 
       syncTime().then(startClock);
 
-      /* ===== 2) Cargar config_rallies y montar botones de tramos ===== */
+      /* ===== 2) Inicialización Firebase y carga config rally ===== */
       if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
       const db = firebase.firestore();
 
       const qs = new URLSearchParams(location.search);
       let rallyId = qs.get('id');
-      let tramoQS = qs.get('tramo');
+      let tramoName = qs.get('tramo');
+
+      let cfgRally = null;
+      let map = null;
+      let overlayLayerGroup = null;
 
       async function ensureRallyId(){
-        if (rallyId) return rallyId;
+        if (rallyId) return true;
         const ask = prompt('Introduce el ID del Rally:');
-        if (!ask) return null;
+        if (!ask) return false;
         rallyId = ask.trim();
         const p = new URLSearchParams(location.search);
         p.set('id', rallyId);
-        if (tramoQS) p.set('tramo', tramoQS);
+        if (tramoName) p.set('tramo', tramoName);
         location.search = p.toString();
-        return null;
+        return false;
       }
 
       function setTitleAndLogo(cfg){
@@ -144,7 +192,7 @@
         tramos.forEach(t=>{
           const name = t?.nombre || t?.name || t?.id || 'Tramo';
           const btn = document.createElement('button');
-          btn.className = 'btn-tc' + ((tramoQS && tramoQS === name) ? ' active' : '');
+          btn.className = 'btn-tc' + ((tramoName && tramoName === name) ? ' active' : '');
           btn.textContent = name;
           btn.addEventListener('click', ()=>{
             const p = new URLSearchParams(location.search);
@@ -156,26 +204,177 @@
         });
       }
 
+      function getCfgTramoByName(cfg, name){
+        const tramos = Array.isArray(cfg?.tramos) ? cfg.tramos : [];
+        return tramos.find(t => (t?.nombre||t?.name||t?.id) === name) || null;
+      }
+
+      function buildMapIfNeeded(){
+        if (map) return;
+        map = L.map('mapEscoba').setView([37.88, -4.77], 12);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        overlayLayerGroup = L.layerGroup().addTo(map);
+      }
+
+      function clearOverlay(){
+        if (overlayLayerGroup) overlayLayerGroup.clearLayers();
+      }
+
+      function fitToBoundsIf(poly){
+        try { map.fitBounds(poly.getBounds()); } catch {}
+      }
+
+      function drawTrackAndRadios(tramoCfg){
+        if (!map || !tramoCfg) return;
+        clearOverlay();
+
+        // Track (como en DC, si viene como array de pares [lat,lng])
+        if (Array.isArray(tramoCfg.track) && tramoCfg.track.length >= 2) {
+          const poly = L.polyline(tramoCfg.track, { color: '#22c55e', weight: 4 }).addTo(overlayLayerGroup);
+          fitToBoundsIf(poly);
+        }
+
+        // Radios base
+        if (Array.isArray(tramoCfg.radios)) {
+          tramoCfg.radios.forEach((r, idx) => {
+            const nR = idx + 1;
+            const icon = L.divIcon({
+              className: 'custom-icon',
+              html: `<div class="radio-badge">R${nR}</div>`,
+              iconSize: [70, 25]
+            });
+            L.marker([r.lat, r.lng], {icon}).addTo(overlayLayerGroup);
+          });
+        }
+      }
+
+      /* ===== 3) Fuente de datos de abandonos: usamos items del renderer (sync.js + app.js) ===== */
+      function getItems(){ return (typeof window._getItems === 'function') ? window._getItems() : []; }
+
+      // Render de la hilera horizontal
+      function renderAbandonRow(){
+        const row = document.getElementById('abandRow');
+        if (!row) return;
+        const items = getItems();
+        const aband = items
+          .filter(x => x && x.status === 'abandon')
+          .sort((a,b)=> (a.value||0) - (b.value||0));
+
+        row.innerHTML = '';
+        for (const it of aband){
+          const tile = document.createElement('div');
+          tile.className = 'aband-tile';
+          tile.innerHTML = `
+            <span class="num">${it.value}</span>
+            <span class="r">${(it.rNumber!=null) ? ('R' + it.rNumber) : 'R?'}</span>
+          `;
+          row.appendChild(tile);
+        }
+      }
+
+      // Dibuja bolitas de dorsales abandonados en cada radio
+      function renderAbandDotsOnMap(){
+        if (!map || !cfgRally || !tramoName) return;
+
+        const tramoCfg = getCfgTramoByName(cfgRally, tramoName);
+        if (!tramoCfg || !Array.isArray(tramoCfg.radios) || tramoCfg.radios.length === 0) return;
+
+        // Agrupar por rNumber
+        const items = getItems();
+        const aband = items.filter(x => x && x.status === 'abandon' && Number.isInteger(x.rNumber) && x.rNumber>0);
+        const groups = new Map(); // rNumber -> dorsales[]
+        for (const it of aband){
+          const r = it.rNumber;
+          if (!groups.has(r)) groups.set(r, []);
+          groups.get(r).push(it.value);
+        }
+
+        // Pintar cada grupo junto a su radio
+        tramoCfg.radios.forEach((r, idx)=>{
+          const nR = idx + 1;
+          const dorsales = groups.get(nR) || [];
+          if (dorsales.length === 0) return;
+
+          const html = `
+            <div class="escoba-pile">
+              ${dorsales.slice(0, 50).map(d => `<span class="escoba-pill" title="Dorsal ${d}">${d}</span>`).join('')}
+            </div>
+          `;
+          const icon = L.divIcon({
+            className: 'custom-icon',
+            html,
+            iconSize: [1,1],
+            iconAnchor: [0,0]
+          });
+
+          // Un pequeño offset para no tapar la placa de Rn
+          const lat = r.lat + 0.00020;
+          const lng = r.lng + 0.00020;
+          L.marker([lat, lng], { icon }).addTo(overlayLayerGroup);
+        });
+      }
+
+      // Orquestación cuando cambie el tramo o lleguen datos nuevos
+      function refreshMapLayering(){
+        if (!cfgRally || !tramoName) return;
+        buildMapIfNeeded();
+        const tramoCfg = getCfgTramoByName(cfgRally, tramoName);
+        drawTrackAndRadios(tramoCfg);
+        renderAbandDotsOnMap();
+      }
+
+      // Hook: cuando el sync remoto actualiza, re-rendereamos nuestra hilera + dots
+      const origOnRemote = window._onRemoteUpdate;
+      if (typeof origOnRemote === 'function') {
+        window._onRemoteUpdate = (arr) => {
+          origOnRemote(arr);
+          renderAbandonRow();
+          refreshMapLayering();
+        };
+      }
+
+      // Init
       (async function init(){
         const ok = await ensureRallyId();
-        if (ok === null) return;
+        if (!ok) return;
 
-        try{
+        try {
           const doc = await db.collection('config_rallies').doc(rallyId).get();
           if (!doc.exists) {
             alert('El ID del Rally no existe en la base de datos.');
             return;
           }
-          const cfg = doc.data();
-          setTitleAndLogo(cfg);
-          drawTramoButtons(cfg);
-        }catch(e){
+          cfgRally = doc.data();
+          setTitleAndLogo(cfgRally);
+          drawTramoButtons(cfgRally);
+
+          // Si no hay tramo en la URL, intentar usar el primero
+          if (!tramoName) {
+            const t0 = Array.isArray(cfgRally?.tramos) ? cfgRally.tramos[0] : null;
+            if (t0) {
+              const name = t0?.nombre || t0?.name || t0?.id;
+              const p = new URLSearchParams(location.search);
+              p.set('id', rallyId);
+              p.set('tramo', name);
+              location.search = p.toString();
+              return;
+            }
+          }
+
+          // Mapa base
+          buildMapIfNeeded();
+
+          // Primer render
+          renderAbandonRow();
+          refreshMapLayering();
+
+        } catch (e) {
           console.error(e);
           alert('Error cargando configuración del rally.');
         }
       })();
 
-      /* ===== 3) Marcar explícitamente modo viewer ===== */
+      // Modo viewer explícito
       window.VIEWER = true;
       document.body.classList.add('viewer');
     })();
