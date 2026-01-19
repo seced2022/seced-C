@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SECeD - Escoba</title>
+  <link rel="stylesheet" href="styles.css?v=41" />
+  <meta name="theme-color" content="#0b1f12" />
+
+  <style>
+    /* Modo lectura (sin menús, sin franjas) */
+    .viewer .menu-btn, .viewer .menu, .viewer .hist-btn, .viewer .tooltip { display: none !important; }
+    .viewer .time-stack { display: none !important; }
+    .viewer .card { pointer-events: none !important; }
+
+    /* Escoba: solo mostrar abandonos */
+    body.escoba-skin .grid .card:not(.abandon) { display: none !important; }
+
+    /* Contenedor principal más ancho (aprovecha pantalla) */
+    .app { max-width: 1600px; width: 95%; margin: 0 auto; }
+
+    /* Barra superior: reloj + botones */
+    .escoba-top {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; padding: 12px 0;
+    }
+    .clock {
+      font-variant-numeric: tabular-nums; font-weight: 900; font-size: 28px;
+      background: #0b1f12; border: 1px solid #13301e; color: #eafff7;
+      border-radius: 10px; padding: 10px 14px;
+    }
+    .tc-selector-bar {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .btn-tc {
+      background: #0c2415; color: #eafff7; border: 1px solid #144a2b;
+      padding: 8px 12px; border-radius: 8px; font-weight: 800; cursor: pointer;
+    }
+    .btn-tc.active { background: #16a34a; border-color: #22c55e; color: #041308; }
+
+    /* Encabezado y logo (opcional) */
+    .brand { margin-top: 12px; }
+    .brand-logo { height: 48px; }
+
+    /* Grilla estándar reutilizando styles.css .grid */
+    #gridWrap { margin-top: 14px; }
+  </style>
+</head>
+<body class="viewer escoba-skin">
+  <main class="app">
+    <div class="brand">
+      <img id="mainLogo" src="logo.svg" alt="SECeD" class="brand-logo" onerror="this.src='logo.png'"/>
+    </div>
+    <h1 id="mainTitle">SECeD — Escoba</h1>
+
+    <div class="escoba-top">
+      <div class="clock"><span id="clockTime">--:--:--.---</span></div>
+      <div id="tcSelector" class="tc-selector-bar"></div>
+    </div>
+
+    <!-- Contenedor de tarjetas (lo pinta app.js) -->
+    <div id="gridWrap">
+      <section id="grid" class="grid" aria-live="polite"></section>
+    </div>
+  </main>
+
+  <!-- Firebase + config -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js?v=16"></script>
+
+  <!-- Reutilizamos tu motor de sincronización y el renderer estándar -->
+  <script src="sync.js?v=16"></script>
+  <script src="app.js?v=16"></script>
+
+  <script>
+    (function(){
+      /* ===== 1) Reloj NTP HH:MM:SS.mmm ===== */
+      const TIMEZONE = 'Europe/Madrid';
+      const clockTime = document.getElementById('clockTime');
+      let timeOffsetMs = 0, tickTimer = null, resyncTimer = null;
+
+      const pad2 = n => String(n).padStart(2,'0');
+      const pad3 = n => String(n).padStart(3,'0');
+
+      function renderClock(){
+        const now = new Date(Date.now() + timeOffsetMs);
+        const h = pad2(now.getHours());
+        const m = pad2(now.getMinutes());
+        const s = pad2(now.getSeconds());
+        const ms = pad3(now.getMilliseconds());
+        if (clockTime) clockTime.textContent = `${h}:${m}:${s}.${ms}`;
+      }
+
+      async function syncTime(){
+        try{
+          const res = await fetch(`https://worldtimeapi.org/api/timezone/${encodeURIComponent(TIMEZONE)}`, { cache:'no-store' });
+          if (!res.ok) throw new Error('HTTP '+res.status);
+          const data = await res.json();
+          const apiMs = Date.parse(data.datetime);
+          timeOffsetMs = apiMs - Date.now();
+        }catch(e){
+          // Si falla, seguimos con el reloj local.
+          timeOffsetMs = 0;
+        }
+      }
+
+      function startClock(){
+        clearInterval(tickTimer);
+        tickTimer = setInterval(renderClock, 30); // 30ms para ms “vivos”
+        renderClock();
+        clearInterval(resyncTimer);
+        resyncTimer = setInterval(syncTime, 5*60*1000);
+      }
+
+      syncTime().then(startClock);
+
+      /* ===== 2) Cargar config_rallies y montar botones de tramos ===== */
+      if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
+      const db = firebase.firestore();
+
+      const qs = new URLSearchParams(location.search);
+      let rallyId = qs.get('id');
+      let tramoQS = qs.get('tramo'); // tramo activo
+
+      async function ensureRallyId(){
+        if (rallyId) return rallyId;
+        const ask = prompt('Introduce el ID del Rally:');
+        if (!ask) return null;
+        rallyId = ask.trim();
+        const p = new URLSearchParams(location.search);
+        p.set('id', rallyId);
+        // si ya hay tramo, lo mantenemos
+        if (tramoQS) p.set('tramo', tramoQS);
+        location.search = p.toString();
+        return null; // la página recarga
+      }
+
+      function setTitleAndLogo(cfg){
+        if (cfg?.logo) document.getElementById('mainLogo').src = cfg.logo;
+        if (cfg?.nombre) document.getElementById('mainTitle').innerText = `${cfg.nombre} — Escoba`;
+      }
+
+      function drawTramoButtons(cfg){
+        const bar = document.getElementById('tcSelector');
+        bar.innerHTML = '';
+        const tramos = Array.isArray(cfg?.tramos) ? cfg.tramos : [];
+        tramos.forEach(t=>{
+          // usamos nombre como identificador visual (como en DC)
+          const name = t?.nombre || t?.name || t?.id || 'Tramo';
+          const btn = document.createElement('button');
+          btn.className = 'btn-tc' + ((tramoQS && tramoQS === name) ? ' active' : '');
+          btn.textContent = name;
+          btn.addEventListener('click', ()=>{
+            // Cambiamos ?tramo= y recargamos para que sync.js levante el tramo correcto
+            const p = new URLSearchParams(location.search);
+            p.set('id', rallyId);
+            p.set('tramo', name);
+            location.search = p.toString();
+          });
+          bar.appendChild(btn);
+        });
+      }
+
+      (async function init(){
+        const ok = await ensureRallyId();
+        if (ok === null) return; // ya recargó si era necesario
+
+        try{
+          const doc = await db.collection('config_rallies').doc(rallyId).get();
+          if (!doc.exists) {
+            alert('El ID del Rally no existe en la base de datos.');
+            return;
+          }
+          const cfg = doc.data();
+          setTitleAndLogo(cfg);
+          drawTramoButtons(cfg);
+        }catch(e){
+          console.error(e);
+          alert('Error cargando configuración del rally.');
+        }
+
+        // Si no hay tramo en QS, no mostramos nada hasta que elijan uno (grid se queda vacío).
+        // Cuando hay ?tramo=, sync.js + app.js dibujan todas las tarjetas;
+        // nuestro CSS filtra para que solo se vean las de ABANDONO con su badge Rn.
+      })();
+
+      /* ===== 3) Marcar explícitamente modo viewer (ya puesto en <body>) ===== */
+      window.VIEWER = true;
+      document.body.classList.add('viewer');
+    })();
+  </script>
+</body>
+</html>
