@@ -18,12 +18,13 @@ label{display:block;margin-bottom:5px;font-weight:bold;font-size:0.85rem;color:#
 input[type="text"],input[type="file"]{width:100%;padding:12px;background:#000;border:1px solid var(--border);color:white;border-radius:6px;margin-bottom:15px;box-sizing:border-box;}
 .tc-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;position:relative;}
 .map-editor{height:450px;width:100%;border-radius:8px;margin-top:10px;border:1px solid #333;}
-.btn{padding:10px;border-radius:6px;border:none;font-weight:bold;cursor:pointer;margin-bottom:5px;}
+.btn{padding:10px;border-radius:6px;border:none;font-weight:bold;cursor:pointer;margin-bottom:6px;}
 .btn-add{background:#1e293b;color:white;}
 .btn-save{background:var(--accent);color:white;font-size:1.2rem;width:100%;margin-top:20px;}
 .btn-remove{background:#7f1d1d;color:white;position:absolute;top:15px;right:15px;font-size:0.8rem;padding:6px 12px;}
-.preview-icon{max-height:60px;margin-bottom:10px;display:none;}
+.preview-img{max-height:80px;display:none;margin-bottom:15px;}
 .loading-tag{color:#fbbf24;font-size:0.8rem;display:none;margin-left:10px;}
+.map-buttons{margin-top:10px;margin-bottom:10px;}
 </style>
 </head>
 
@@ -38,14 +39,17 @@ input[type="text"],input[type="file"]{width:100%;padding:12px;background:#000;bo
 <label>NOMBRE PÚBLICO DEL RALLY</label>
 <input type="text" id="rallyNombre">
 
-<label>ICONO SALIDA PERSONALIZADO</label>
+<label>LOGO / PLACA DEL RALLY (Se comprimirá automáticamente)</label>
+<input type="file" accept="image/*" onchange="procesarYComprimirImagen(this)">
+<img id="imgPreview" class="preview-img">
+<input type="hidden" id="rallyLogoBase64">
+
+<label>ICONO SALIDA PERSONALIZADO (Opcional)</label>
 <input type="file" accept="image/*" onchange="subirIcono(this,'salida')">
-<img id="previewSalida" class="preview-icon">
 <input type="hidden" id="iconoSalidaBase64">
 
-<label>ICONO META PERSONALIZADO</label>
+<label>ICONO META PERSONALIZADO (Opcional)</label>
 <input type="file" accept="image/*" onchange="subirIcono(this,'meta')">
-<img id="previewMeta" class="preview-icon">
 <input type="hidden" id="iconoMetaBase64">
 </div>
 
@@ -65,9 +69,9 @@ input[type="text"],input[type="file"]{width:100%;padding:12px;background:#000;bo
 if(!firebase.apps.length)firebase.initializeApp(window.FIREBASE_CONFIG);
 const db=firebase.firestore();
 let tramoCount=0;
-
 let iconoSalidaGlobal=null;
 let iconoMetaGlobal=null;
+const LOGO_GENERICO="logo.png";
 
 /* ================= CARGAR ================= */
 
@@ -75,26 +79,20 @@ async function verificarRallyExistente(id){
 if(!id)return;
 document.getElementById('loadingStatus').style.display="inline";
 
-try{
 const doc=await db.collection("config_rallies").doc(id).get();
 if(doc.exists){
 const data=doc.data();
 
 document.getElementById('rallyNombre').value=data.nombre||"";
+
+if(data.logo){
+document.getElementById('rallyLogoBase64').value=data.logo;
+document.getElementById('imgPreview').src=data.logo;
+document.getElementById('imgPreview').style.display='block';
+}
+
 iconoSalidaGlobal=data.iconoSalida||null;
 iconoMetaGlobal=data.iconoMeta||null;
-
-if(iconoSalidaGlobal){
-document.getElementById('previewSalida').src=iconoSalidaGlobal;
-document.getElementById('previewSalida').style.display='block';
-document.getElementById('iconoSalidaBase64').value=iconoSalidaGlobal;
-}
-
-if(iconoMetaGlobal){
-document.getElementById('previewMeta').src=iconoMetaGlobal;
-document.getElementById('previewMeta').style.display='block';
-document.getElementById('iconoMetaBase64').value=iconoMetaGlobal;
-}
 
 document.getElementById('tramosList').innerHTML="";
 tramoCount=0;
@@ -111,12 +109,60 @@ t.meta||null
 });
 }
 }
-}catch(e){console.error(e);}
 
 document.getElementById('loadingStatus').style.display="none";
 }
 
-/* ================= ICONOS ================= */
+/* ================= TRAMOS ================= */
+
+function agregarTramoConDatos(nombre="",track=[],radios=[],salida=null,meta=null){
+tramoCount++;
+const idMap=`map_${tramoCount}`;
+
+const html=`
+<div class="tc-card" id="card_${idMap}">
+<button class="btn btn-remove" onclick="document.getElementById('card_${idMap}').remove()">Eliminar</button>
+
+<label>NOMBRE DEL TRAMO</label>
+<input type="text" class="tc-name" value="${nombre}">
+
+<button class="btn btn-add" onclick="duplicarTramo('${idMap}',true)">Duplicar con radios</button>
+<button class="btn btn-add" onclick="duplicarTramo('${idMap}',false)">Duplicar sin radios</button>
+
+<div class="map-buttons">
+<button class="btn btn-add" onclick="activarModo('${idMap}','salida')">🟢 Colocar Salida</button>
+<button class="btn btn-add" onclick="activarModo('${idMap}','meta')">🏁 Colocar Meta</button>
+</div>
+
+<div id="${idMap}" class="map-editor"></div>
+
+<input type="hidden" class="tc-track-data" value='${JSON.stringify(track)}'>
+<input type="hidden" class="tc-radios-data" value='${JSON.stringify(radios)}'>
+<input type="hidden" class="tc-salida-data" value='${JSON.stringify(salida)}'>
+<input type="hidden" class="tc-meta-data" value='${JSON.stringify(meta)}'>
+</div>`;
+
+document.getElementById('tramosList').insertAdjacentHTML('beforeend',html);
+setTimeout(()=>initMapa(idMap,track,radios,salida,meta),100);
+}
+
+function agregarTramo(){agregarTramoConDatos();}
+
+function duplicarTramo(idMap,conRadios){
+const card=document.getElementById('card_'+idMap);
+const nombre=card.querySelector('.tc-name').value+" (Copia)";
+const track=JSON.parse(card.querySelector('.tc-track-data').value||"[]");
+const radios=conRadios?JSON.parse(card.querySelector('.tc-radios-data').value||"[]"):[];
+agregarTramoConDatos(nombre,track,radios,null,null);
+}
+
+/* ================= MAPA ================= */
+
+let modoActivo={};
+
+function activarModo(id,tipo){
+modoActivo[id]=tipo;
+}
 
 function getSalidaIcon(){
 return L.icon({
@@ -133,50 +179,6 @@ iconSize:[32,32],
 iconAnchor:[16,32]
 });
 }
-
-function subirIcono(input,tipo){
-const file=input.files[0];if(!file)return;
-const reader=new FileReader();
-reader.onload=e=>{
-if(tipo==="salida"){
-iconoSalidaGlobal=e.target.result;
-document.getElementById('previewSalida').src=e.target.result;
-document.getElementById('previewSalida').style.display='block';
-document.getElementById('iconoSalidaBase64').value=e.target.result;
-}
-if(tipo==="meta"){
-iconoMetaGlobal=e.target.result;
-document.getElementById('previewMeta').src=e.target.result;
-document.getElementById('previewMeta').style.display='block';
-document.getElementById('iconoMetaBase64').value=e.target.result;
-}
-};
-reader.readAsDataURL(file);
-}
-
-/* ================= TRAMOS ================= */
-
-function agregarTramoConDatos(nombre="",track=[],radios=[],salida=null,meta=null){
-tramoCount++;
-const idMap=`map_${tramoCount}`;
-const html=`
-<div class="tc-card" id="card_${idMap}">
-<button class="btn btn-remove" onclick="document.getElementById('card_${idMap}').remove()">Eliminar</button>
-<label>NOMBRE DEL TRAMO</label>
-<input type="text" class="tc-name" value="${nombre}">
-<div id="${idMap}" class="map-editor"></div>
-<input type="hidden" class="tc-track-data" value='${JSON.stringify(track)}'>
-<input type="hidden" class="tc-radios-data" value='${JSON.stringify(radios)}'>
-<input type="hidden" class="tc-salida-data" value='${JSON.stringify(salida)}'>
-<input type="hidden" class="tc-meta-data" value='${JSON.stringify(meta)}'>
-</div>`;
-document.getElementById('tramosList').insertAdjacentHTML('beforeend',html);
-setTimeout(()=>initMapa(idMap,track,radios,salida,meta),100);
-}
-
-function agregarTramo(){agregarTramoConDatos();}
-
-/* ================= MAPA COMPLETO ================= */
 
 function initMapa(id,existingTrack,existingRadios,existingSalida,existingMeta){
 
@@ -228,50 +230,71 @@ JSON.stringify({lat:pos.lat,lng:pos.lng});
 });
 }
 
-/* DRAW CONTROL */
-const drawControl=new L.Control.Draw({
-draw:{
-polyline:{shapeOptions:{color:'#17a34a',weight:5}},
-marker:true,
-polygon:false,circle:false,rectangle:false,circlemarker:false
-},
-edit:{featureGroup:drawnItems}
+/* CLICK PARA COLOCAR */
+map.on('click',function(e){
+
+if(!modoActivo[id])return;
+
+if(modoActivo[id]==="salida"){
+if(salidaMarker)drawnItems.removeLayer(salidaMarker);
+salidaMarker=L.marker(e.latlng,{icon:getSalidaIcon(),draggable:true}).addTo(drawnItems);
+salidaMarker.on('dragend',()=>{
+const pos=salidaMarker.getLatLng();
+document.querySelector(`#card_${id} .tc-salida-data`).value=
+JSON.stringify({lat:pos.lat,lng:pos.lng});
 });
-map.addControl(drawControl);
-
-/* UPDATE */
-function updateInputs(){
-const track=[];
-const radios=[];
-let rCount=1;
-
-drawnItems.eachLayer(layer=>{
-if(layer instanceof L.Polyline){
-layer.getLatLngs().forEach(ll=>track.push({lat:ll.lat,lng:ll.lng}));
+document.querySelector(`#card_${id} .tc-salida-data`).value=
+JSON.stringify({lat:e.latlng.lat,lng:e.latlng.lng});
 }
-else if(layer instanceof L.Marker && layer.tipo==="radio"){
-radios.push({lat:layer.getLatLng().lat,lng:layer.getLatLng().lng});
-layer.bindTooltip("Radio "+rCount++,{permanent:true});
-}
+
+if(modoActivo[id]==="meta"){
+if(metaMarker)drawnItems.removeLayer(metaMarker);
+metaMarker=L.marker(e.latlng,{icon:getMetaIcon(),draggable:true}).addTo(drawnItems);
+metaMarker.on('dragend',()=>{
+const pos=metaMarker.getLatLng();
+document.querySelector(`#card_${id} .tc-meta-data`).value=
+JSON.stringify({lat:pos.lat,lng:pos.lng});
 });
-
-document.querySelector(`#card_${id} .tc-track-data`).value=JSON.stringify(track);
-document.querySelector(`#card_${id} .tc-radios-data`).value=JSON.stringify(radios);
+document.querySelector(`#card_${id} .tc-meta-data`).value=
+JSON.stringify({lat:e.latlng.lat,lng:e.latlng.lng});
 }
 
-map.on(L.Draw.Event.CREATED,(e)=>{
-if(e.layerType==='polyline'){
-drawnItems.eachLayer(l=>{if(l instanceof L.Polyline)drawnItems.removeLayer(l);});
-}
-if(e.layerType==='marker'){
-e.layer.tipo="radio";
-}
-drawnItems.addLayer(e.layer);
-updateInputs();
+modoActivo[id]=null;
 });
+}
 
-map.on(L.Draw.Event.EDITED,updateInputs);
-map.on(L.Draw.Event.DELETED,updateInputs);
+/* ================= LOGO ================= */
+
+function procesarYComprimirImagen(input){
+const file=input.files[0]; if(!file)return;
+const reader=new FileReader();
+reader.onload=function(e){
+const img=new Image();
+img.onload=function(){
+const canvas=document.createElement('canvas');
+const MAX=400; let w=img.width,h=img.height;
+if(w>MAX){h*=MAX/w;w=MAX;}
+canvas.width=w; canvas.height=h;
+const ctx=canvas.getContext('2d');
+ctx.drawImage(img,0,0,w,h);
+const base64=canvas.toDataURL('image/jpeg',0.7);
+document.getElementById('rallyLogoBase64').value=base64;
+document.getElementById('imgPreview').src=base64;
+document.getElementById('imgPreview').style.display='block';
+};
+img.src=e.target.result;
+};
+reader.readAsDataURL(file);
+}
+
+function subirIcono(input,tipo){
+const file=input.files[0]; if(!file)return;
+const reader=new FileReader();
+reader.onload=e=>{
+if(tipo==="salida") iconoSalidaGlobal=e.target.result;
+if(tipo==="meta") iconoMetaGlobal=e.target.result;
+};
+reader.readAsDataURL(file);
 }
 
 /* ================= GUARDAR ================= */
@@ -279,6 +302,7 @@ map.on(L.Draw.Event.DELETED,updateInputs);
 async function guardarRallyCompleto(){
 const id=document.getElementById('rallyId').value.trim();
 const nombre=document.getElementById('rallyNombre').value.trim();
+let logo=document.getElementById('rallyLogoBase64').value||LOGO_GENERICO;
 if(!id||!nombre)return alert("Falta ID o Nombre");
 
 const tramos=[];
@@ -293,14 +317,13 @@ meta:JSON.parse(card.querySelector('.tc-meta-data').value||"null")
 });
 
 await db.collection("config_rallies").doc(id).set({
-nombre,
-tramos,
-iconoSalida:document.getElementById('iconoSalidaBase64').value||null,
-iconoMeta:document.getElementById('iconoMetaBase64').value||null,
+nombre,logo,tramos,
+iconoSalida:iconoSalidaGlobal||null,
+iconoMeta:iconoMetaGlobal||null,
 ultimaEdicion:new Date().toISOString()
 });
 
-alert("Guardado correctamente");
+alert("✅ Rally guardado correctamente.");
 }
 </script>
 </body>
