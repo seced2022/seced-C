@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>SECeD - Dirección de Carrera</title>
 
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
 .grid-dc { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; width: 100%; box-sizing: border-box; }
@@ -15,7 +15,7 @@
 .btn-tc-toggle.active { background: #16a34a; border-color: #fff; }
 .card-dc { background: #0f1a14; border: 1px solid #1d2d23; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; height: 500px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.map-dc { flex: 1; border-radius: 8px; background: #000; border: 1px solid #1d2d23; z-index: 1; }
+.map-dc { flex: 1; border-radius: 8px; background: #000; border: 1px solid #1d2d23; }
 
 .btn-stop { background: #7f1d1d; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: 800; cursor: pointer; }
 .btn-stop.blink { background: #ff0000; animation: blinker 1s linear infinite; box-shadow: 0 0 15px #ff0000; }
@@ -112,6 +112,10 @@ container.insertAdjacentHTML('beforeend', `
 <div class="card-dc">
 <div class="card-header">
 <h2 class="tc-title">${nombre}</h2>
+<div>
+<button class="btn-stop" id="stop-${tId}" onclick="actualizarEstado('${nombre}', true)">PARAR SALIDA</button>
+<button class="btn-resume" onclick="actualizarEstado('${nombre}', false)">REANUDAR</button>
+</div>
 </div>
 <div id="map-${tId}" class="map-dc"></div>
 </div>
@@ -127,45 +131,43 @@ const poly = L.polyline(tramo.track, {color: '#22c55e', weight: 4}).addTo(map);
 map.fitBounds(poly.getBounds());
 }
 
-// ===== SALIDA =====
+// SALIDA
 if (tramo.salida?.lat) {
-const iconSalida = L.icon({
+L.marker([tramo.salida.lat, tramo.salida.lng], {
+icon: L.icon({
 iconUrl: configGlobal.iconoSalida || 'https://cdn-icons-png.flaticon.com/512/190/190411.png',
 iconSize: [32,32],
 iconAnchor: [16,32]
-});
-L.marker([tramo.salida.lat, tramo.salida.lng], {icon: iconSalida}).addTo(map);
+})
+}).addTo(map);
 }
 
-// ===== META =====
+// META
 if (tramo.meta?.lat) {
-const iconMeta = L.icon({
+L.marker([tramo.meta.lat, tramo.meta.lng], {
+icon: L.icon({
 iconUrl: configGlobal.iconoMeta || 'https://cdn-icons-png.flaticon.com/512/190/190406.png',
 iconSize: [32,32],
 iconAnchor: [16,32]
-});
-L.marker([tramo.meta.lat, tramo.meta.lng], {icon: iconMeta}).addTo(map);
+})
+}).addTo(map);
 }
 
-// ===== RADIOS =====
 const badgeRefs = {};
 
 if (tramo.radios) {
 tramo.radios.forEach((r, rIdx) => {
 const nR = rIdx + 1;
-
 const icon = L.divIcon({
-className: '',
 html: `<div class="radio-badge" id="badge-${tId}-${nR}">R${nR}: --</div>`,
 iconSize: [80,25]
 });
-
 L.marker([r.lat, r.lng], {icon}).addTo(map);
 badgeRefs[nR] = document.getElementById(`badge-${tId}-${nR}`);
 });
 }
 
-// ===== SUSCRIPCIÓN RESET CORREGIDA =====
+suscribirParada(nombre, tId);
 suscribirClicksRadios(nombre, tId, badgeRefs);
 
 }, 50);
@@ -173,8 +175,20 @@ suscribirClicksRadios(nombre, tId, badgeRefs);
 });
 }
 
-
-// ================= RESET VISUAL REAL =================
+function suscribirParada(nombreReal, tId) {
+db.collection("rallies").doc(rallyId).collection("estado_tramos").doc(nombreReal)
+.onSnapshot(doc => {
+const btn = document.getElementById(`stop-${tId}`);
+if (!btn) return;
+if (doc.exists && doc.data().pararSalida === true) {
+btn.classList.add('blink');
+btn.innerText = "SALIDA PARADA";
+} else {
+btn.classList.remove('blink');
+btn.innerText = "PARAR SALIDA";
+}
+});
+}
 
 function suscribirClicksRadios(tramoNombre, tId, badgeRefs) {
 
@@ -183,7 +197,6 @@ const tramoDoc = db.collection('tramos').doc(String(tramoNombre));
 tramoDoc.collection('radios').onSnapshot(snap => {
 
 if (snap.empty) {
-// Limpieza total visual
 Object.keys(badgeRefs).forEach(n => {
 const b = badgeRefs[n];
 if (b) {
@@ -197,7 +210,6 @@ return;
 const ultPorRadio = {};
 
 snap.forEach(doc => {
-
 const dorsal = Number(doc.id);
 if (!Number.isFinite(dorsal) || dorsal <= 0) return;
 
@@ -220,7 +232,6 @@ ultPorRadio[n] = dorsal;
 }
 });
 
-// Refrescar visual completo
 Object.keys(badgeRefs).forEach(n => {
 const b = badgeRefs[n];
 if (!b) return;
@@ -236,9 +247,13 @@ b.innerText = `R${n}: --`;
 }
 });
 
-}, err => {
-console.warn('onSnapshot radios error', err);
 });
+}
+
+async function actualizarEstado(nombre, estado) {
+await db.collection("rallies").doc(rallyId)
+.collection("estado_tramos").doc(nombre)
+.set({ pararSalida: estado }, { merge: true });
 }
 
 window.onload = initDC;
