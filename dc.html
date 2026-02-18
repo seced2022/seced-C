@@ -130,6 +130,35 @@
             map.fitBounds(poly.getBounds());
           }
 
+          // ================= SALIDA =================
+if (tramo.salida && tramo.salida.lat && tramo.salida.lng) {
+
+  const iconSalida = L.icon({
+    iconUrl: configGlobal.iconoSalida || 'https://cdn-icons-png.flaticon.com/512/190/190411.png',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32]
+  });
+
+  L.marker([tramo.salida.lat, tramo.salida.lng], {
+    icon: iconSalida
+  }).addTo(map);
+}
+
+// ================= META =================
+if (tramo.meta && tramo.meta.lat && tramo.meta.lng) {
+
+  const iconMeta = L.icon({
+    iconUrl: configGlobal.iconoMeta || 'https://cdn-icons-png.flaticon.com/512/190/190406.png',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32]
+  });
+
+  L.marker([tramo.meta.lat, tramo.meta.lng], {
+    icon: iconMeta
+  }).addTo(map);
+}
+
+
           // Colocar marcadores de radios
           const badgeRefs = {};
           if (tramo.radios) {
