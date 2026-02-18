@@ -261,6 +261,76 @@ JSON.stringify({lat:e.latlng.lat,lng:e.latlng.lng});
 
 modoActivo[id]=null;
 });
+
+/* ================= DRAW CONTROL (TRACK + RADIOS) ================= */
+
+const drawControl = new L.Control.Draw({
+    draw: {
+        polyline: { shapeOptions: { color: '#17a34a', weight: 5 } },
+        marker: true,
+        polygon: false,
+        circle: false,
+        rectangle: false,
+        circlemarker: false
+    },
+    edit: { featureGroup: drawnItems }
+});
+map.addControl(drawControl);
+
+/* ACTUALIZAR INPUTS */
+
+function updateInputs() {
+    const track = [];
+    const radios = [];
+    let rCount = 1;
+
+    drawnItems.eachLayer(layer => {
+
+        if (layer instanceof L.Polyline) {
+            layer.getLatLngs().forEach(latlng => {
+                track.push({ lat: latlng.lat, lng: latlng.lng });
+            });
+        }
+
+        else if (layer instanceof L.Marker && layer.tipo === "radio") {
+            radios.push({
+                lat: layer.getLatLng().lat,
+                lng: layer.getLatLng().lng
+            });
+            layer.bindTooltip("Radio " + rCount++, {
+                permanent: true,
+                direction: 'top'
+            });
+        }
+    });
+
+    document.querySelector(`#card_${id} .tc-track-data`).value = JSON.stringify(track);
+    document.querySelector(`#card_${id} .tc-radios-data`).value = JSON.stringify(radios);
+}
+
+/* EVENTOS DRAW */
+
+map.on(L.Draw.Event.CREATED, (e) => {
+
+    if (e.layerType === 'polyline') {
+        // Solo 1 track permitido
+        drawnItems.eachLayer(l => {
+            if (l instanceof L.Polyline) drawnItems.removeLayer(l);
+        });
+    }
+
+    if (e.layerType === 'marker') {
+        e.layer.tipo = "radio";
+    }
+
+    drawnItems.addLayer(e.layer);
+    updateInputs();
+});
+
+map.on(L.Draw.Event.EDITED, updateInputs);
+map.on(L.Draw.Event.DELETED, updateInputs);
+  
+  
 }
 
 /* ================= LOGO ================= */
