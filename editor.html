@@ -1,52 +1,53 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SECeD - Editor de Rallies PRO</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <style>
-        :root { --bg: #0b120e; --card: #0f1a14; --border: #1d2d23; --accent: #17a34a; --text: #e6f2ea; }
-        body { background-color: var(--bg); color: var(--text); font-family: sans-serif; padding: 20px; margin: 0; }
-        .container { max-width: 950px; margin: auto; }
-        .header-box { background: var(--card); padding: 25px; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 20px; }
-        h1 { color: var(--accent); margin-top: 0; }
-        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.85rem; color: #888; }
-        input[type="text"], input[type="file"] { width: 100%; padding: 12px; background: #000; border: 1px solid var(--border); color: white; border-radius: 6px; margin-bottom: 15px; box-sizing: border-box; }
-        .tc-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; position: relative; }
-        .map-editor { height: 450px; width: 100%; border-radius: 8px; margin-top: 10px; border: 1px solid #333; }
-        .btn { padding: 15px; border-radius: 6px; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; font-size: 1rem; }
-        .btn-add { background: #1e293b; color: white; margin-bottom: 15px; }
-        .btn-save { background: var(--accent); color: white; font-size: 1.2rem; margin-top: 20px; }
-        .btn-remove { background: #7f1d1d; color: white; width: auto; position: absolute; top: 15px; right: 15px; padding: 6px 12px; font-size: 0.8rem; }
-        #imgPreview { max-height: 80px; display: none; margin-bottom: 15px; border: 1px dashed var(--border); padding: 5px; border-radius: 4px; }
-        .loading-tag { color: #fbbf24; font-size: 0.8rem; display: none; margin-left: 10px; }
-        .instructions { font-size: 0.8rem; color: #aaa; margin-bottom: 10px; background: #16251b; padding: 10px; border-radius: 6px; border-left: 4px solid var(--accent); line-height: 1.4; }
-    </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SECeD - Editor de Rallies PRO</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+
+<style>
+:root{--bg:#0b120e;--card:#0f1a14;--border:#1d2d23;--accent:#17a34a;--text:#e6f2ea;}
+body{background:var(--bg);color:var(--text);font-family:sans-serif;padding:20px;margin:0;}
+.container{max-width:950px;margin:auto;}
+.header-box{background:var(--card);padding:25px;border-radius:12px;border:1px solid var(--border);margin-bottom:20px;}
+h1{color:var(--accent);margin-top:0;}
+label{display:block;margin-bottom:5px;font-weight:bold;font-size:0.85rem;color:#888;}
+input[type="text"],input[type="file"]{width:100%;padding:12px;background:#000;border:1px solid var(--border);color:white;border-radius:6px;margin-bottom:15px;box-sizing:border-box;}
+.tc-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;position:relative;}
+.map-editor{height:450px;width:100%;border-radius:8px;margin-top:10px;border:1px solid #333;}
+.btn{padding:10px;border-radius:6px;border:none;font-weight:bold;cursor:pointer;margin-bottom:5px;}
+.btn-add{background:#1e293b;color:white;}
+.btn-save{background:var(--accent);color:white;font-size:1.2rem;width:100%;margin-top:20px;}
+.btn-remove{background:#7f1d1d;color:white;position:absolute;top:15px;right:15px;font-size:0.8rem;padding:6px 12px;}
+.loading-tag{color:#fbbf24;font-size:0.8rem;display:none;margin-left:10px;}
+.instructions{font-size:0.8rem;color:#aaa;margin-bottom:10px;background:#16251b;padding:10px;border-radius:6px;border-left:4px solid var(--accent);}
+</style>
 </head>
+
 <body>
-
 <div class="container">
-    <div class="header-box">
-        <h1>Configurador de Rally <span id="loadingStatus" class="loading-tag">Cargando datos...</span></h1>
-        
-        <label>ID ÚNICO DEL RALLY (Escríbelo para cargar)</label>
-        <input type="text" id="rallyId" placeholder="ej: rally-cordoba-25" onblur="verificarRallyExistente(this.value)">
+<div class="header-box">
+<h1>Configurador de Rally <span id="loadingStatus" class="loading-tag">Cargando datos...</span></h1>
 
-        <label>NOMBRE PÚBLICO DEL RALLY</label>
-        <input type="text" id="rallyNombre" placeholder="Ej: 32º Rallye Sierra Morena">
+<label>ID ÚNICO DEL RALLY</label>
+<input type="text" id="rallyId" placeholder="ej: rally-cordoba-25" onblur="verificarRallyExistente(this.value)">
 
-        <label>LOGO / PLACA DEL RALLY (Se comprimirá automáticamente)</label>
-        <input type="file" id="logoFile" accept="image/*" onchange="procesarYComprimirImagen(this)">
-        <img id="imgPreview" src="">
-        <input type="hidden" id="rallyLogoBase64">
-    </div>
+<label>NOMBRE PÚBLICO DEL RALLY</label>
+<input type="text" id="rallyNombre">
 
-    <div id="tramosList"></div>
-    
-    <button class="btn btn-add" onclick="agregarTramo()">+ AÑADIR NUEVO TRAMO (TC)</button>
-    <button class="btn btn-save" onclick="guardarRallyCompleto()">💾 GUARDAR / ACTUALIZAR CONFIGURACIÓN</button>
+<label>LOGO / PLACA</label>
+<input type="file" id="logoFile" accept="image/*" onchange="procesarYComprimirImagen(this)">
+<img id="imgPreview" style="max-height:80px;display:none;">
+<input type="hidden" id="rallyLogoBase64">
+</div>
+
+<div id="tramosList"></div>
+
+<button class="btn btn-add" onclick="agregarTramo()">+ AÑADIR NUEVO TRAMO</button>
+<button class="btn btn-save" onclick="guardarRallyCompleto()">💾 GUARDAR / ACTUALIZAR</button>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
@@ -56,161 +57,275 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
 <script>
-    if (!firebase.apps.length) firebase.initializeApp(window.FIREBASE_CONFIG);
-    const db = firebase.firestore();
-    let tramoCount = 0;
-    const LOGO_GENERICO = "logo.png"; 
+if(!firebase.apps.length)firebase.initializeApp(window.FIREBASE_CONFIG);
+const db=firebase.firestore();
+let tramoCount=0;
+const LOGO_GENERICO="logo.png";
 
-    // CARGAR SI EXISTE EL ID
-    async function verificarRallyExistente(id) {
-        if (!id) return;
-        const status = document.getElementById('loadingStatus');
-        status.style.display = 'inline';
-        try {
-            const doc = await db.collection("config_rallies").doc(id).get();
-            if (doc.exists) {
-                const data = doc.data();
-                document.getElementById('rallyNombre').value = data.nombre || "";
-                if (data.logo) {
-                    document.getElementById('rallyLogoBase64').value = data.logo;
-                    document.getElementById('imgPreview').src = data.logo;
-                    document.getElementById('imgPreview').style.display = 'block';
-                }
-                document.getElementById('tramosList').innerHTML = "";
-                tramoCount = 0;
-                if (data.tramos) data.tramos.forEach(t => agregarTramoConDatos(t.nombre, t.track, t.radios));
-            }
-        } catch (e) { console.error(e); } finally { status.style.display = 'none'; }
-    }
+/* ================= CARGAR ================= */
 
-    function agregarTramoConDatos(nombre, track, radios = []) {
-        tramoCount++;
-        const idMap = `map_${tramoCount}`;
-        const html = `
-            <div class="tc-card" id="card_${idMap}">
-                <button class="btn btn-remove" onclick="document.getElementById('card_${idMap}').remove()">Eliminar</button>
-                <label>NOMBRE DEL TRAMO</label>
-                <input type="text" class="tc-name" value="${nombre}" placeholder="Ej: TC1 Villaviciosa">
-                <div class="instructions">
-                    💡 <b>Instrucciones Mapa:</b><br>
-                    - Usa la <b>Línea</b> para el recorrido.<br>
-                    - Usa el <b>Marcador</b> para poner los puntos de RADIO (se numeran solos).
-                </div>
-                <div id="${idMap}" class="map-editor"></div>
-                <input type="hidden" class="tc-track-data" value='${JSON.stringify(track)}'>
-                <input type="hidden" class="tc-radios-data" value='${JSON.stringify(radios)}'>
-            </div>
-        `;
-        document.getElementById('tramosList').insertAdjacentHTML('beforeend', html);
-        setTimeout(() => initMapa(idMap, track, radios), 100);
-    }
+async function verificarRallyExistente(id){
+if(!id)return;
+const status=document.getElementById('loadingStatus');
+status.style.display='inline';
+try{
+const doc=await db.collection("config_rallies").doc(id).get();
+if(doc.exists){
+const data=doc.data();
+document.getElementById('rallyNombre').value=data.nombre||"";
+if(data.logo){
+document.getElementById('rallyLogoBase64').value=data.logo;
+document.getElementById('imgPreview').src=data.logo;
+document.getElementById('imgPreview').style.display='block';
+}
+document.getElementById('tramosList').innerHTML="";
+tramoCount=0;
+if(data.tramos){
+data.tramos.forEach(t=>{
+agregarTramoConDatos(
+t.nombre,
+t.track||[],
+t.radios||[],
+t.salida||null,
+t.meta||null
+);
+});
+}
+}
+}catch(e){console.error(e);}
+status.style.display='none';
+}
 
-    function agregarTramo() { agregarTramoConDatos("", [], []); }
+/* ================= AGREGAR TRAMO ================= */
 
-    function initMapa(id, existingTrack, existingRadios) {
-        const map = L.map(id).setView([37.88, -4.77], 12);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-        
-        const drawnItems = new L.FeatureGroup();
-        map.addLayer(drawnItems);
+function agregarTramoConDatos(nombre="",track=[],radios=[],salida=null,meta=null){
+tramoCount++;
+const idMap=`map_${tramoCount}`;
+const html=`
+<div class="tc-card" id="card_${idMap}">
+<button class="btn btn-remove" onclick="document.getElementById('card_${idMap}').remove()">Eliminar</button>
 
-        // Track existente
-        if (existingTrack?.length) {
-            const poly = L.polyline(existingTrack, { color: '#17a34a', weight: 5 }).addTo(drawnItems);
-            map.fitBounds(poly.getBounds());
-        }
+<label>NOMBRE DEL TRAMO</label>
+<input type="text" class="tc-name" value="${nombre}">
 
-        // Radios existentes
-        if (existingRadios) {
-            existingRadios.forEach((r, idx) => {
-                const marker = L.marker([r.lat, r.lng]).addTo(drawnItems);
-                marker.bindTooltip("Radio " + (idx + 1), { permanent: true, direction: 'top' });
-            });
-        }
+<button class="btn btn-add" onclick="duplicarTramo('${idMap}',true)">Duplicar con radios</button>
+<button class="btn btn-add" onclick="duplicarTramo('${idMap}',false)">Duplicar sin radios</button>
 
-        const drawControl = new L.Control.Draw({
-            draw: {
-                polyline: { shapeOptions: { color: '#17a34a', weight: 5 } },
-                marker: true,
-                polygon: false, circle: false, rectangle: false, circlemarker: false
-            },
-            edit: { featureGroup: drawnItems }
-        });
-        map.addControl(drawControl);
+<div class="instructions">
+- Línea = recorrido<br>
+- Marcadores = radios<br>
+- Botones S / M = salida y meta
+</div>
 
-        const updateInputs = () => {
-            const track = [];
-            const radios = [];
-            let rCount = 1;
-            
-            drawnItems.eachLayer(layer => {
-                if (layer instanceof L.Polyline) {
-                    layer.getLatLngs().forEach(latlng => track.push({ lat: latlng.lat, lng: latlng.lng }));
-                } else if (layer instanceof L.Marker) {
-                    radios.push({ lat: layer.getLatLng().lat, lng: layer.getLatLng().lng });
-                    layer.bindTooltip("Radio " + rCount++, { permanent: true, direction: 'top' });
-                }
-            });
-            document.querySelector(`#card_${id} .tc-track-data`).value = JSON.stringify(track);
-            document.querySelector(`#card_${id} .tc-radios-data`).value = JSON.stringify(radios);
-        };
+<div id="${idMap}" class="map-editor"></div>
 
-        map.on(L.Draw.Event.CREATED, (e) => {
-            if (e.layerType === 'polyline') {
-                drawnItems.eachLayer(l => { if (l instanceof L.Polyline) drawnItems.removeLayer(l); });
-            }
-            drawnItems.addLayer(e.layer);
-            updateInputs();
-        });
+<input type="hidden" class="tc-track-data" value='${JSON.stringify(track)}'>
+<input type="hidden" class="tc-radios-data" value='${JSON.stringify(radios)}'>
+<input type="hidden" class="tc-salida-data" value='${JSON.stringify(salida)}'>
+<input type="hidden" class="tc-meta-data" value='${JSON.stringify(meta)}'>
+</div>`;
+document.getElementById('tramosList').insertAdjacentHTML('beforeend',html);
+setTimeout(()=>initMapa(idMap,track,radios,salida,meta),100);
+}
 
-        map.on(L.Draw.Event.EDITED, updateInputs);
-        map.on(L.Draw.Event.DELETED, updateInputs);
-    }
+function agregarTramo(){agregarTramoConDatos();}
 
-    // COMPRESIÓN DE IMAGEN (No se toca)
-    function procesarYComprimirImagen(input) {
-        const file = input.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement('canvas');
-                const MAX = 400; let w = img.width, h = img.height;
-                if (w > MAX) { h *= MAX / w; w = MAX; }
-                canvas.width = w; canvas.height = h;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, w, h);
-                const base64 = canvas.toDataURL('image/jpeg', 0.7);
-                document.getElementById('rallyLogoBase64').value = base64;
-                document.getElementById('imgPreview').src = base64;
-                document.getElementById('imgPreview').style.display = 'block';
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-    }
+function duplicarTramo(idMap,conRadios){
+const card=document.getElementById('card_'+idMap);
+const nombre=card.querySelector('.tc-name').value+" (Copia)";
+const track=JSON.parse(card.querySelector('.tc-track-data').value||"[]");
+const radios=conRadios?JSON.parse(card.querySelector('.tc-radios-data').value||"[]"):[];
+agregarTramoConDatos(nombre,track,radios,null,null);
+}
 
-    // GUARDAR TODO
-    async function guardarRallyCompleto() {
-        const id = document.getElementById('rallyId').value.trim();
-        const nombre = document.getElementById('rallyNombre').value.trim();
-        let logo = document.getElementById('rallyLogoBase64').value || LOGO_GENERICO;
-        if (!id || !nombre) return alert("Falta ID o Nombre");
+/* ================= MAPA ================= */
 
-        const tramos = [];
-        document.querySelectorAll('.tc-card').forEach(card => {
-            tramos.push({
-                nombre: card.querySelector('.tc-name').value,
-                track: JSON.parse(card.querySelector('.tc-track-data').value || "[]"),
-                radios: JSON.parse(card.querySelector('.tc-radios-data').value || "[]")
-            });
-        });
+function initMapa(id,existingTrack,existingRadios,existingSalida,existingMeta){
 
-        try {
-            await db.collection("config_rallies").doc(id).set({ nombre, logo, tramos, ultimaEdicion: new Date().toISOString() });
-            alert("✅ Rally guardado/actualizado con éxito.");
-        } catch (e) { alert("Error al guardar: " + e.message); }
-    }
+const map=L.map(id).setView([37.88,-4.77],12);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+const drawnItems=new L.FeatureGroup();
+map.addLayer(drawnItems);
+
+let salidaMarker=null;
+let metaMarker=null;
+
+/* TRACK */
+if(existingTrack?.length){
+const poly=L.polyline(existingTrack,{color:'#17a34a',weight:5}).addTo(drawnItems);
+map.fitBounds(poly.getBounds());
+}
+
+/* RADIOS */
+if(existingRadios){
+existingRadios.forEach((r,i)=>{
+const m=L.marker([r.lat,r.lng]).addTo(drawnItems);
+m.tipo="radio";
+m.bindTooltip("Radio "+(i+1),{permanent:true});
+});
+}
+
+/* SALIDA */
+if(existingSalida){
+salidaMarker=L.marker([existingSalida.lat,existingSalida.lng],{icon:getSalidaIcon()}).addTo(drawnItems);
+salidaMarker.tipo="salida";
+}
+
+/* META */
+if(existingMeta){
+metaMarker=L.marker([existingMeta.lat,existingMeta.lng],{icon:getMetaIcon()}).addTo(drawnItems);
+metaMarker.tipo="meta";
+}
+
+/* DRAW CONTROL */
+const drawControl=new L.Control.Draw({
+draw:{
+polyline:{shapeOptions:{color:'#17a34a',weight:5}},
+marker:true,
+polygon:false,circle:false,rectangle:false,circlemarker:false
+},
+edit:{featureGroup:drawnItems}
+});
+map.addControl(drawControl);
+
+/* BOTONES SALIDA META */
+
+let modo=null;
+
+const btnSalida=L.control({position:'topleft'});
+btnSalida.onAdd=function(){
+const div=L.DomUtil.create('div','leaflet-bar');
+div.innerHTML='<a href="#">S</a>';
+div.onclick=()=>modo='salida';
+return div;
+};
+btnSalida.addTo(map);
+
+const btnMeta=L.control({position:'topleft'});
+btnMeta.onAdd=function(){
+const div=L.DomUtil.create('div','leaflet-bar');
+div.innerHTML='<a href="#">M</a>';
+div.onclick=()=>modo='meta';
+return div;
+};
+btnMeta.addTo(map);
+
+map.on('click',function(e){
+if(!modo)return;
+
+if(modo==='salida'){
+if(salidaMarker)drawnItems.removeLayer(salidaMarker);
+salidaMarker=L.marker(e.latlng,{icon:getSalidaIcon()}).addTo(drawnItems);
+salidaMarker.tipo="salida";
+document.querySelector(`#card_${id} .tc-salida-data`).value=
+JSON.stringify({lat:e.latlng.lat,lng:e.latlng.lng});
+}
+
+if(modo==='meta'){
+if(metaMarker)drawnItems.removeLayer(metaMarker);
+metaMarker=L.marker(e.latlng,{icon:getMetaIcon()}).addTo(drawnItems);
+metaMarker.tipo="meta";
+document.querySelector(`#card_${id} .tc-meta-data`).value=
+JSON.stringify({lat:e.latlng.lat,lng:e.latlng.lng});
+}
+
+modo=null;
+});
+
+/* UPDATE INPUTS */
+
+function updateInputs(){
+const track=[];
+const radios=[];
+let rCount=1;
+
+drawnItems.eachLayer(layer=>{
+if(layer instanceof L.Polyline){
+layer.getLatLngs().forEach(ll=>track.push({lat:ll.lat,lng:ll.lng}));
+}
+else if(layer instanceof L.Marker){
+if(layer.tipo==="radio"){
+radios.push({lat:layer.getLatLng().lat,lng:layer.getLatLng().lng});
+layer.bindTooltip("Radio "+rCount++,{permanent:true});
+}
+}
+});
+
+document.querySelector(`#card_${id} .tc-track-data`).value=JSON.stringify(track);
+document.querySelector(`#card_${id} .tc-radios-data`).value=JSON.stringify(radios);
+}
+
+map.on(L.Draw.Event.CREATED,(e)=>{
+if(e.layerType==='polyline'){
+drawnItems.eachLayer(l=>{if(l instanceof L.Polyline)drawnItems.removeLayer(l);});
+}
+if(e.layerType==='marker'){
+e.layer.tipo="radio";
+}
+drawnItems.addLayer(e.layer);
+updateInputs();
+});
+
+map.on(L.Draw.Event.EDITED,updateInputs);
+map.on(L.Draw.Event.DELETED,updateInputs);
+}
+
+function getSalidaIcon(){
+return L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/190/190411.png',iconSize:[30,30]});
+}
+function getMetaIcon(){
+return L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/190/190406.png',iconSize:[30,30]});
+}
+
+/* ================= LOGO ================= */
+
+function procesarYComprimirImagen(input){
+const file=input.files[0];if(!file)return;
+const reader=new FileReader();
+reader.onload=function(e){
+const img=new Image();
+img.onload=function(){
+const canvas=document.createElement('canvas');
+const MAX=400;let w=img.width,h=img.height;
+if(w>MAX){h*=MAX/w;w=MAX;}
+canvas.width=w;canvas.height=h;
+const ctx=canvas.getContext('2d');
+ctx.drawImage(img,0,0,w,h);
+const base64=canvas.toDataURL('image/jpeg',0.7);
+document.getElementById('rallyLogoBase64').value=base64;
+document.getElementById('imgPreview').src=base64;
+document.getElementById('imgPreview').style.display='block';
+};
+img.src=e.target.result;
+};
+reader.readAsDataURL(file);
+}
+
+/* ================= GUARDAR ================= */
+
+async function guardarRallyCompleto(){
+const id=document.getElementById('rallyId').value.trim();
+const nombre=document.getElementById('rallyNombre').value.trim();
+let logo=document.getElementById('rallyLogoBase64').value||LOGO_GENERICO;
+if(!id||!nombre)return alert("Falta ID o Nombre");
+
+const tramos=[];
+document.querySelectorAll('.tc-card').forEach(card=>{
+tramos.push({
+nombre:card.querySelector('.tc-name').value,
+track:JSON.parse(card.querySelector('.tc-track-data').value||"[]"),
+radios:JSON.parse(card.querySelector('.tc-radios-data').value||"[]"),
+salida:JSON.parse(card.querySelector('.tc-salida-data').value||"null"),
+meta:JSON.parse(card.querySelector('.tc-meta-data').value||"null")
+});
+});
+
+await db.collection("config_rallies").doc(id).set({
+nombre,logo,tramos,ultimaEdicion:new Date().toISOString()
+});
+
+alert("✅ Rally guardado correctamente.");
+}
 </script>
 </body>
 </html>
